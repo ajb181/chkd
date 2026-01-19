@@ -6,7 +6,7 @@
 
 Simple. One process. CLI that teaches.
 
-### Phase 1: Core Infrastructure 🚧 🚧
+### Phase 1: Core Infrastructure 🚧
 
 > As a developer, I want a simple local server that handles spec management
 
