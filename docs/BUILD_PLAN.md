@@ -2,13 +2,14 @@
 
 > Recovery doc - if interrupted, read this to continue.
 
-## Current State: PHASE 1 COMPLETE ✅
+## Current State: PHASE 3 COMPLETE ✅
 
-All CLI commands are wired and working:
+All core functionality is working:
 - `npm run dev` starts server on :3847
 - All API endpoints functional
 - CLI commands work end-to-end
 - Workflow template auto-added to new features
+- Claude Code skills ready
 
 ## What's Built
 
@@ -31,9 +32,15 @@ All CLI commands are wired and working:
    - GET/POST /api/bugs
 ✅ CLI with workflow docs (src/cli/index.ts)
 ✅ Types (src/lib/types.ts)
+✅ Claude Code skills:
+   - /chkd - Build mode with polish permission
+   - /bugfix - Research-first bug fixing
+   - /story - Story development and spec refinement
+   - /spec-check - Validate SPEC.md format
 ```
 
 ## Phase 1: DONE ✅
+## Phase 3: DONE ✅
 
 ## What's Next
 
@@ -46,10 +53,6 @@ Old: src/lib/components/CurrentTaskCard.svelte
 ```
 
 The CLI is the primary interface, but UI is nice for visual progress.
-
-### Phase 3: Skills
-Update `.claude/skills/chkd/` to use new endpoints.
-Add workflow template language per V2_WORKFLOW_VISION.md.
 
 ### Phase 4: Polish
 - Fix emoji duplication bug (phase status)
@@ -66,6 +69,16 @@ Add workflow template language per V2_WORKFLOW_VISION.md.
 | Types | `src/lib/types.ts` |
 | CLI | `src/cli/index.ts` |
 | API routes | `src/routes/api/*/+server.ts` |
+| Skills | `.claude/skills/*/SKILL.md` |
+
+## Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/chkd` | Build mode - check session, implement tasks with polish |
+| `/bugfix` | Fix bugs without feature creep - research first |
+| `/story` | Develop stories - assess, question, refine specs |
+| `/spec-check` | Validate SPEC.md format after editing |
 
 ## Commands
 
