@@ -214,10 +214,16 @@ Command-line interface with workflow documentation.
 - [ ] **FUT.2 Sceptic Check** - Validate ideas before building
 - [ ] **FUT.3 Quality Gates** - Block bad code from main
 
+### Git & Source Control (UI owns this)
+- [ ] **FUT.4 Diff View** - See what changed during session
+- [ ] **FUT.5 Staging UI** - Select files to commit
+- [ ] **FUT.6 Commit Flow** - Pre-fill message from session, commit
+- [ ] **FUT.7 Push to Remote** - Push when ready
+- [ ] **FUT.8 Audit Trail** - History of commits per session
+
 ### Advanced Features
-- [ ] **FUT.4 WebSocket Updates** - Real-time UI updates
-- [ ] **FUT.5 Git Integration** - Diff view, commit from UI
-- [ ] **FUT.6 Version History** - Track spec changes over time
+- [ ] **FUT.9 WebSocket Updates** - Real-time UI updates
+- [ ] **FUT.10 Version History** - Track spec changes over time
 
 ---
 

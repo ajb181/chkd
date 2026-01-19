@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { SpecParser, type ParsedSpec, type SpecPhase, type SpecItem } from './parser';
+import { SpecParser, type ParsedSpec, type SpecPhase, type SpecArea, type SpecItem } from './parser';
 
 /**
  * Mark a spec item as complete
@@ -25,8 +25,8 @@ export async function markItemComplete(specPath: string, itemId: string): Promis
 
   lines[lineIndex] = newLine;
 
-  // Update phase status emoji
-  updatePhaseStatus(lines, spec, itemInfo.phase);
+  // Update area status emoji (no-op for Area format, only for Phase format)
+  updateAreaStatus(lines, spec, itemInfo.area);
 
   await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
 }
@@ -55,14 +55,50 @@ export async function markItemIncomplete(specPath: string, itemId: string): Prom
 
   lines[lineIndex] = newLine;
 
-  // Update phase status emoji
-  updatePhaseStatus(lines, spec, itemInfo.phase);
+  // Update area status emoji
+  updateAreaStatus(lines, spec, itemInfo.area);
 
   await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
 }
 
 /**
- * Add a new item to a phase
+ * Add a new item to an area by code (e.g., 'BE', 'FE', 'SD')
+ */
+export async function addItemToArea(
+  specPath: string,
+  areaCode: string,
+  title: string,
+  description?: string,
+  subItems?: string[]
+): Promise<{ itemId: string; line: number }> {
+  const content = await fs.readFile(specPath, 'utf-8');
+  const lines = content.split('\n');
+  const parser = new SpecParser();
+  const spec = parser.parse(content);
+
+  const area = spec.areas.find(a => a.code === areaCode);
+  if (!area) {
+    throw new Error(`Area ${areaCode} not found`);
+  }
+
+  // Find insertion point
+  const insertLine = findInsertionPointForArea(lines, area, spec);
+
+  // Build the new item lines
+  const newLines = buildItemLines(title, description, subItems);
+
+  // Insert
+  lines.splice(insertLine, 0, ...newLines);
+
+  await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
+
+  const itemId = generateId(areaCode, title);
+
+  return { itemId, line: insertLine + 1 };
+}
+
+/**
+ * Add a new item to a phase (backward compat)
  */
 export async function addItem(
   specPath: string,
@@ -82,7 +118,7 @@ export async function addItem(
   }
 
   // Find insertion point
-  const insertLine = findInsertionPoint(lines, phase);
+  const insertLine = findInsertionPointForArea(lines, phase, spec);
 
   // Build the new item lines
   const newLines = buildItemLines(title, description, subItems);
@@ -92,7 +128,7 @@ export async function addItem(
 
   await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
 
-  const itemId = generateId(phaseNumber, title);
+  const itemId = generateId(phase.code, title);
 
   return { itemId, line: insertLine + 1 };
 }
@@ -103,7 +139,7 @@ export async function addItem(
  */
 export async function addFeatureWithWorkflow(
   specPath: string,
-  phaseNumber: number,
+  areaCodeOrPhaseNum: string | number,
   title: string,
   description?: string
 ): Promise<{ itemId: string; line: number }> {
@@ -116,18 +152,22 @@ export async function addFeatureWithWorkflow(
     'Polish: iterate based on usage'
   ];
 
-  return addItem(specPath, phaseNumber, title, description, workflowSteps);
+  if (typeof areaCodeOrPhaseNum === 'string') {
+    return addItemToArea(specPath, areaCodeOrPhaseNum, title, description, workflowSteps);
+  } else {
+    return addItem(specPath, areaCodeOrPhaseNum, title, description, workflowSteps);
+  }
 }
 
 // ============================================
 // Helper functions
 // ============================================
 
-function findItemById(spec: ParsedSpec, itemId: string): { item: SpecItem; phase: SpecPhase } | null {
-  for (const phase of spec.phases) {
-    const item = searchItems(phase.items, itemId);
+function findItemById(spec: ParsedSpec, itemId: string): { item: SpecItem; area: SpecArea } | null {
+  for (const area of spec.areas) {
+    const item = searchItems(area.items, itemId);
     if (item) {
-      return { item, phase };
+      return { item, area };
     }
   }
   return null;
@@ -142,16 +182,17 @@ function searchItems(items: SpecItem[], itemId: string): SpecItem | null {
   return null;
 }
 
-function findInsertionPoint(lines: string[], phase: SpecPhase): number {
-  if (phase.items.length > 0) {
-    const lastItem = getLastNestedItem(phase.items);
+function findInsertionPointForArea(lines: string[], area: SpecArea, spec: ParsedSpec): number {
+  if (area.items.length > 0) {
+    const lastItem = getLastNestedItem(area.items);
     return lastItem.line;
   }
 
-  // No items, insert after phase header
-  const phaseLineIndex = phase.line - 1;
-  for (let i = phaseLineIndex + 1; i < lines.length; i++) {
-    if (lines[i].match(/^###?\s/)) {
+  // No items, find the next area/section and insert before it
+  const areaLineIndex = area.line - 1;
+  for (let i = areaLineIndex + 1; i < lines.length; i++) {
+    // Stop at next ## or ### header
+    if (lines[i].match(/^##\s+[^#]/) || lines[i].match(/^###\s+/)) {
       return i;
     }
   }
@@ -186,15 +227,15 @@ function buildItemLines(title: string, description?: string, subItems?: string[]
   return lines;
 }
 
-function updatePhaseStatus(lines: string[], spec: ParsedSpec, phase: SpecPhase): void {
+function updateAreaStatus(lines: string[], spec: ParsedSpec, area: SpecArea): void {
   // Re-count items after our modification
   const parser = new SpecParser();
   const newSpec = parser.parse(lines.join('\n'));
-  const newPhase = newSpec.phases.find(p => p.number === phase.number);
+  const newArea = newSpec.areas.find(a => a.code === area.code);
 
-  if (!newPhase) return;
+  if (!newArea) return;
 
-  const allItems = getAllItems(newPhase.items);
+  const allItems = getAllItems(newArea.items);
   const completedCount = allItems.filter(i => i.completed).length;
   const totalCount = allItems.length;
 
@@ -207,14 +248,24 @@ function updatePhaseStatus(lines: string[], spec: ParsedSpec, phase: SpecPhase):
     emoji = '📋';
   }
 
-  const phaseLineIndex = phase.line - 1;
-  const phaseLine = lines[phaseLineIndex];
-  // Match phase header, stripping ANY trailing emojis (fixes duplication bug)
-  // The 'u' flag is required for emoji character classes to work correctly
-  const match = phaseLine.match(/^(###\s+Phase\s+\d+:\s+.+?)(?:\s+[✅🚧📋])*\s*$/u);
+  const areaLineIndex = area.line - 1;
+  const areaLine = lines[areaLineIndex];
 
-  if (match) {
-    lines[phaseLineIndex] = `${match[1]} ${emoji}`;
+  // Try to match Phase format first (### Phase N: Name)
+  // The 'u' flag is required for emoji character classes to work correctly
+  const phaseMatch = areaLine.match(/^(###\s+Phase\s+\d+:\s+.+?)(?:\s+[✅🚧📋])*\s*$/u);
+  if (phaseMatch) {
+    lines[areaLineIndex] = `${phaseMatch[1]} ${emoji}`;
+    return;
+  }
+
+  // Try Area format (## Area Name) - typically we don't add emojis to areas
+  // but support it if they want
+  const areaMatch = areaLine.match(/^(##\s+[^#].+?)(?:\s+[✅🚧📋])*\s*$/u);
+  if (areaMatch) {
+    // Optionally add emoji to area headers
+    // For now, don't modify area headers - let status be computed dynamically
+    // lines[areaLineIndex] = `${areaMatch[1]} ${emoji}`;
   }
 }
 
@@ -227,10 +278,10 @@ function getAllItems(items: SpecItem[]): SpecItem[] {
   return result;
 }
 
-function generateId(phaseNum: number, title: string): string {
+function generateId(areaCode: string, title: string): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-  return `phase${phaseNum}-${slug}`;
+  return `${areaCode.toLowerCase()}-${slug}`;
 }

@@ -10,9 +10,9 @@ export interface SpecItem {
   story?: string;
 }
 
-export interface SpecPhase {
+export interface SpecArea {
   name: string;
-  number: number;
+  code: string;  // SD, FE, BE, FUT, REF
   status: 'complete' | 'in-progress' | 'pending';
   items: SpecItem[];
   line: number;
@@ -20,9 +20,13 @@ export interface SpecPhase {
   description?: string;
 }
 
+// Keep SpecPhase as alias for backward compatibility
+export type SpecPhase = SpecArea & { number: number };
+
 export interface ParsedSpec {
   title: string;
-  phases: SpecPhase[];
+  areas: SpecArea[];
+  phases: SpecPhase[];  // Backward compat - same as areas with number added
   totalItems: number;
   completedItems: number;
   progress: number;
@@ -39,13 +43,27 @@ export interface SpecValidationResult {
   valid: boolean;
   issues: SpecIssue[];
   summary: {
-    phasesFound: number;
+    areasFound: number;
+    phasesFound: number;  // Backward compat
     totalItems: number;
     completedItems: number;
     progress: number;
-    emptyPhases: number[];
+    emptyAreas: string[];
+    emptyPhases: number[];  // Backward compat
   };
 }
+
+// Map area names to codes
+const AREA_CODES: Record<string, string> = {
+  'site design': 'SD',
+  'frontend': 'FE',
+  'backend': 'BE',
+  'future areas': 'FUT',
+  'future': 'FUT',
+  'reference': 'REF',
+  'skills': 'SKL',
+  'overview': 'OV',
+};
 
 export class SpecParser {
   async parseFile(specPath: string): Promise<ParsedSpec> {
@@ -55,11 +73,12 @@ export class SpecParser {
 
   parse(content: string): ParsedSpec {
     const lines = content.split('\n');
-    const phases: SpecPhase[] = [];
+    const areas: SpecArea[] = [];
     let title = '';
-    let currentPhase: SpecPhase | null = null;
+    let currentArea: SpecArea | null = null;
     let itemStack: SpecItem[] = [];
     let indentStack: number[] = [];
+    let areaIndex = 0;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -71,27 +90,34 @@ export class SpecParser {
         continue;
       }
 
-      // Detect phase headers: ### Phase N: Name emoji
-      const phaseMatch = line.match(/^###\s+(?:Phase|Story)\s+(\d+):\s+(.+?)(\s+[✅🚧📋✓])?$/);
-      const storyMatch = !phaseMatch && line.match(/^###\s+Story:\s+(.+?)(\s+[✅✓])?$/);
+      // Detect Area headers: ## Area Name
+      const areaMatch = line.match(/^##\s+([^#].+?)(\s+[✅🚧📋✓])?\s*$/);
 
-      if (phaseMatch || storyMatch) {
-        if (currentPhase) {
-          phases.push(currentPhase);
+      // Also support old Phase format: ### Phase N: Name
+      const phaseMatch = !areaMatch && line.match(/^###\s+(?:Phase|Story)\s+(\d+):\s+(.+?)(\s+[✅🚧📋✓])?$/);
+
+      if (areaMatch || phaseMatch) {
+        // Save previous area
+        if (currentArea) {
+          this.computeAreaStatus(currentArea);
+          areas.push(currentArea);
         }
 
-        let phaseNum: number;
-        let phaseName: string;
+        let areaName: string;
+        let areaCode: string;
         let emoji: string | undefined;
 
-        if (phaseMatch) {
-          phaseNum = parseInt(phaseMatch[1], 10);
-          phaseName = phaseMatch[2].trim();
+        if (areaMatch) {
+          areaName = areaMatch[1].trim();
+          emoji = areaMatch[2]?.trim();
+          // Get code from mapping or generate from name
+          const lowerName = areaName.toLowerCase();
+          areaCode = AREA_CODES[lowerName] || this.generateCode(areaName);
+        } else if (phaseMatch) {
+          // Old Phase format - use phase number as code
+          areaName = phaseMatch[2].trim();
           emoji = phaseMatch[3]?.trim();
-        } else if (storyMatch) {
-          phaseNum = -(phases.length + 100);
-          phaseName = storyMatch[1].trim();
-          emoji = storyMatch[2]?.trim();
+          areaCode = `P${phaseMatch[1]}`;
         } else {
           continue;
         }
@@ -100,53 +126,37 @@ export class SpecParser {
         if (emoji === '✅' || emoji === '✓') status = 'complete';
         else if (emoji === '🚧') status = 'in-progress';
 
-        currentPhase = {
-          name: phaseName,
-          number: phaseNum,
+        currentArea = {
+          name: areaName,
+          code: areaCode,
           status,
           items: [],
           line: lineNum,
         };
         itemStack = [];
         indentStack = [];
+        areaIndex++;
 
-        // Look ahead to capture content before first checklist item
+        // Look ahead to capture blockquote description
         const storyLines: string[] = [];
-        const descriptionLines: string[] = [];
         let lookAhead = i + 1;
-        let inBlockquote = false;
 
         while (lookAhead < lines.length) {
           const nextLine = lines[lookAhead];
 
-          if (nextLine.match(/^###\s+(?:Phase|Story)/)) break;
+          // Stop at next area/phase header or checklist item
+          if (nextLine.match(/^##\s+[^#]/) || nextLine.match(/^###\s+(?:Phase|Story)/)) break;
           if (nextLine.match(/^\s*-\s+\[[ xX]\]/)) break;
 
           if (nextLine.startsWith('>')) {
             storyLines.push(nextLine.slice(1).trim());
-            inBlockquote = true;
-          } else if (inBlockquote && nextLine.trim() === '') {
-            inBlockquote = false;
-          } else if (!inBlockquote) {
-            descriptionLines.push(nextLine);
           }
 
           lookAhead++;
         }
 
         if (storyLines.length > 0) {
-          currentPhase.story = storyLines.join(' ');
-        }
-        if (descriptionLines.length > 0) {
-          while (descriptionLines.length > 0 && descriptionLines[0].trim() === '') {
-            descriptionLines.shift();
-          }
-          while (descriptionLines.length > 0 && descriptionLines[descriptionLines.length - 1].trim() === '') {
-            descriptionLines.pop();
-          }
-          if (descriptionLines.length > 0) {
-            currentPhase.description = descriptionLines.join('\n');
-          }
+          currentArea.story = storyLines.join(' ');
         }
 
         continue;
@@ -156,11 +166,12 @@ export class SpecParser {
       const itemMatch = line.match(/^(\s*)-\s+\[([ xX])\]\s+(.+)$/);
       const checkMatch = !itemMatch && line.match(/^(\s*)-\s+✓\s+(.+)$/);
 
-      if ((itemMatch || checkMatch) && currentPhase) {
+      if ((itemMatch || checkMatch) && currentArea) {
         const indent = itemMatch ? itemMatch[1].length : (checkMatch ? checkMatch[1].length : 0);
         const completed = itemMatch ? itemMatch[2].toLowerCase() === 'x' : true;
         const text = itemMatch ? itemMatch[3] : (checkMatch ? checkMatch[2] : '');
 
+        // Parse **Title** - Description format
         const boldMatch = text.match(/^\*\*(.+?)\*\*\s*(?:-\s*)?(.*)$/);
         let itemTitle: string;
         let itemDesc: string;
@@ -174,7 +185,7 @@ export class SpecParser {
         }
 
         const item: SpecItem = {
-          id: this.generateId(currentPhase.number, itemTitle),
+          id: this.generateId(currentArea.code, itemTitle),
           title: itemTitle,
           description: itemDesc,
           completed,
@@ -182,41 +193,14 @@ export class SpecParser {
           line: lineNum,
         };
 
+        // Handle nesting based on indent
         while (indentStack.length > 0 && indent <= indentStack[indentStack.length - 1]) {
           indentStack.pop();
           itemStack.pop();
         }
 
         if (itemStack.length === 0) {
-          // Look ahead for user story blockquote
-          const storyLines: string[] = [];
-          let lookAhead = i + 1;
-
-          while (lookAhead < lines.length && lines[lookAhead].trim() === '') {
-            lookAhead++;
-          }
-
-          while (lookAhead < lines.length) {
-            const nextLine = lines[lookAhead];
-            if (nextLine.match(/^\s*-\s+\[[ xX]\]/) || nextLine.match(/^###\s+(?:Phase|Story)/)) {
-              break;
-            }
-            const blockquoteMatch = nextLine.match(/^\s*>\s*(.*)$/);
-            if (blockquoteMatch) {
-              storyLines.push(blockquoteMatch[1].trim());
-              lookAhead++;
-            } else if (storyLines.length > 0) {
-              break;
-            } else {
-              lookAhead++;
-            }
-          }
-
-          if (storyLines.length > 0) {
-            item.story = storyLines.join(' ');
-          }
-
-          currentPhase.items.push(item);
+          currentArea.items.push(item);
         } else {
           itemStack[itemStack.length - 1].children.push(item);
         }
@@ -226,14 +210,23 @@ export class SpecParser {
       }
     }
 
-    if (currentPhase) {
-      phases.push(currentPhase);
+    // Don't forget the last area
+    if (currentArea) {
+      this.computeAreaStatus(currentArea);
+      areas.push(currentArea);
     }
 
-    const { total, completed } = this.countItems(phases);
+    const { total, completed } = this.countItems(areas);
+
+    // Create phases array for backward compatibility
+    const phases: SpecPhase[] = areas.map((area, idx) => ({
+      ...area,
+      number: idx + 1,
+    }));
 
     return {
       title,
+      areas,
       phases,
       totalItems: total,
       completedItems: completed,
@@ -249,7 +242,8 @@ export class SpecParser {
       for (const item of items) {
         if (
           item.title.toLowerCase().includes(lowerQuery) ||
-          item.description.toLowerCase().includes(lowerQuery)
+          item.description.toLowerCase().includes(lowerQuery) ||
+          item.id.toLowerCase().includes(lowerQuery)
         ) {
           results.push(item);
         }
@@ -257,8 +251,8 @@ export class SpecParser {
       }
     };
 
-    for (const phase of spec.phases) {
-      searchInItems(phase.items);
+    for (const area of spec.areas) {
+      searchInItems(area.items);
     }
 
     return results;
@@ -276,13 +270,19 @@ export class SpecParser {
       }
     };
 
-    for (const phase of spec.phases) {
-      collectIncomplete(phase.items);
+    for (const area of spec.areas) {
+      collectIncomplete(area.items);
     }
 
     return results;
   }
 
+  getAreaItems(spec: ParsedSpec, areaCode: string): SpecItem[] {
+    const area = spec.areas.find((a) => a.code === areaCode);
+    return area?.items || [];
+  }
+
+  // Backward compat
   getPhaseItems(spec: ParsedSpec, phaseNumber: number): SpecItem[] {
     const phase = spec.phases.find((p) => p.number === phaseNumber);
     return phase?.items || [];
@@ -291,82 +291,67 @@ export class SpecParser {
   validate(content: string): SpecValidationResult {
     const issues: SpecIssue[] = [];
     const lines = content.split('\n');
-    const phaseNumbers: number[] = [];
-    let lastPhaseNumber = 0;
-    let currentPhaseLine = 0;
-    let currentPhaseHasItems = false;
+    const areaCodes: string[] = [];
+    let currentAreaLine = 0;
+    let currentAreaHasItems = false;
+    let currentAreaCode = '';
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
 
-      const decimalMatch = line.match(/^###\s+Phase\s+(\d+\.\d+):/);
-      if (decimalMatch) {
-        issues.push({
-          type: 'error',
-          line: lineNum,
-          message: `Decimal phase number "${decimalMatch[1]}" - parser only supports integers`,
-          suggestion: `Change to "### Phase ${Math.floor(parseFloat(decimalMatch[1]))}: ..."`,
-        });
-      }
+      // Detect area headers
+      const areaMatch = line.match(/^##\s+([^#].+?)(\s+[✅🚧📋✓])?\s*$/);
+      const phaseMatch = !areaMatch && line.match(/^###\s+(?:Phase|Story)\s+(\d+):\s+(.+?)(\s+[✅🚧📋✓])?$/);
 
-      const phaseMatch = line.match(/^###\s+(?:Phase|Story)\s+(\d+):\s+(.+?)(\s+[✅🚧📋✓])?$/);
-      if (phaseMatch) {
-        if (currentPhaseLine > 0 && !currentPhaseHasItems) {
+      if (areaMatch || phaseMatch) {
+        // Check previous area had items
+        if (currentAreaLine > 0 && !currentAreaHasItems) {
           issues.push({
-            type: 'error',
-            line: currentPhaseLine,
-            message: `Phase has no checklist items - it won't appear in the UI`,
+            type: 'warning',
+            line: currentAreaLine,
+            message: `Area has no checklist items`,
             suggestion: 'Add items using "- [ ] **Feature** - Description" format',
           });
         }
 
-        const phaseNum = parseInt(phaseMatch[1], 10);
-        phaseNumbers.push(phaseNum);
+        let areaCode: string;
+        if (areaMatch) {
+          const areaName = areaMatch[1].trim().toLowerCase();
+          areaCode = AREA_CODES[areaName] || this.generateCode(areaMatch[1]);
+        } else if (phaseMatch) {
+          areaCode = `P${phaseMatch[1]}`;
+        } else {
+          continue;
+        }
 
-        if (phaseNum !== lastPhaseNumber + 1 && lastPhaseNumber > 0) {
+        // Check for duplicate area codes
+        if (areaCodes.includes(areaCode)) {
           issues.push({
             type: 'warning',
             line: lineNum,
-            message: `Phase ${phaseNum} follows Phase ${lastPhaseNumber} - gap in numbering`,
-            suggestion: `Consider renumbering to Phase ${lastPhaseNumber + 1}`,
+            message: `Duplicate area code "${areaCode}"`,
+            suggestion: 'Each area should have a unique name/code',
           });
         }
 
-        const duplicates = phaseNumbers.filter(n => n === phaseNum);
-        if (duplicates.length > 1) {
-          issues.push({
-            type: 'error',
-            line: lineNum,
-            message: `Duplicate Phase ${phaseNum}`,
-            suggestion: 'Each phase must have a unique number',
-          });
-        }
-
-        lastPhaseNumber = phaseNum;
-        currentPhaseLine = lineNum;
-        currentPhaseHasItems = false;
+        areaCodes.push(areaCode);
+        currentAreaLine = lineNum;
+        currentAreaHasItems = false;
+        currentAreaCode = areaCode;
       }
 
       if (line.match(/^\s*-\s+\[[ xX]\]/)) {
-        currentPhaseHasItems = true;
-      }
-
-      if (line.match(/^####\s+/) && currentPhaseLine > 0) {
-        issues.push({
-          type: 'warning',
-          line: lineNum,
-          message: '#### headers are ignored by parser',
-          suggestion: 'Use checklist items instead, or move content to description',
-        });
+        currentAreaHasItems = true;
       }
     }
 
-    if (currentPhaseLine > 0 && !currentPhaseHasItems) {
+    // Check last area
+    if (currentAreaLine > 0 && !currentAreaHasItems) {
       issues.push({
-        type: 'error',
-        line: currentPhaseLine,
-        message: `Phase has no checklist items - it won't appear in the UI`,
+        type: 'warning',
+        line: currentAreaLine,
+        message: `Area has no checklist items`,
         suggestion: 'Add items using "- [ ] **Feature** - Description" format',
       });
     }
@@ -377,37 +362,68 @@ export class SpecParser {
       valid: issues.filter(i => i.type === 'error').length === 0,
       issues,
       summary: {
+        areasFound: parsed.areas.length,
         phasesFound: parsed.phases.length,
         totalItems: parsed.totalItems,
         completedItems: parsed.completedItems,
         progress: parsed.progress,
+        emptyAreas: parsed.areas.filter(a => a.items.length === 0).map(a => a.code),
         emptyPhases: parsed.phases.filter(p => p.items.length === 0).map(p => p.number),
       },
     };
   }
 
-  private generateId(phaseNum: number, title: string): string {
+  private generateCode(name: string): string {
+    // Generate 2-3 letter code from name
+    const words = name.split(/\s+/);
+    if (words.length === 1) {
+      return words[0].slice(0, 3).toUpperCase();
+    }
+    return words.map(w => w[0]).join('').toUpperCase().slice(0, 3);
+  }
+
+  private generateId(areaCode: string, title: string): string {
     const slug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
-    return `phase${phaseNum}-${slug}`;
+    return `${areaCode.toLowerCase()}-${slug}`;
   }
 
-  private countItems(phases: SpecPhase[]): { total: number; completed: number } {
+  private computeAreaStatus(area: SpecArea): void {
+    const allItems = this.getAllItems(area.items);
+    if (allItems.length === 0) {
+      area.status = 'pending';
+      return;
+    }
+
+    const completedCount = allItems.filter(i => i.completed).length;
+    if (completedCount === allItems.length) {
+      area.status = 'complete';
+    } else if (completedCount > 0) {
+      area.status = 'in-progress';
+    } else {
+      area.status = 'pending';
+    }
+  }
+
+  private getAllItems(items: SpecItem[]): SpecItem[] {
+    const result: SpecItem[] = [];
+    for (const item of items) {
+      result.push(item);
+      result.push(...this.getAllItems(item.children));
+    }
+    return result;
+  }
+
+  private countItems(areas: SpecArea[]): { total: number; completed: number } {
     let total = 0;
     let completed = 0;
 
-    const countInItems = (items: SpecItem[]) => {
-      for (const item of items) {
-        total++;
-        if (item.completed) completed++;
-        countInItems(item.children);
-      }
-    };
-
-    for (const phase of phases) {
-      countInItems(phase.items);
+    for (const area of areas) {
+      const allItems = this.getAllItems(area.items);
+      total += allItems.length;
+      completed += allItems.filter(i => i.completed).length;
     }
 
     return { total, completed };
