@@ -210,7 +210,8 @@ function updatePhaseStatus(lines: string[], spec: ParsedSpec, phase: SpecPhase):
   const phaseLineIndex = phase.line - 1;
   const phaseLine = lines[phaseLineIndex];
   // Match phase header, stripping ANY trailing emojis (fixes duplication bug)
-  const match = phaseLine.match(/^(###\s+Phase\s+\d+:\s+.+?)(?:\s+[✅🚧📋])*\s*$/);
+  // The 'u' flag is required for emoji character classes to work correctly
+  const match = phaseLine.match(/^(###\s+Phase\s+\d+:\s+.+?)(?:\s+[✅🚧📋])*\s*$/u);
 
   if (match) {
     lines[phaseLineIndex] = `${match[1]} ${emoji}`;
