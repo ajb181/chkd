@@ -2,13 +2,13 @@
 
 > Recovery doc - if interrupted, read this to continue.
 
-## Current State: SCAFFOLD COMPLETE ✅
+## Current State: PHASE 1 COMPLETE ✅
 
-The basic SvelteKit app is working:
+All CLI commands are wired and working:
 - `npm run dev` starts server on :3847
-- API routes respond
-- CLI skeleton works
-- Database schema ready
+- All API endpoints functional
+- CLI commands work end-to-end
+- Workflow template auto-added to new features
 
 ## What's Built
 
@@ -16,53 +16,45 @@ The basic SvelteKit app is working:
 ✅ Project scaffold (SvelteKit + adapter-node)
 ✅ Database layer (src/lib/server/db/)
 ✅ Spec parser (src/lib/server/spec/parser.ts)
-✅ Basic API routes:
+✅ Spec writer (src/lib/server/spec/writer.ts)
+✅ All API routes:
    - GET /api/health
-   - GET /api/repos, POST /api/repos
+   - GET/POST /api/repos
    - GET /api/session
    - GET /api/status
-✅ CLI skeleton with workflow docs (src/cli/index.ts)
+   - POST /api/session/start
+   - POST /api/session/complete
+   - POST /api/session/check
+   - GET /api/spec/full
+   - POST /api/spec/tick
+   - POST /api/spec/add (with workflow template!)
+   - GET/POST /api/bugs
+✅ CLI with workflow docs (src/cli/index.ts)
 ✅ Types (src/lib/types.ts)
 ```
 
-## What's Next (in order)
+## Phase 1: DONE ✅
 
-### Phase 1: Wire Up CLI Commands
-The CLI shows help but commands don't actually work yet.
+## What's Next
 
-```
-1. POST /api/session/start   - Start a task
-2. POST /api/session/complete - Complete current task
-3. POST /api/spec/tick       - Mark item complete
-4. POST /api/session/check   - Check if on-plan
-5. POST /api/spec/add        - Add item to spec
-6. POST /api/bugs            - Create a bug
-```
-
-Each needs:
-- API route in `src/routes/api/`
-- Wire to database queries
-- Test with CLI
-
-### Phase 2: Spec Writer
-Need `src/lib/server/spec/writer.ts` to modify SPEC.md files:
-- Mark items complete `[ ]` → `[x]`
-- Add new items
-- Copy from old project: `daemon/src/validator/spec-writer.ts`
-
-### Phase 3: UI (Optional for MVP)
-Copy essential components from old project:
+### Phase 2: UI (Optional)
+Copy or rebuild essential components:
 ```
 Old: src/lib/components/StoryList.svelte
 Old: src/lib/components/StoryDetail.svelte
 Old: src/lib/components/CurrentTaskCard.svelte
 ```
 
-Or build fresh - the CLI is the primary interface now.
+The CLI is the primary interface, but UI is nice for visual progress.
 
-### Phase 4: Skills
+### Phase 3: Skills
 Update `.claude/skills/chkd/` to use new endpoints.
 Add workflow template language per V2_WORKFLOW_VISION.md.
+
+### Phase 4: Polish
+- Fix emoji duplication bug (phase status)
+- Better elapsed time display in CLI
+- Error handling improvements
 
 ## Key Files Reference
 
