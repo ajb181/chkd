@@ -6,20 +6,19 @@
 
 ## Summary
 
-**Overall**: Strong foundation for spec/workflow management. But missing core features from original vision.
+**Overall**: Strong foundation for spec/workflow management.
 
-**Key Gap**: v2 focuses on spec management and workflow. Original chkd v1 had **test generation** and **quality validation** features that are NOT in v2.
+**Scope Decision**: v2 = workflow only. Quality features (test generation, sceptic check, quality gates) will come in v3+.
 
 **Priority order**:
 1. Fix SPEC.md sync (shows wrong status)
-2. Decide: Is v2 just workflow, or does it need original features?
-3. Spec structure decision (areas vs phases)
-4. Testing story
-5. UI (optional but nice)
+2. Spec structure decision (areas vs phases)
+3. Testing story (for v2 itself)
+4. UI (optional but nice)
 
 ---
 
-## 0. Original Core Features - Missing from v2 🔴
+## 0. Original Core Features - Deferred to v3+ 📋
 
 **The original chkd v1 vision included**:
 
@@ -70,25 +69,19 @@ Before merge to main:
 
 ---
 
-### Decision Needed: What is v2?
+### Decision: v2 is workflow only ✅
 
-**Option A: v2 is just workflow management**
+**DECIDED**: v2 focuses on workflow management only.
+
 - Spec tracking, session management, CLI
-- Test generation and quality gates come later (or never)
+- Test generation, sceptic check, quality gates come later
 - Keep it simple
 
-**Option B: v2 should have core quality features**
-- Port test generation from v1
-- Add sceptic check
-- Add quality gates
-- More complex but more complete
+**Future versions** will add:
+- v3: Test generation (port from v1)
+- v4: Sceptic check + quality gates
 
-**Option C: v2 is foundation, v3 adds quality**
-- v2 = workflow + spec management (current)
-- v3 = add test generation
-- v4 = add sceptic + quality gates
-
-**Recommendation**: Start with Option A (keep v2 simple), but document the full vision so it's not lost.
+The original features are documented here for reference when building future versions.
 
 ---
 
@@ -296,14 +289,23 @@ From BUILD_PLAN.md "Phase 4: Polish":
 ### Must Do (Before Using)
 1. **Fix SPEC.md** - Mark completed items as `[x]`
 
+### Decided ✅
+2. **v2 = workflow only** - Quality features (test gen, sceptic, gates) come in v3+
+
 ### Should Decide
-2. **Spec structure** - Areas vs phases? (Recommend: try areas)
-3. **Testing approach** - What tests? When in workflow?
+3. **Spec structure** - Areas vs phases? (Recommend: try areas)
+4. **Testing approach** - What tests for v2 itself? When in workflow?
 
 ### Nice to Have
-4. **Debugging skill** - Formal session approach
-5. **UI** - Visual progress display
-6. **CLI polish** - Elapsed time, error handling
+5. **Debugging skill** - Formal session approach
+6. **UI** - Visual progress display
+7. **CLI polish** - Elapsed time, error handling
+
+### Documented for Future (v3+)
+- Test generation (port from v1)
+- Sceptic check
+- Quality gates
+- Teaching/explanation system
 
 ---
 
