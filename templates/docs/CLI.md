@@ -9,6 +9,7 @@ Complete reference for all chkd command-line commands.
 ```bash
 # Status
 chkd status              # See progress and current task
+chkd list                # List all spec items by area
 chkd progress            # See current task's sub-items
 chkd workflow            # Show development workflow
 
@@ -20,6 +21,9 @@ chkd tick "item"         # Mark an item complete
 chkd bug "description"   # Quick-create a bug
 chkd bugs                # List open bugs
 chkd fix "bug"           # Mark a bug as fixed
+
+# Spec
+chkd repair              # AI-powered SPEC.md reformatting
 
 # Setup
 chkd init [name]         # Initialize new project
@@ -78,6 +82,51 @@ Progress: 2/4 sub-items
 - `⬚` Not started (`[ ]`)
 - `🔨` In progress (`[~]`)
 - `✅` Complete (`[x]`)
+
+---
+
+### `chkd list`
+
+List all spec items organized by area.
+
+```bash
+chkd list
+```
+
+**Output:**
+- Project title and overall progress
+- All areas with item counts
+- Each item with status icon and ID
+- Bugs section at the end (if any)
+
+**Status icons:**
+- `○` Not started
+- `◐` In progress
+- `✓` Complete
+- `–` Skipped
+
+**Output example:**
+```
+📋 My Project
+─────────────────────────────────────────
+Progress: 13/20 (65%)
+
+Site Design (3/5)
+  ✓ SD.1   Landing page
+  ✓ SD.2   Navigation
+  ◐ SD.3   Dashboard
+  ○ SD.4   Settings
+  – SD.5   Admin panel
+
+🐛 Bugs (2 open, 1 fixed)
+  ○ 🟠 a1b2c3  Login crash
+  ✓ 🟡 d4e5f6  Save button
+```
+
+**When to use:**
+- See all tasks at a glance
+- Find a task ID to work on
+- Review what's left to do
 
 ---
 
@@ -247,6 +296,48 @@ chkd upgrade "My App"    # Custom project name
 5. Preserves custom skills
 
 **Safe to re-run** - only backs up on first run.
+
+---
+
+## Spec Commands
+
+### `chkd repair`
+
+Reformat SPEC.md using AI to fix formatting issues.
+
+```bash
+chkd repair
+```
+
+**What it does:**
+1. Reads your `docs/SPEC.md`
+2. Uses AI to reformat to correct chkd format
+3. Creates backup at `docs/SPEC-backup.md`
+4. Writes reformatted content
+5. Validates the result
+
+**Requires:**
+- API key: `CHKD_API_KEY` or `ANTHROPIC_API_KEY` env var
+- Existing `docs/SPEC.md` file
+
+**What it fixes:**
+- Item format: `- [ ] **SD.1 Title** - Description`
+- Area headers: `## Area: SD (Site Design)`
+- Sequential numbering within areas
+- Sub-item indentation
+- Missing separators between areas
+
+**What it preserves:**
+- All existing items (never removes content)
+- Completion status: `[ ]`, `[x]`, `[~]`
+- Item descriptions and meaning
+- Custom area codes if used
+
+**When to use:**
+- After manually editing SPEC.md
+- When items are formatted incorrectly
+- When area headers don't match expected format
+- After dumping quick notes into the spec
 
 ---
 
