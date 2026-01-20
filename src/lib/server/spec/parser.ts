@@ -1,10 +1,15 @@
 import fs from 'fs/promises';
 
+export type ItemStatus = 'open' | 'in-progress' | 'done' | 'skipped';
+export type Priority = 1 | 2 | 3 | null;  // P1=High, P2=Medium, P3=Low, null=Backlog
+
 export interface SpecItem {
   id: string;
   title: string;
   description: string;
-  completed: boolean;
+  completed: boolean;  // backward compat: true if done
+  status: ItemStatus;
+  priority: Priority;  // null = backlog (untagged)
   children: SpecItem[];
   line: number;
   story?: string;
@@ -146,7 +151,7 @@ export class SpecParser {
 
           // Stop at next area/phase header or checklist item
           if (nextLine.match(/^##\s+[^#]/) || nextLine.match(/^###\s+(?:Phase|Story)/)) break;
-          if (nextLine.match(/^\s*-\s+\[[ xX]\]/)) break;
+          if (nextLine.match(/^\s*-\s+\[[ xX~\-]\]/)) break;
 
           if (nextLine.startsWith('>')) {
             storyLines.push(nextLine.slice(1).trim());
@@ -162,14 +167,35 @@ export class SpecParser {
         continue;
       }
 
-      // Detect checklist items
-      const itemMatch = line.match(/^(\s*)-\s+\[([ xX])\]\s+(.+)$/);
+      // Detect checklist items: [ ] open, [x] done, [~] in-progress, [-] skipped
+      const itemMatch = line.match(/^(\s*)-\s+\[([ xX~\-])\]\s+(.+)$/);
       const checkMatch = !itemMatch && line.match(/^(\s*)-\s+✓\s+(.+)$/);
 
       if ((itemMatch || checkMatch) && currentArea) {
         const indent = itemMatch ? itemMatch[1].length : (checkMatch ? checkMatch[1].length : 0);
-        const completed = itemMatch ? itemMatch[2].toLowerCase() === 'x' : true;
+        const marker = itemMatch ? itemMatch[2].toLowerCase() : 'x';
         const text = itemMatch ? itemMatch[3] : (checkMatch ? checkMatch[2] : '');
+
+        // Determine status from marker
+        let status: ItemStatus;
+        let completed: boolean;
+        switch (marker) {
+          case 'x':
+            status = 'done';
+            completed = true;
+            break;
+          case '~':
+            status = 'in-progress';
+            completed = false;
+            break;
+          case '-':
+            status = 'skipped';
+            completed = false;
+            break;
+          default:
+            status = 'open';
+            completed = false;
+        }
 
         // Parse **Title** - Description format
         const boldMatch = text.match(/^\*\*(.+?)\*\*\s*(?:-\s*)?(.*)$/);
@@ -184,11 +210,21 @@ export class SpecParser {
           itemDesc = '';
         }
 
+        // Extract priority tag [P1], [P2], [P3] from title
+        let priority: Priority = null;  // null = backlog
+        const priorityMatch = itemTitle.match(/^\[P([123])\]\s*/i);
+        if (priorityMatch) {
+          priority = parseInt(priorityMatch[1], 10) as Priority;
+          itemTitle = itemTitle.replace(/^\[P[123]\]\s*/i, '');  // Remove tag from display title
+        }
+
         const item: SpecItem = {
           id: this.generateId(currentArea.code, itemTitle),
           title: itemTitle,
           description: itemDesc,
           completed,
+          status,
+          priority,
           children: [],
           line: lineNum,
         };

@@ -9,6 +9,49 @@ description: Fix bugs without feature creep - research first, minimal changes
 
 ---
 
+## FIRST: Start Debug Session
+
+**When entering bugfix mode, ALWAYS do this first:**
+
+1. Check project status: `chkd status`
+2. Create/append to debug notes file:
+
+```bash
+echo "## Debug Session: $(date '+%Y-%m-%d %H:%M')" >> .debug-notes.md
+echo "**Bug:** [describe bug here]" >> .debug-notes.md
+echo "" >> .debug-notes.md
+```
+
+**You are now in DEBUG MODE. Stay here until the bug is verified fixed.**
+
+### Debug Notes File (`.debug-notes.md`)
+
+Track your investigation in this file:
+
+```markdown
+## Debug Session: 2024-01-20 14:30
+**Bug:** Save button doesn't work
+
+### Research
+- Found similar issue on SO: [link]
+- Error suggests null reference
+
+### Findings
+- Line 87: user.id accessed without null check
+- user is null before session loads
+
+### Fix Applied
+- Added guard: `if (!user) return;`
+
+### Verified
+- [x] User confirmed fix works
+- [x] No regression in related features
+```
+
+**Always update `.debug-notes.md` as you work.** This helps you (and the user) track progress.
+
+---
+
 ## CRITICAL: BUG FIX ONLY
 
 **You are in BUGFIX MODE. You fix what's broken, not what's missing.**
@@ -129,13 +172,7 @@ That's not the bug we're fixing, so I'm noting it for later."
 Then capture it:
 
 ```bash
-curl -s -X POST http://localhost:3847/api/bugs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repoPath": "'$(pwd)'",
-    "title": "Improvement: what you noticed",
-    "description": "Found while fixing bug. Not related to the fix."
-  }' | jq
+chkd bug "Improvement: what you noticed"
 ```
 
 ### When user asks for features:
@@ -231,3 +268,28 @@ The bug is fixed. Want to plan that feature separately?"
 6. **Go slow** - Rushing causes new bugs
 
 **Bugfix mode = disciplined restraint.**
+
+---
+
+## EXITING DEBUG MODE
+
+**You stay in debug mode until ALL of these are true:**
+
+1. ✅ User has confirmed the bug is fixed
+2. ✅ You've updated `.debug-notes.md` with findings and fix
+3. ✅ No unrelated changes were made
+4. ✅ Any ideas discovered are captured with `chkd bug "..."`
+
+**Then exit debug mode by telling the user:**
+> "Bug fixed and verified. Debug notes saved to `.debug-notes.md`. Exiting debug mode."
+
+### If Bug Can't Be Fixed This Session
+
+Don't just leave it hanging. Capture it and tell the user:
+
+```bash
+chkd bug "Unresolved: [bug description] - needs [what]"
+```
+
+**Tell the user:**
+> "I couldn't fully fix this bug. I've documented what I found in `.debug-notes.md` and captured it as a bug for follow-up. Here's what's needed: [explain]"

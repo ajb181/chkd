@@ -21,6 +21,7 @@ export function getDb(): Database.Database {
   db.pragma('journal_mode = WAL');
 
   initSchema(db);
+  runMigrations(db);
 
   return db;
 }
@@ -98,6 +99,8 @@ function initSchema(db: Database.Database): void {
       current_task_id TEXT,
       current_task_title TEXT,
       current_task_phase INTEGER,
+      current_item_id TEXT,      -- item Claude is working on NOW
+      current_item_title TEXT,
       status TEXT NOT NULL DEFAULT 'idle',
       mode TEXT,
       start_time TEXT,
@@ -110,6 +113,9 @@ function initSchema(db: Database.Database): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Add columns if they don't exist (migration for existing DBs)
+    -- SQLite doesn't support IF NOT EXISTS for columns, so we handle this in code
+
     -- Search history
     CREATE TABLE IF NOT EXISTS search_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,6 +126,23 @@ function initSchema(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_search_history_repo ON search_history(repo_path);
   `);
+}
+
+function runMigrations(db: Database.Database): void {
+  // Check if current_item_id column exists
+  const tableInfo = db.prepare("PRAGMA table_info(sessions)").all() as any[];
+  const columnNames = tableInfo.map(c => c.name);
+
+  if (!columnNames.includes('current_item_id')) {
+    db.exec(`
+      ALTER TABLE sessions ADD COLUMN current_item_id TEXT;
+      ALTER TABLE sessions ADD COLUMN current_item_title TEXT;
+    `);
+  }
+
+  if (!columnNames.includes('also_did')) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN also_did TEXT;`);
+  }
 }
 
 export function closeDb(): void {

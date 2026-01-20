@@ -1,0 +1,62 @@
+# chkd-v2 Specification
+
+> Feature checklist and requirements. The spec is both the todo list and the map of what exists.
+
+---
+
+## Site Design
+
+> Pages, layouts, user experience.
+
+- [ ] **SD.1 [First Page]** - Description of the page
+
+---
+
+## Frontend
+
+> Components, state management, client-side logic.
+
+- [ ] **FE.1 [First Component]** - Description of the component
+
+---
+
+## Backend
+
+> APIs, services, database, server logic.
+
+- [ ] **BE.1 [First Endpoint]** - Description of the endpoint
+
+---
+
+## Future
+
+> Planned features and ideas for later.
+
+- [ ] **FUT.1 [Future Feature]** - Description
+
+---
+
+## Reference
+
+### Workflow Template
+
+Every feature added gets these steps:
+```
+- [ ] Explore: understand problem, search existing functions
+- [ ] Design: flow diagram if needed
+- [ ] Prototype: backend with test data + frontend calling it
+- [ ] Feedback: user reviews prototype
+- [ ] Implement: replace test data with real logic
+- [ ] Polish: iterate based on usage
+```
+
+### Spec Format
+
+- Area header: `## Area Name`
+- Section numbers: `**XX.N Feature Name**` (e.g., BE.1, FE.2)
+- Checklist: `- [ ]` or `- [x]`
+- User story: Blockquote `>`
+
+---
+
+*Spec created with chkd init*

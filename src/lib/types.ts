@@ -19,8 +19,14 @@ export interface TaskInfo {
   phase: number | null;
 }
 
+export interface ItemInfo {
+  id: string;
+  title: string;
+}
+
 export interface TaskSession {
   currentTask: TaskInfo | null;
+  currentItem: ItemInfo | null;  // item being worked on NOW
   startTime: string | null;
   iteration: number;
   status: SessionStatus;
@@ -29,6 +35,7 @@ export interface TaskSession {
   bugFixes: { description: string; timestamp: string }[];
   scopeChanges: { type: string; title: string; timestamp: string }[];
   deviations: { request: string; handled: string; timestamp: string }[];
+  alsoDid: string[];  // Off-plan work done during this task
   elapsedMs: number;
   lastActivity: string | null;
   repoPath?: string;

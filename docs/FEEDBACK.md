@@ -309,6 +309,36 @@ From BUILD_PLAN.md "Phase 4: Polish":
 
 ---
 
+## Notes from Review Session
+
+### Explore Step Clarification
+The Explore step in the workflow template should explicitly include:
+1. **Read relevant codebase** - understand existing patterns, related code
+2. **Refine the spec** - update based on what's learned
+
+This is not heavy tooling - just making it explicit that Claude reads context before building.
+
+### Multiple Projects
+The UI redesign doc mentions multi-project support briefly. May need more detail:
+- Project switcher UI
+- Add/remove projects
+- Where projects are stored
+
+### Spec Formatting Helper
+Add a `chkd format` command that cleans up rough spec entries:
+- Adds missing `[ ]` checkboxes
+- Adds section numbers
+- Closes incomplete markdown
+
+### Testing Integration (v2)
+Run tests on iteration complete:
+- `chkd done` triggers `npm test`
+- If fail → show errors, don't complete
+- If pass → proceed
+- Different levels: quick (changed files), full (all tests)
+
+---
+
 ## Files Reference
 
 | Purpose | Location |

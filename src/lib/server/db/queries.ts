@@ -145,6 +145,7 @@ export function getSession(repoId: string): TaskSession {
   if (!row) {
     return {
       currentTask: null,
+      currentItem: null,
       startTime: null,
       iteration: 0,
       status: 'idle',
@@ -153,6 +154,7 @@ export function getSession(repoId: string): TaskSession {
       bugFixes: [],
       scopeChanges: [],
       deviations: [],
+      alsoDid: [],
       elapsedMs: 0,
       lastActivity: null,
     };
@@ -167,6 +169,10 @@ export function getSession(repoId: string): TaskSession {
       title: row.current_task_title,
       phase: row.current_task_phase,
     } : null,
+    currentItem: row.current_item_id ? {
+      id: row.current_item_id,
+      title: row.current_item_title,
+    } : null,
     startTime: row.start_time,
     iteration: row.iteration || 0,
     status: row.status || 'idle',
@@ -175,6 +181,7 @@ export function getSession(repoId: string): TaskSession {
     bugFixes: JSON.parse(row.bug_fixes || '[]'),
     scopeChanges: JSON.parse(row.scope_changes || '[]'),
     deviations: JSON.parse(row.deviations || '[]'),
+    alsoDid: JSON.parse(row.also_did || '[]'),
     elapsedMs: startTime ? now - startTime : 0,
     lastActivity: row.last_activity,
   };
@@ -222,6 +229,77 @@ export function clearSession(repoId: string): void {
   `).run(repoId);
 }
 
+export function updateSession(repoId: string, updates: {
+  currentTask?: { id: string; title: string; phase: number | null } | null;
+  currentItem?: { id: string; title: string } | null;
+  status?: string;
+  mode?: string | null;
+  iteration?: number;
+  startTime?: string | null;
+}): void {
+  const db = getDb();
+  const sets: string[] = ['updated_at = datetime(\'now\')'];
+  const values: any[] = [];
+
+  if (updates.currentTask !== undefined) {
+    if (updates.currentTask) {
+      sets.push('current_task_id = ?', 'current_task_title = ?', 'current_task_phase = ?');
+      values.push(updates.currentTask.id, updates.currentTask.title, updates.currentTask.phase);
+    } else {
+      sets.push('current_task_id = NULL', 'current_task_title = NULL', 'current_task_phase = NULL');
+    }
+  }
+
+  if (updates.currentItem !== undefined) {
+    if (updates.currentItem) {
+      sets.push('current_item_id = ?', 'current_item_title = ?');
+      values.push(updates.currentItem.id, updates.currentItem.title);
+    } else {
+      sets.push('current_item_id = NULL', 'current_item_title = NULL');
+    }
+  }
+
+  if (updates.status !== undefined) {
+    sets.push('status = ?');
+    values.push(updates.status);
+  }
+
+  if (updates.mode !== undefined) {
+    sets.push('mode = ?');
+    values.push(updates.mode);
+  }
+
+  if (updates.iteration !== undefined) {
+    sets.push('iteration = ?');
+    values.push(updates.iteration);
+  }
+
+  if (updates.startTime !== undefined) {
+    sets.push('start_time = ?');
+    values.push(updates.startTime);
+  }
+
+  values.push(repoId);
+
+  db.prepare(`UPDATE sessions SET ${sets.join(', ')} WHERE repo_id = ?`).run(...values);
+}
+
+export function addAlsoDid(repoId: string, description: string): void {
+  const db = getDb();
+  const row = db.prepare(`SELECT also_did FROM sessions WHERE repo_id = ?`).get(repoId) as any;
+
+  const alsoDid = JSON.parse(row?.also_did || '[]');
+  alsoDid.push(description);
+
+  db.prepare(`UPDATE sessions SET also_did = ?, last_activity = datetime('now') WHERE repo_id = ?`)
+    .run(JSON.stringify(alsoDid), repoId);
+}
+
+export function clearAlsoDid(repoId: string): void {
+  const db = getDb();
+  db.prepare(`UPDATE sessions SET also_did = '[]' WHERE repo_id = ?`).run(repoId);
+}
+
 // ============================================
 // Bugs
 // ============================================
@@ -256,4 +334,33 @@ export function createBug(repoId: string, title: string, description?: string, s
   `).run(id, repoId, title, description || null, severity);
 
   return getBugs(repoId).find(b => b.id === id)!;
+}
+
+export function updateBugStatus(bugId: string, status: string): boolean {
+  const db = getDb();
+
+  const resolvedAt = status === 'fixed' || status === 'wont_fix'
+    ? "datetime('now')"
+    : 'NULL';
+
+  const result = db.prepare(`
+    UPDATE bugs
+    SET status = ?, resolved_at = ${resolvedAt}
+    WHERE id = ?
+  `).run(status, bugId);
+
+  return result.changes > 0;
+}
+
+export function getBugByQuery(repoId: string, query: string): Bug | null {
+  const bugs = getBugs(repoId);
+  const queryLower = query.toLowerCase();
+
+  // Try exact ID match first (short ID)
+  const byId = bugs.find(b => b.id.startsWith(query));
+  if (byId) return byId;
+
+  // Try title match
+  const byTitle = bugs.find(b => b.title.toLowerCase().includes(queryLower));
+  return byTitle || null;
 }

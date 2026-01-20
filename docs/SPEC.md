@@ -52,7 +52,34 @@ Configure repos and preferences.
 
 - [ ] **SD.5 CSS Variables** - Color system, spacing, typography
 - [ ] **SD.6 Component Styles** - Buttons, cards, inputs
-- [ ] **SD.7 Dark Mode** - Full dark theme support
+- [x] **SD.7 Dark Mode** - Full dark theme support
+- [x] **SD.8 Queue List for Off-Task Items** - Capture todos during active session, surface on tick with instructions for Claude to add to internal todo
+  - [x] Queue input in task card (visible during active session)
+  - [x] Queued item count badge
+  - [x] Remove items before tick
+  - [x] POST /api/session/queue - Add item
+  - [x] GET /api/session/queue - List items
+  - [x] DELETE /api/session/queue/:id - Remove item
+  - [x] Update tick response to include queued items + instructions
+  - [x] Auto-clear queue after surfacing
+- [ ] [P1] **SD.9 Update the specfile template to have note stopping claude directly editing it.** - Force the use of the endpoints for spec update.  Also should look at claude file genreally and give a better overview of chkd and the calls to make - noting in the ci calls
+
+
+> As a user, I want to have a specfile template that prevents me from directly editing it, so that I can ensure consistency and avoid unintentional changes.
+  - [ ] Explore: understand problem, search existing functions
+  - [ ] Design: flow diagram if needed
+  - [ ] Prototype: backend with test data + frontend calling it
+  - [ ] Feedback: user reviews prototype
+  - [ ] Implement: replace test data with real logic
+  - [ ] Polish: iterate based on usage
+- [x] **SD.9 Test Queue Feature** - Dummy task for testing the queue feature
+- [ ] **SD.10 Test Queue Feature** - Dummy task for testing queue
+  - [ ] Explore: understand problem, search existing functions
+  - [ ] Design: flow diagram if needed
+  - [ ] Prototype: backend with test data + frontend calling it
+  - [ ] Feedback: user reviews prototype
+  - [ ] Implement: replace test data with real logic
+  - [ ] Polish: iterate based on usage
 
 ---
 
@@ -114,6 +141,15 @@ Add new features to the spec.
 - [ ] **FE.6 API Client** - Functions to call backend
   - [ ] Fetch wrapper with error handling
   - [ ] Type-safe responses
+- [ ] [P1] **FE.7 Update the top Session ui to show other sessions in deveopment from other projects if many working at the same time.** - If I'm coding several different projects no matter what project file I'm looking at an easy way to toggle on and showing a summarised version of what that's up to as I go around the project but if I'm the master project then I'm looking at is still the main visible one at the time
+
+> As a developer, I want to see other sessions in development from other projects if many are working at the same time, so that I can better collaborate and understand the overall context.
+  - [ ] Explore: understand problem, search existing functions
+  - [ ] Design: flow diagram if needed
+  - [ ] Prototype: backend with test data + frontend calling it
+  - [ ] Feedback: user reviews prototype
+  - [ ] Implement: replace test data with real logic
+  - [ ] Polish: iterate based on usage
 
 ---
 
@@ -202,6 +238,15 @@ Command-line interface with workflow documentation.
   - [x] check, add, bug commands
   - [x] workflow command (shows diagram)
   - [x] help command
+- [ ] **BE.9 Order detect when the instance has stopped developing and we haven't actually actively been told** - The system should automatically detect when an instance has stopped developing and notify the user, without requiring the user to actively check for this condition.
+
+> As a user, I want to be notified when an instance has stopped developing so that I can take appropriate action.
+  - [ ] Explore: understand problem, search existing functions
+  - [ ] Design: flow diagram if needed
+  - [ ] Prototype: backend with test data + frontend calling it
+  - [ ] Feedback: user reviews prototype
+  - [ ] Implement: replace test data with real logic
+  - [ ] Polish: iterate based on usage
 
 ---
 

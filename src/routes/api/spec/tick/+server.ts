@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { getRepoByPath, getSession } from '$lib/server/db/queries';
 import { SpecParser } from '$lib/server/spec/parser';
 import { markItemComplete } from '$lib/server/spec/writer';
+import { clearQueue } from '$lib/server/proposal';
 import path from 'path';
 
 // POST /api/spec/tick - Mark an item complete
@@ -19,18 +20,34 @@ export const POST: RequestHandler = async ({ request }) => {
     const parser = new SpecParser();
     const spec = await parser.parseFile(specPath);
 
-    // Find the item
+    // Find the item (including children)
     let targetId = itemId;
     let targetTitle = '';
 
     if (!targetId && itemQuery) {
-      // Search by query
+      // Search by query - check both items and their children
       const sectionMatch = itemQuery.match(/^(\d+)\.(\d+)/);
+      const queryLower = itemQuery.toLowerCase();
+
+      // Helper to search children
+      const searchChildren = (children: any[]): { id: string; title: string } | null => {
+        for (const child of children) {
+          if (child.title.toLowerCase().includes(queryLower)) {
+            return { id: child.id, title: child.title };
+          }
+          if (child.children && child.children.length > 0) {
+            const found = searchChildren(child.children);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
 
       for (const phase of spec.phases) {
         for (let i = 0; i < phase.items.length; i++) {
           const item = phase.items[i];
 
+          // Check section match (e.g., "SD.1")
           if (sectionMatch) {
             const phaseNum = parseInt(sectionMatch[1]);
             const itemNum = parseInt(sectionMatch[2]);
@@ -41,10 +58,21 @@ export const POST: RequestHandler = async ({ request }) => {
             }
           }
 
-          if (item.title.toLowerCase().includes(itemQuery.toLowerCase())) {
+          // Check item title
+          if (item.title.toLowerCase().includes(queryLower)) {
             targetId = item.id;
             targetTitle = item.title;
             break;
+          }
+
+          // Search children recursively
+          if (item.children && item.children.length > 0) {
+            const found = searchChildren(item.children);
+            if (found) {
+              targetId = found.id;
+              targetTitle = found.title;
+              break;
+            }
           }
         }
         if (targetId) break;
@@ -68,27 +96,52 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    // Find title if not set
+    // Find title if not set (search children too)
     if (!targetTitle) {
-      for (const phase of spec.phases) {
-        for (const item of phase.items) {
+      const findTitle = (items: any[]): string | null => {
+        for (const item of items) {
           if (item.id === targetId) {
-            targetTitle = item.title;
-            break;
+            return item.title;
           }
+          if (item.children && item.children.length > 0) {
+            const found = findTitle(item.children);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+
+      for (const phase of spec.phases) {
+        const found = findTitle(phase.items);
+        if (found) {
+          targetTitle = found;
+          break;
         }
       }
     }
 
     await markItemComplete(specPath, targetId);
 
+    // Get and clear queued items (user added while Claude was working)
+    const queuedItems = clearQueue(repoPath);
+
+    // Build response
+    const response: Record<string, unknown> = {
+      itemId: targetId,
+      title: targetTitle,
+      message: `Marked complete: ${targetTitle}`,
+    };
+
+    // If there are queued items, include them with instructions for Claude
+    if (queuedItems.length > 0) {
+      response.queuedItems = queuedItems.map(q => q.title);
+      response.queuedCount = queuedItems.length;
+      response.instruction = `USER QUEUED ${queuedItems.length} ITEM(S): ${queuedItems.map(q => `"${q.title}"`).join(', ')}. ADD these to your existing Claude Code TodoWrite list without losing any current items. Do NOT add to the spec.`;
+    }
+
     return json({
       success: true,
-      data: {
-        itemId: targetId,
-        title: targetTitle,
-        message: `Marked complete: ${targetTitle}`
-      }
+      data: response
     });
   } catch (error) {
     return json({ success: false, error: String(error) }, { status: 500 });

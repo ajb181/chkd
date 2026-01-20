@@ -1,15 +1,14 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getRepoByPath, getSession } from '$lib/server/db/queries';
 import { SpecParser } from '$lib/server/spec/parser';
-import { addItem, addFeatureWithWorkflow } from '$lib/server/spec/writer';
+import { addItem, addItemToArea, addFeatureWithWorkflow } from '$lib/server/spec/writer';
 import path from 'path';
 
 // POST /api/spec/add - Add a new item to the spec
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const body = await request.json();
-    const { repoPath, title, description, phaseNumber, withWorkflow = true } = body;
+    const { repoPath, title, description, areaCode, phaseNumber, withWorkflow = true, tasks } = body;
 
     if (!repoPath || !title) {
       return json({ success: false, error: 'repoPath and title are required' }, { status: 400 });
@@ -19,7 +18,38 @@ export const POST: RequestHandler = async ({ request }) => {
     const parser = new SpecParser();
     const spec = await parser.parseFile(specPath);
 
-    // Determine target phase
+    // Validate tasks if provided
+    const customTasks = Array.isArray(tasks) ? tasks.filter((t: unknown) => typeof t === 'string' && t.trim()) : undefined;
+
+    // If areaCode is provided, use the new area-based approach
+    if (areaCode) {
+      const area = spec.areas.find(a => a.code === areaCode);
+      if (!area) {
+        return json({ success: false, error: `Area ${areaCode} not found` }, { status: 400 });
+      }
+
+      // Add the item (with workflow template if requested)
+      let result;
+      if (withWorkflow) {
+        result = await addFeatureWithWorkflow(specPath, areaCode, title, description, customTasks);
+      } else {
+        result = await addItemToArea(specPath, areaCode, title, description);
+      }
+
+      return json({
+        success: true,
+        data: {
+          itemId: result.itemId,
+          areaCode,
+          areaName: area.name,
+          line: result.line,
+          title,
+          message: `Added "${title}" to ${area.name}`
+        }
+      });
+    }
+
+    // Fallback: use phase-based approach for backward compat
     let targetPhase = phaseNumber;
 
     if (!targetPhase) {
@@ -40,7 +70,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // Add the item (with workflow template if requested)
     let result;
     if (withWorkflow) {
-      result = await addFeatureWithWorkflow(specPath, targetPhase, title, description);
+      result = await addFeatureWithWorkflow(specPath, targetPhase, title, description, customTasks);
     } else {
       result = await addItem(specPath, targetPhase, title, description);
     }

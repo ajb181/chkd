@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run chkd:*)",
+      "Bash(npx chkd)",
+      "Bash(node:*)",
+      "Bash(npm link:*)",
+      "Bash(chkd status:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsx:*)",
+      "Bash(chkd help:*)",
+      "Bash(chkd upgrade:*)",
+      "Bash(chkd bug --help:*)",
+      "Bash(chkd done --help:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npm run cli:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}
