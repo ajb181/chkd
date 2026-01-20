@@ -1030,6 +1030,7 @@
           </div>
           <div class="progress-bar">
             <div class="progress-fill" style="width: {spec.progress}%"></div>
+            <span class="progress-percent">{spec.progress}%</span>
           </div>
         </div>
 
@@ -1935,16 +1936,27 @@
   }
 
   .progress-bar {
-    height: 6px;
+    position: relative;
+    height: 8px;
     background: var(--bg-tertiary);
-    border-radius: 3px;
-    overflow: hidden;
+    border-radius: 4px;
+    overflow: visible;
   }
 
   .progress-fill {
     height: 100%;
     background: var(--primary);
+    border-radius: 4px;
     transition: width 0.3s;
+  }
+
+  .progress-percent {
+    position: absolute;
+    right: 0;
+    top: -18px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
   }
 
   /* View Toggle */
