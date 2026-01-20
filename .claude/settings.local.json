@@ -14,7 +14,10 @@
       "Bash(chkd done --help:*)",
       "Bash(npx ts-node:*)",
       "Bash(npm run cli:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

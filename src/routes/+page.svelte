@@ -67,6 +67,8 @@
   let bugs: Bug[] = [];
   let bugsExpanded = false;
   let showAllBugs = false;
+  let bugInput = '';
+  let addingBug = false;
 
   // Context helper types
   interface ContextHelp {
@@ -401,6 +403,30 @@
     featureCaptureInitialTitle = captureInput.trim();
     captureInput = '';
     showFeatureCapture = true;
+  }
+
+  async function handleAddBug() {
+    if (!bugInput.trim() || !repoPath || addingBug) return;
+    addingBug = true;
+    try {
+      const res = await fetch('/api/bugs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoPath, title: bugInput.trim(), severity: 'medium' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        bugInput = '';
+        // Refresh bugs
+        const bugsRes = await getBugs(repoPath);
+        if (bugsRes.success && bugsRes.data) {
+          bugs = bugsRes.data;
+        }
+        bugsExpanded = true;
+      }
+    } finally {
+      addingBug = false;
+    }
   }
 
   // Smart Feature Capture functions
@@ -926,62 +952,75 @@
       {/if}
 
       <!-- Bug Tracker Panel -->
-      {#if bugs.length > 0}
-        {@const openBugs = bugs.filter(b => b.status === 'open' || b.status === 'in_progress')}
-        {@const fixedBugs = bugs.filter(b => b.status === 'fixed' || b.status === 'wont_fix')}
-        {@const displayBugs = showAllBugs ? bugs : openBugs}
-        <div class="bug-panel" class:has-critical={openBugs.some(b => b.severity === 'critical')}>
-          <button class="bug-header" on:click={() => bugsExpanded = !bugsExpanded}>
-            <span class="bug-icon">{bugsExpanded ? '▾' : '▸'}</span>
-            <span class="bug-title">🐛 Bugs</span>
-            {#if openBugs.length > 0}
-              <span class="bug-count" class:critical={openBugs.some(b => b.severity === 'critical' || b.severity === 'high')}>
-                {openBugs.length} open
-              </span>
-            {:else}
-              <span class="bug-count done">All clear!</span>
-            {/if}
-          </button>
+      {@const openBugs = bugs.filter(b => b.status === 'open' || b.status === 'in_progress')}
+      {@const fixedBugs = bugs.filter(b => b.status === 'fixed' || b.status === 'wont_fix')}
+      {@const displayBugs = showAllBugs ? bugs : openBugs}
+      <div class="bug-panel" class:has-critical={openBugs.some(b => b.severity === 'critical')}>
+        <button class="bug-header" on:click={() => bugsExpanded = !bugsExpanded}>
+          <span class="bug-icon">{bugsExpanded ? '▾' : '▸'}</span>
+          <span class="bug-title">🐛 Bugs</span>
+          {#if openBugs.length > 0}
+            <span class="bug-count" class:critical={openBugs.some(b => b.severity === 'critical' || b.severity === 'high')}>
+              {openBugs.length} open
+            </span>
+          {:else}
+            <span class="bug-count done">All clear!</span>
+          {/if}
+        </button>
 
-          {#if bugsExpanded}
-            <div class="bug-content">
+        {#if bugsExpanded}
+          <div class="bug-content">
+            <!-- Quick bug input -->
+            <form class="bug-input-form" on:submit|preventDefault={handleAddBug}>
+              <input
+                type="text"
+                class="bug-input"
+                placeholder="Quick add bug..."
+                bind:value={bugInput}
+                disabled={addingBug}
+              />
+              <button type="submit" class="bug-add-btn" disabled={!bugInput.trim() || addingBug}>
+                {addingBug ? '...' : '+'}
+              </button>
+            </form>
+
+            {#if bugs.length > 0}
               <div class="bug-filters">
                 <label class="bug-filter-toggle">
                   <input type="checkbox" bind:checked={showAllBugs} />
                   Show fixed ({fixedBugs.length})
                 </label>
               </div>
+            {/if}
 
-              {#if displayBugs.length === 0}
-                <p class="bug-empty">No bugs to show</p>
-              {:else}
-                <ul class="bug-list">
-                  {#each displayBugs as bug}
-                    <li class="bug-item" class:fixed={bug.status === 'fixed' || bug.status === 'wont_fix'}>
-                      <span class="bug-severity {bug.severity}" title={bug.severity}>
-                        {bug.severity === 'critical' ? '🔴' : bug.severity === 'high' ? '🟠' : bug.severity === 'medium' ? '🟡' : '🟢'}
-                      </span>
-                      <span class="bug-item-title">{bug.title}</span>
-                      {#if bug.status === 'fixed'}
-                        <span class="bug-status-badge fixed">✓ Fixed</span>
-                      {:else if bug.status === 'in_progress'}
-                        <span class="bug-status-badge progress">◐ In Progress</span>
-                      {:else if bug.status === 'wont_fix'}
-                        <span class="bug-status-badge wontfix">– Won't Fix</span>
-                      {/if}
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
+            {#if displayBugs.length === 0}
+              <p class="bug-empty">{bugs.length === 0 ? 'No bugs yet' : 'No open bugs'}</p>
+            {:else}
+              <ul class="bug-list">
+                {#each displayBugs as bug}
+                  <li class="bug-item" class:fixed={bug.status === 'fixed' || bug.status === 'wont_fix'}>
+                    <span class="bug-severity {bug.severity}" title={bug.severity}>
+                      {bug.severity === 'critical' ? '🔴' : bug.severity === 'high' ? '🟠' : bug.severity === 'medium' ? '🟡' : '🟢'}
+                    </span>
+                    <span class="bug-item-title">{bug.title}</span>
+                    {#if bug.status === 'fixed'}
+                      <span class="bug-status-badge fixed">✓ Fixed</span>
+                    {:else if bug.status === 'in_progress'}
+                      <span class="bug-status-badge progress">◐ In Progress</span>
+                    {:else if bug.status === 'wont_fix'}
+                      <span class="bug-status-badge wontfix">– Won't Fix</span>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
 
-              <div class="bug-actions">
-                <code>chkd bug "desc"</code> <span>add bug</span>
-                <code>/bugfix</code> <span>fix in Claude</span>
-              </div>
+            <div class="bug-actions">
+              <code>/bugfix</code> <span>fix in Claude</span>
             </div>
-          {/if}
-        </div>
-      {/if}
+          </div>
+        {/if}
+      </div>
 
       <!-- Progress Summary + View Toggle -->
       <div class="top-bar">
@@ -3027,5 +3066,46 @@
     border-radius: var(--radius-sm);
     font-size: 11px;
     margin-right: 4px;
+  }
+
+  .bug-input-form {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+  }
+
+  .bug-input {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    background: var(--bg);
+  }
+
+  .bug-input:focus {
+    outline: none;
+    border-color: var(--error);
+  }
+
+  .bug-add-btn {
+    padding: var(--space-sm) var(--space-md);
+    background: var(--error);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 36px;
+  }
+
+  .bug-add-btn:hover:not(:disabled) {
+    background: #dc2626;
+  }
+
+  .bug-add-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>
