@@ -454,14 +454,57 @@
       <h2>Fixing Bugs</h2>
       <p class="intro-text">The bugfix workflow keeps you focused on fixing without feature creep.</p>
 
-      <h3>Quick Bug Tracking (CLI)</h3>
+      <h3>Capturing Bugs</h3>
+      <p>You can capture bugs two ways:</p>
+
+      <div class="bug-capture-methods">
+        <div class="capture-method">
+          <strong>🖥️ Dashboard</strong>
+          <p>Click the 🐛 Bugs panel on the main dashboard. Type in the quick input and press Enter or click +.</p>
+        </div>
+        <div class="capture-method">
+          <strong>⌨️ CLI</strong>
+          <p>Run <code>chkd bug "description"</code> from your terminal.</p>
+        </div>
+      </div>
+
+      <h3>Bug Severity Levels</h3>
+      <p>Bugs have four severity levels to help you prioritize:</p>
+
+      <div class="severity-table">
+        <div class="severity-row critical">
+          <span class="severity-icon">🔴</span>
+          <span class="severity-name">Critical</span>
+          <span class="severity-desc">App broken, data loss, security issue</span>
+        </div>
+        <div class="severity-row high">
+          <span class="severity-icon">🟠</span>
+          <span class="severity-name">High</span>
+          <span class="severity-desc">Major feature broken, no workaround</span>
+        </div>
+        <div class="severity-row medium">
+          <span class="severity-icon">🟡</span>
+          <span class="severity-name">Medium</span>
+          <span class="severity-desc">Feature broken but has workaround (default)</span>
+        </div>
+        <div class="severity-row low">
+          <span class="severity-icon">🟢</span>
+          <span class="severity-name">Low</span>
+          <span class="severity-desc">Minor issue, cosmetic, edge case</span>
+        </div>
+      </div>
+
+      <h3>CLI Commands</h3>
       <div class="code-block">
-        <code># Quick-add a bug you noticed</code><br/>
+        <code># Quick-add a bug (medium severity)</code><br/>
         <code>chkd bug "Save button doesn't work"</code><br/><br/>
         <code># Add with severity</code><br/>
-        <code>chkd bug "Login crash on mobile" --severity high</code><br/><br/>
+        <code>chkd bug "Login crash" --severity high</code><br/>
+        <code>chkd bug "Typo in footer" --severity low</code><br/><br/>
         <code># See all open bugs</code><br/>
         <code>chkd bugs</code><br/><br/>
+        <code># See all bugs including fixed</code><br/>
+        <code>chkd bugs --all</code><br/><br/>
         <code># Mark bug as fixed</code><br/>
         <code>chkd fix "Save button"</code>
       </div>
@@ -537,12 +580,28 @@
       </div>
 
       <h3>After Fixing</h3>
-      <p>Run <code>chkd fix "bug"</code> to mark it done. Consider using <code>/retro</code> in Claude Code to capture learnings:</p>
+      <p>Run <code>chkd fix "bug"</code> to mark it done. You'll be prompted to capture learnings:</p>
       <ul>
         <li><strong>Root cause</strong> - What caused this bug?</li>
         <li><strong>Prevention</strong> - How to prevent similar bugs?</li>
         <li><strong>Detection</strong> - Should we add a test case?</li>
       </ul>
+      <p>Consider using <code>/retro</code> in Claude Code for a guided retrospective that can update your project docs.</p>
+
+      <h3>Debug Notes</h3>
+      <p>During debugging, findings are saved to <code>.debug-notes.md</code> in your project:</p>
+      <div class="code-block" style="font-size: 12px;">
+        <code>## Debug Session: 2026-01-20 14:30</code><br/>
+        <code>**Bug:** Save button doesn't work</code><br/><br/>
+        <code>### Symptoms</code><br/>
+        <code>- Button shows spinner forever</code><br/>
+        <code>- Console: TypeError: Cannot read 'id'</code><br/><br/>
+        <code>### Root Cause</code><br/>
+        <code>- Line 87: user.id called when user is null</code><br/><br/>
+        <code>### Fix Applied</code><br/>
+        <code>- Added guard: if (!user) return;</code>
+      </div>
+      <p>This file builds a history of debugging sessions for future reference.</p>
     </section>
 
     <section>
@@ -1470,6 +1529,83 @@
     color: var(--text);
   }
 
+  /* Bug Capture Methods */
+  .bug-capture-methods {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+    margin: var(--space-md) 0;
+  }
+
+  .capture-method {
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border-left: 3px solid var(--primary);
+  }
+
+  .capture-method strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: var(--space-xs);
+  }
+
+  .capture-method p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* Severity Table */
+  .severity-table {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin: var(--space-md) 0;
+  }
+
+  .severity-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+  }
+
+  .severity-icon {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+  }
+
+  .severity-name {
+    font-weight: 600;
+    font-size: 13px;
+    width: 70px;
+  }
+
+  .severity-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .severity-row.critical {
+    border-left: 3px solid #ef4444;
+  }
+
+  .severity-row.high {
+    border-left: 3px solid #f97316;
+  }
+
+  .severity-row.medium {
+    border-left: 3px solid #eab308;
+  }
+
+  .severity-row.low {
+    border-left: 3px solid #22c55e;
+  }
+
   /* Bugfix Section */
   .bugfix-flow {
     display: flex;
@@ -1580,6 +1716,19 @@
   @media (max-width: 600px) {
     .bugfix-rules {
       grid-template-columns: 1fr;
+    }
+
+    .bug-capture-methods {
+      grid-template-columns: 1fr;
+    }
+
+    .severity-row {
+      flex-wrap: wrap;
+    }
+
+    .severity-desc {
+      width: 100%;
+      margin-top: var(--space-xs);
     }
   }
 </style>
