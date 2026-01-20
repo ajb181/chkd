@@ -13,6 +13,16 @@
   let addingRepo = false;
   let addRepoError: string | null = null;
 
+  // Repo status cards - stores session/progress for each repo
+  interface RepoStatus {
+    currentTask: string | null;
+    status: 'idle' | 'building' | 'debugging';
+    progress: number;
+    completedItems: number;
+    totalItems: number;
+  }
+  let repoStatuses: Map<string, RepoStatus> = new Map();
+
   // Get repoPath from URL or use first available repo
   let repoPath = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('repo') || ''
@@ -292,7 +302,38 @@
         // Default fallback
         repoPath = '/Users/alex/chkd-v2';
       }
+
+      // Fetch status for all repos (for the repo cards)
+      await loadAllRepoStatuses();
     }
+  }
+
+  async function loadAllRepoStatuses() {
+    const statusPromises = repos.map(async (repo) => {
+      try {
+        const [sessionRes, specRes] = await Promise.all([
+          getSession(repo.path),
+          getSpec(repo.path)
+        ]);
+
+        const status: RepoStatus = {
+          currentTask: sessionRes.data?.currentTask?.title || null,
+          status: sessionRes.data?.mode === 'debugging' ? 'debugging' :
+                  sessionRes.data?.status === 'building' ? 'building' : 'idle',
+          progress: specRes.data?.progress || 0,
+          completedItems: specRes.data?.completedItems || 0,
+          totalItems: specRes.data?.totalItems || 0
+        };
+        return { repoId: repo.id, status };
+      } catch {
+        return { repoId: repo.id, status: { currentTask: null, status: 'idle' as const, progress: 0, completedItems: 0, totalItems: 0 } };
+      }
+    });
+
+    const results = await Promise.all(statusPromises);
+    const newStatuses = new Map<string, RepoStatus>();
+    results.forEach(r => newStatuses.set(r.repoId, r.status));
+    repoStatuses = newStatuses;
   }
 
   async function handleAddRepo() {
@@ -367,6 +408,20 @@
 
       if (sessionRes.success) {
         session = sessionRes.data || null;
+      }
+
+      // Update current repo's status in the cards
+      if (currentRepo && specRes.success && sessionRes.success) {
+        const newStatus: RepoStatus = {
+          currentTask: session?.currentTask?.title || null,
+          status: session?.mode === 'debugging' ? 'debugging' :
+                  session?.status === 'building' ? 'building' : 'idle',
+          progress: spec?.progress || 0,
+          completedItems: spec?.completedItems || 0,
+          totalItems: spec?.totalItems || 0
+        };
+        repoStatuses.set(currentRepo.id, newStatus);
+        repoStatuses = repoStatuses; // Trigger reactivity
       }
     } catch (e) {
       error = String(e);
@@ -664,30 +719,51 @@
 </script>
 
 <div class="app" class:has-detail={selectedFeature}>
-  <!-- Header with Repo Selector and Quick Capture -->
+  <!-- Repo Cards Strip -->
+  <div class="repo-cards-strip">
+    {#each repos as repo}
+      {@const status = repoStatuses.get(repo.id)}
+      <button
+        class="repo-card"
+        class:active={currentRepo?.id === repo.id}
+        class:building={status?.status === 'building'}
+        class:debugging={status?.status === 'debugging'}
+        on:click={() => selectRepo(repo)}
+      >
+        <div class="repo-card-header">
+          <span class="repo-card-name">{repo.name}</span>
+          {#if status?.status === 'building'}
+            <span class="repo-card-status building">●</span>
+          {:else if status?.status === 'debugging'}
+            <span class="repo-card-status debugging">●</span>
+          {:else}
+            <span class="repo-card-status idle">○</span>
+          {/if}
+        </div>
+        <div class="repo-card-task">
+          {#if status?.currentTask}
+            {status.currentTask.length > 25 ? status.currentTask.slice(0, 22) + '...' : status.currentTask}
+          {:else}
+            <span class="repo-card-idle">Idle</span>
+          {/if}
+        </div>
+        <div class="repo-card-progress">
+          <div class="repo-card-bar">
+            <div class="repo-card-fill" style="width: {status?.progress || 0}%"></div>
+          </div>
+          <span class="repo-card-pct">{status?.progress || 0}%</span>
+        </div>
+      </button>
+    {/each}
+    <button class="repo-card repo-card-add" on:click={() => showAddRepo = true} title="Add Repository">
+      <span class="repo-card-plus">+</span>
+      <span class="repo-card-add-label">Add Repo</span>
+    </button>
+  </div>
+
+  <!-- Header with Nav and Quick Capture -->
   <header class="capture-bar">
     <div class="header-left">
-      <!-- Repo Selector -->
-      <div class="repo-selector">
-        <select
-          class="repo-select"
-          value={currentRepo?.id || ''}
-          on:change={(e) => {
-            const repo = repos.find(r => r.id === e.currentTarget.value);
-            if (repo) selectRepo(repo);
-          }}
-        >
-          {#each repos as repo}
-            <option value={repo.id}>{repo.name}</option>
-          {/each}
-          {#if repos.length === 0}
-            <option value="">No repos</option>
-          {/if}
-        </select>
-        <button class="btn-add-repo" on:click={() => showAddRepo = true} title="Add Repository">
-          +
-        </button>
-      </div>
       <a href="/guide{currentRepo ? `?repo=${encodeURIComponent(currentRepo.path)}` : ''}" class="nav-link">Guide</a>
       <a href="/settings" class="nav-link">Settings</a>
     </div>
@@ -1354,6 +1430,155 @@
   }
 
   /* Repo Selector */
+  /* Repo Cards Strip */
+  .repo-cards-strip {
+    display: flex;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .repo-card {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: var(--space-sm) var(--space-md);
+    min-width: 160px;
+    max-width: 200px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+  }
+
+  .repo-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .repo-card.active {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, var(--bg), rgba(79, 70, 229, 0.05));
+  }
+
+  .repo-card.building {
+    border-color: var(--info);
+  }
+
+  .repo-card.debugging {
+    border-color: var(--error);
+  }
+
+  .repo-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+  }
+
+  .repo-card-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .repo-card-status {
+    font-size: 10px;
+  }
+
+  .repo-card-status.building {
+    color: var(--info);
+    animation: pulse 1.5s infinite;
+  }
+
+  .repo-card-status.debugging {
+    color: var(--error);
+    animation: pulse 1.5s infinite;
+  }
+
+  .repo-card-status.idle {
+    color: var(--text-muted);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .repo-card-task {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 16px;
+  }
+
+  .repo-card-idle {
+    font-style: italic;
+    opacity: 0.6;
+  }
+
+  .repo-card-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .repo-card-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .repo-card-fill {
+    height: 100%;
+    background: var(--primary);
+    transition: width 0.3s;
+  }
+
+  .repo-card-pct {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .repo-card-add {
+    align-items: center;
+    justify-content: center;
+    min-width: 80px;
+    border-style: dashed;
+    background: transparent;
+  }
+
+  .repo-card-add:hover {
+    background: var(--bg);
+  }
+
+  .repo-card-plus {
+    font-size: 20px;
+    color: var(--text-muted);
+  }
+
+  .repo-card-add-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
   .repo-selector {
     display: flex;
     align-items: center;

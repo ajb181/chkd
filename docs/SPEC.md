@@ -66,12 +66,12 @@ Configure repos and preferences.
 
 
 > As a user, I want to have a specfile template that prevents me from directly editing it, so that I can ensure consistency and avoid unintentional changes.
-  - [ ] Explore: understand problem, search existing functions
+  - [x] Explore: understand problem, search existing functions
   - [ ] Design: flow diagram if needed
-  - [ ] Prototype: backend with test data + frontend calling it
+  - [x] Prototype: backend with test data + frontend calling it
   - [ ] Feedback: user reviews prototype
   - [ ] Implement: replace test data with real logic
-  - [ ] Polish: iterate based on usage
+  - [x] Polish: iterate based on usage
 - [x] **SD.9 Test Queue Feature** - Dummy task for testing the queue feature
 - [ ] **SD.10 Test Queue Feature** - Dummy task for testing queue
   - [ ] Explore: understand problem, search existing functions
@@ -80,6 +80,17 @@ Configure repos and preferences.
   - [ ] Feedback: user reviews prototype
   - [ ] Implement: replace test data with real logic
   - [ ] Polish: iterate based on usage
+- [x] **SD.11 Can we add a task to replace the drop-down menu for swapping the repose I'm imagining a set of cards that run across the top they have a bit of information about the repo and what's developing where it's at like a very condensed high-level and you can click between them really easily and they're showing you what each one's working on at the moment or if it's idle** - The cards will run across the top of the screen, displaying details like the repository name, what's currently being developed, and the overall status.
+
+> As a product manager, I want a set of cards that show high-level information about each repository so that I can easily see what's being worked on and the status of each area. You can click them to nav between them
+  - [ ] Explore: understand problem, search existing functions
+  - [ ] Design: flow diagram if needed
+  - [ ] Prototype: backend with test data + frontend calling it
+  - [ ] Feedback: user reviews prototype
+  - [ ] Implement: replace test data with real logic
+  - [ ] Polish: iterate based on usage
+  - [ ] Allow quick message to the queue that gets pulled in on the next "click"
+  - [ ] Add ability to receive a message when Claude asked multi questions and is blocking to continue you could handle it in the app
 
 ---
 
