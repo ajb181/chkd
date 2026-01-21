@@ -213,3 +213,40 @@ export function getQuickWinByQuery(repoPath: string, repoId: string, query: stri
   const byTitle = wins.find(w => w.title.toLowerCase().includes(queryLower));
   return byTitle || null;
 }
+
+// Update a quick win's title
+export function updateQuickWin(repoPath: string, quickWinId: string, newTitle: string): { success: boolean; newId?: string } {
+  const filePath = getFilePath(repoPath);
+
+  if (!fs.existsSync(filePath)) {
+    return { success: false };
+  }
+
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split('\n');
+
+  // Find the item by ID (regenerate ID from title)
+  const checkboxRegex = /^(\s*)- \[([ x])\] (.+)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(checkboxRegex);
+    if (match) {
+      const title = match[3].trim();
+      const id = crypto.createHash('md5').update(title).digest('hex').slice(0, 8);
+
+      if (id === quickWinId) {
+        // Update the title
+        const indent = match[1];
+        const checked = match[2];
+        lines[i] = `${indent}- [${checked}] ${newTitle.trim()}`;
+        fs.writeFileSync(filePath, lines.join('\n'));
+
+        // Return new ID (since title changed, ID changes)
+        const newId = crypto.createHash('md5').update(newTitle.trim()).digest('hex').slice(0, 8);
+        return { success: true, newId };
+      }
+    }
+  }
+
+  return { success: false };
+}

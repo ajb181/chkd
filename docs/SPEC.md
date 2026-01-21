@@ -134,7 +134,7 @@ Configure repos and preferences.
   - [ ] Feedback: user reviews and approves UX
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
-- [ ] **Track and display time spent on each checklist item - store duration when ticked, show in UI**
+- [x] **Track and display time spent on each checklist item - store duration when ticked, show in UI**
   - [x] Explore: check existing checklist data structure + timing patterns
   - [x] Design: duration storage schema + UI display mockups
   - [~] Prototype: timer UI + mock duration data display
@@ -148,6 +148,34 @@ Configure repos and preferences.
   - [x] Feedback: verify connection stability in test environment
   - [x] Implement: fix connection issues and add proper error handling
   - [x] Polish: add connection status indicators and auto-reconnect
+- [ ] **SD.16 allow a file to be added into a bug or sotry** - Enable users to attach files (documents, images, logs, etc.) to bug reports and stories for better context and documentation.
+
+> As a developer, I want to attach files to bugs and stories so that I can provide additional context like screenshots, logs, or documentation.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+- [x] **SD.17 add impromptu and debug work states so the UI is always engaged regardless** - At the moment it can be idle in the app but actually the code is working so we're looking to solve those solutions both when in debug and impromptu work
+
+> As a developer, I want impromptu and debug work states so that the UI stays engaged during all types of work sessions.
+  - [x] Explore: research problem, check existing code/patterns
+  - [x] Design: plan approach + define endpoint contracts
+  - [x] Prototype: build UI with mock data, stub backend
+  - [x] Feedback: user reviews and approves UX
+  - [x] review overall code around this update for simplification if possible
+  - [x] Implement: connect real backend logic
+  - [x] Polish: error states, edge cases, performance
+- [ ] **SD.18 allow file to be attached when creating bug or story** - Enable users to attach files (documents, images, logs, etc.) to bug reports and user stories for better context and documentation.
+
+> As a developer, I want to attach files to bugs and stories so that I can provide additional context like screenshots, logs, or documentation.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
 
 ---
 
@@ -354,6 +382,50 @@ Command-line interface with workflow documentation.
   - [ ] Explore: understand problem, search existing functions
   - [ ] Implement: replace test data with real logic
   - [ ] Polish: iterate based on usage
+- [ ] **BE.11 Add working pusle check message to bacd end** - Allow the AI to call a pulse with the state that it's still in just as a nice signal to the back end that we're still on track if there's a mismatch on the state of the platform and the the AI sending we can give it a little message and help get back on track
+
+> As a developer, I want a health check endpoint so that I can monitor if the backend service is running properly.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+  - [ ] update documention & guides
+- [ ] **BE.12 Update Bug Workflow** - ⎿    chkd bug "description" [--severity high|medium|low|critical]             
+       ─────────────────────────────────────────────────────────────            
+                                                                                
+       Quick-create a bug with minimal friction.                                
+                                                                                
+       OPTIONS:                                                                 
+         --severity <level>   Set severity (default: medium)                    
+                              Levels: critical, high, medium, low               
+                                                                                
+       WHEN TO USE:                                                             
+         - You notice something broken while working                            
+         - User reports an issue                                                
+         - Test fails unexpectedly                                              
+         - You want to track something for later                                
+                                                                                
+       EXAMPLES:                                                                
+         chkd bug "Save button broken"                                          
+         chkd bug "Login fails on mobile" --severity high                       
+         chkd bug "Typo in footer" --severity low                               
+         chkd bug "App crashes on startup" --severity critical                  
+                                                                                
+       NEXT STEPS:                                                              
+         - Run 'chkd bugs' to see all bugs                                      
+         - Use '/bugfix' in Claude Code to fix a bug systematically             
+                                                                                
+       TIP: Keep descriptions short but specific.        We need to update starting a bug making it more simple this should be add,
+
+> Currently getting confused creating a bug rather then working on the bug simplgy
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+  - [ ] update documention and guides
 
 ---
 

@@ -47,7 +47,7 @@ export const POST: RequestHandler = async ({ request }) => {
         phaseNudge = 'Use mock/fake data. Real backend comes later.';
       } else if (itemLower.startsWith('feedback')) {
         phase = 'Feedback';
-        phaseNudge = 'Get explicit approval. One approval ≠ blanket approval.';
+        phaseNudge = 'Get explicit approval. Use TodoWrite to stay on task.';
       } else if (itemLower.startsWith('implement')) {
         phase = 'Implement';
         phaseNudge = 'Build the real logic. Feedback was approved.';

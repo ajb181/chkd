@@ -6,7 +6,8 @@ import {
   createQuickWin,
   completeQuickWin,
   deleteQuickWin,
-  getQuickWinByQuery
+  getQuickWinByQuery,
+  updateQuickWin
 } from '$lib/server/quickwins';
 
 // GET /api/quickwins - List quick wins for a repo (from markdown file)
@@ -86,6 +87,35 @@ export const PATCH: RequestHandler = async ({ request }) => {
         title: win.title,
         status: win.status === 'open' ? 'done' : 'open',  // toggled
         message: `Quick win ${win.status === 'open' ? 'done' : 'reopened'}: ${win.title}`
+      }
+    });
+  } catch (error) {
+    return json({ success: false, error: String(error) }, { status: 500 });
+  }
+};
+
+// PUT /api/quickwins - Update a quick win's title
+export const PUT: RequestHandler = async ({ request }) => {
+  try {
+    const body = await request.json();
+    const { repoPath, id, title } = body;
+
+    if (!repoPath || !id || !title) {
+      return json({ success: false, error: 'repoPath, id, and title are required' }, { status: 400 });
+    }
+
+    const result = updateQuickWin(repoPath, id, title.trim());
+
+    if (!result.success) {
+      return json({ success: false, error: 'Quick win not found' }, { status: 404 });
+    }
+
+    return json({
+      success: true,
+      data: {
+        id: result.newId,
+        title: title.trim(),
+        message: 'Quick win updated'
       }
     });
   } catch (error) {

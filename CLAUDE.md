@@ -18,10 +18,25 @@ chkd progress            # See current task's sub-items
 chkd working "item"      # Signal you're starting an item
 chkd tick "item"         # Mark item complete
 
+# Ad-hoc Work (keeps UI engaged)
+chkd impromptu "desc"    # Start ad-hoc work not in spec
+chkd debug "desc"        # Start debug/investigation session
+
+# Adding Features
+chkd add "title"              # Add feature with workflow sub-tasks
+chkd add "title" --story "x"  # Add with story/description
+chkd add "title" --area FE    # Specify area (SD, FE, BE, FUT)
+chkd edit "SD.1" --story "x"  # Update existing item's story
+
 # Bugs
 chkd bug "description"   # Quick-create a bug
 chkd bugs                # List open bugs
 chkd fix "bug"           # Mark bug as fixed
+
+# Quick Wins
+chkd win "title"         # Add a quick win
+chkd wins                # List quick wins
+chkd won "query"         # Complete a quick win
 
 # Help
 chkd help [command]      # Get detailed help
@@ -34,7 +49,24 @@ chkd help [command]      # Get detailed help
 - `/commit` - Safe commit workflow
 - `/retro` - Capture learnings after fixing bugs
 
-## Staying Focused (IMPORTANT!)
+## Keep the UI Engaged (IMPORTANT!)
+
+**Before writing any code, ask yourself:** Am I in a session?
+
+- **Working on a spec task?** → Use `/chkd SD.1` (starts session automatically)
+- **Doing ad-hoc work not in spec?** → Run `chkd impromptu "what I'm doing"` FIRST
+- **Debugging something?** → Run `chkd debug "what I'm investigating"` FIRST
+
+**The UI should NEVER show "IDLE" while you're coding.** If it does, start a session!
+
+```bash
+chkd status              # Check current state
+chkd impromptu "desc"    # Start ad-hoc session
+chkd debug "desc"        # Start debug session
+chkd done                # End session when finished
+```
+
+## Staying Focused
 
 When working on a task:
 
@@ -46,6 +78,20 @@ When working on a task:
 **DO** quickly log issues and stay on track.
 
 The bugs list exists so nothing gets lost. Fix them later with `/bugfix`.
+
+## Before Making Changes (Explore Phase)
+
+During the **Explore** phase of any task:
+
+1. **Review the code you'll touch** - Read it, understand it
+2. **Flag complexity** - If code is messy or complex, tell the user:
+   - "This area could use refactoring first"
+   - "This file is 500+ lines, might want to split"
+3. **Let user decide** - They choose whether to refactor first or proceed
+4. **If refactoring:** `chkd pause` → create refactor story → do that first → return
+
+Don't dive into changes without understanding what you're touching.
+Don't add features on top of messy code without flagging it.
 
 ## Source of Truth
 

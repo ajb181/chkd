@@ -11,10 +11,10 @@ export interface Repository {
 
 // Session
 export type SessionStatus = 'idle' | 'building' | 'ready_for_testing' | 'rework' | 'complete';
-export type SessionMode = 'building' | 'debugging' | 'story' | 'reviewing' | null;
+export type SessionMode = 'building' | 'debugging' | 'impromptu' | 'quickwin' | 'story' | 'reviewing' | null;
 
 export interface TaskInfo {
-  id: string;
+  id: string | null;  // null for adhoc sessions (impromptu/debug)
   title: string;
   phase: number | null;
 }

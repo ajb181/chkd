@@ -165,8 +165,9 @@ export function getSession(repoId: string): TaskSession {
   const now = Date.now();
 
   return {
-    currentTask: row.current_task_id ? {
-      id: row.current_task_id,
+    // For adhoc sessions (impromptu/debug), id can be null but title exists
+    currentTask: (row.current_task_id || row.current_task_title) ? {
+      id: row.current_task_id || null,
       title: row.current_task_title,
       phase: row.current_task_phase,
     } : null,
@@ -358,16 +359,24 @@ export function updateBugStatus(bugId: string, status: string): boolean {
   return result.changes > 0;
 }
 
-export function updateBug(bugId: string, title: string, description: string | null): boolean {
+export function updateBug(bugId: string, title: string, description: string | null, severity?: string): boolean {
   const db = getDb();
 
-  const result = db.prepare(`
-    UPDATE bugs
-    SET title = ?, description = ?
-    WHERE id = ?
-  `).run(title, description, bugId);
-
-  return result.changes > 0;
+  if (severity) {
+    const result = db.prepare(`
+      UPDATE bugs
+      SET title = ?, description = ?, severity = ?
+      WHERE id = ?
+    `).run(title, description, severity, bugId);
+    return result.changes > 0;
+  } else {
+    const result = db.prepare(`
+      UPDATE bugs
+      SET title = ?, description = ?
+      WHERE id = ?
+    `).run(title, description, bugId);
+    return result.changes > 0;
+  }
 }
 
 export function getBugByQuery(repoId: string, query: string): Bug | null {

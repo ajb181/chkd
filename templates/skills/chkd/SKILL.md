@@ -63,14 +63,29 @@ When you see these sub-items, here's what they mean:
 
 | Sub-item starts with | What to do |
 |---------------------|------------|
-| **Explore:** | Research only. Read code, find patterns. No building yet. |
+| **Explore:** | Research only. Read code, find patterns. **Flag complexity to user.** No building yet. |
 | **Design:** | Plan the approach. Define contracts. Still no building. |
 | **Prototype:** | Build with FAKE/MOCK data. Stub the backend. Make it look real but use test data. |
 | **Feedback:** | ⚠️ STOP. Show user. Get explicit approval. One approval ≠ blanket approval. |
 | **Implement:** | NOW build real backend. Only after Feedback approval. |
 | **Polish:** | Error states, loading, edge cases. |
+| **Docs:** | Update documentation & guide if user-facing feature. |
 
 **Critical:** Prototype ≠ Implement. Prototype uses mock data so the user can approve the UX before you invest in real backend code.
+
+### Explore Phase: Investigate First!
+
+During Explore, before proposing any changes:
+
+1. **Review the code you'll touch** - Read it, understand it
+2. **Flag complexity** - If code is messy or complex, tell the user:
+   - "This area could use refactoring first"
+   - "This file is 500+ lines, might want to split"
+3. **Let user decide** - They choose whether to refactor first or proceed
+4. **If refactoring:** `chkd pause` → create refactor story → do that first → return
+
+Don't dive into changes without understanding what you're touching.
+Don't add features on top of messy code without flagging it.
 
 ### For EACH sub-item:
 

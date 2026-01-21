@@ -80,24 +80,39 @@ This creates:
 
 ### Step 4: Add features to your spec
 
-Edit `docs/SPEC.md` to list what you want to build:
+**Option A: Use the CLI (recommended)**
+
+```bash
+# Add a feature with workflow sub-tasks
+chkd add "Login page"
+
+# Specify the area
+chkd add "Auth API" --area BE
+
+# Preview first
+chkd add "Dashboard" --dry-run
+```
+
+This creates the feature with proper formatting and workflow sub-tasks (Explore, Design, Prototype, Feedback, Implement, Polish).
+
+**Option B: Edit manually**
+
+Edit `docs/SPEC.md` directly:
 
 ```markdown
 # My Project
 
 ## Area: FE (Frontend)
 
-- [ ] **1.1 Login page** - Email/password form with validation
-- [ ] **1.2 Dashboard** - Show user stats and recent activity
-- [ ] **1.3 Settings page** - Let users update their profile
+- [ ] **FE.1 Login page** - Email/password form with validation
+- [ ] **FE.2 Dashboard** - Show user stats and recent activity
 
 ## Area: BE (Backend)
 
-- [ ] **2.1 Auth API** - Login, logout, session management
-- [ ] **2.2 User API** - CRUD operations for users
+- [ ] **BE.1 Auth API** - Login, logout, session management
 ```
 
-**Important:** The numbers like `1.1`, `1.2` are **task IDs**. You'll use these to tell Claude what to build.
+**Task IDs:** The codes like `FE.1`, `BE.1` are task IDs. Use these to tell Claude what to build (e.g., `/chkd FE.1`).
 
 ### Step 5: Build something!
 
@@ -170,8 +185,15 @@ When you run `/chkd SD.1`, Claude looks up task 1.1 in your spec and builds it.
 | Command | What it does |
 |---------|--------------|
 | `chkd status` | Show progress and current task |
+| `chkd add "title"` | Add a new feature/story to spec |
+| `chkd edit "item"` | Update an item's title or story |
 | `chkd bug "desc"` | Quick-create a bug |
 | `chkd bugs` | List open bugs |
+| `chkd win "title"` | Add a quick win |
+| `chkd wins` | List quick wins |
+| `chkd won "query"` | Complete a quick win |
+| `chkd impromptu "desc"` | Start ad-hoc work (not in spec) |
+| `chkd debug "desc"` | Start debug/investigation session |
 | `chkd upgrade` | Add/update chkd in your project |
 | `chkd init` | Set up chkd in a brand new project |
 | `chkd workflow` | Show the development workflow |
@@ -238,13 +260,85 @@ This shows up in the chkd UI so you know what happened. You're not blocked - it'
 | You want to... | Do this |
 |----------------|---------|
 | Build a specific task | `/chkd SD.1` (use the task ID) |
+| Add a new feature/story | `chkd add "Feature name"` |
+| Update an item's description | `chkd edit "SD.1" --story "new desc"` |
 | Plan or refine features | `/story` |
 | Fix a bug | `/bugfix` |
 | Quick-log a bug | `chkd bug "description"` |
 | See open bugs | `chkd bugs` |
+| Log a small improvement | `chkd win "quick fix idea"` |
+| Complete a quick win | `chkd won "query"` |
+| Do ad-hoc work (not in spec) | `chkd impromptu "what you're doing"` |
+| Debug/investigate something | `chkd debug "what you're investigating"` |
 | Commit your work | `/commit` |
 | See overall progress | `chkd status` (in regular terminal) |
 | Check the UI | Open `http://localhost:3847` |
+
+---
+
+## Adding Features from the CLI
+
+Use `chkd add` to quickly add new features/stories to your spec.
+
+### Basic Usage
+
+```bash
+# Add a feature (auto-detects area)
+chkd add "User authentication"
+
+# Add with a story/description
+chkd add "Dark mode" --story "Toggle between light and dark themes"
+
+# Specify the area
+chkd add "Dark mode toggle" --area FE
+chkd add "Rate limiting" --area BE
+
+# Preview first (recommended)
+chkd add "Payment integration" --dry-run
+```
+
+### What Gets Created
+
+When you run `chkd add "User authentication"`, it creates:
+
+```markdown
+- [ ] **FE.4 User authentication**
+  - [ ] Explore: research existing patterns
+  - [ ] Design: plan approach + contracts
+  - [ ] Prototype: build with mock data
+  - [ ] Feedback: user reviews
+  - [ ] Implement: real backend logic
+  - [ ] Polish: error states, edge cases
+```
+
+### Custom Sub-tasks
+
+```bash
+# Use your own sub-tasks instead of the workflow
+chkd add "API endpoint" --tasks "validation,tests,docs"
+```
+
+### Tips
+
+- Use `--dry-run` to preview before adding
+- Use `--story` to add context when creating
+- The workflow sub-tasks (Explore, Design, etc.) enforce good practices
+- Use `--no-workflow` if you just want the item without sub-tasks
+
+### Updating Existing Items
+
+Use `chkd edit` to update an item's title or story after creation:
+
+```bash
+# Update the story/description
+chkd edit "SD.1" --story "New description for this feature"
+
+# Update the title
+chkd edit "FE.2" --title "Updated title"
+
+# Update both
+chkd edit "BE.1" --title "New name" --story "With new story"
+```
 
 ---
 
@@ -572,7 +666,7 @@ This is why chkd isn't just a spec file - it's an interactive system that guides
 ┌─────────────────────────────────────────────────────┐
 │                     YOU                              │
 │                                                      │
-│  1. Write features in docs/SPEC.md                  │
+│  1. Add features: chkd add "title" or edit SPEC.md  │
 │  2. Run chkd status to see what's next              │
 │  3. Run /chkd <task_id> in Claude Code              │
 │  4. Review what Claude built                        │

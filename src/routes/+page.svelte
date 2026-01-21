@@ -65,7 +65,7 @@
   interface RepoStatus {
     currentTask: string | null;
     currentItem: string | null;  // The sub-item being worked on
-    status: 'idle' | 'building' | 'debugging';
+    status: 'idle' | 'building' | 'debugging' | 'impromptu' | 'quickwin';
     repoProgress: number;        // Overall repo progress %
     taskProgress: number;        // Current task progress % (sub-items)
     completedItems: number;
@@ -141,6 +141,7 @@
   let editingBugId: string | null = null;
   let editBugTitle = '';
   let editBugDescription = '';
+  let editBugSeverity: 'critical' | 'high' | 'medium' | 'low' = 'medium';
   let savingBug = false;
 
   // Bug polish confirmation
@@ -155,6 +156,9 @@
   let quickWinInput = getDraft('quickWinInput');
   $: saveDraft('quickWinInput', quickWinInput);
   let addingQuickWin = false;
+  let editingQuickWinId: string | null = null;
+  let editQuickWinTitle = '';
+  let savingQuickWin = false;
 
   $: openQuickWins = quickWins.filter(w => w.status === 'open');
 
@@ -226,10 +230,47 @@
     }
   }
 
+  function startEditQuickWin(win: QuickWin) {
+    editingQuickWinId = win.id;
+    editQuickWinTitle = win.title;
+  }
+
+  async function saveQuickWinEdit() {
+    if (!editingQuickWinId || !editQuickWinTitle.trim()) return;
+    savingQuickWin = true;
+    try {
+      const res = await fetch('/api/quickwins', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoPath,
+          id: editingQuickWinId,
+          title: editQuickWinTitle.trim()
+        })
+      });
+      if (res.ok) {
+        const winsRes = await getQuickWins(repoPath);
+        if (winsRes.success && winsRes.data) {
+          quickWins = winsRes.data;
+        }
+        editingQuickWinId = null;
+        editQuickWinTitle = '';
+      }
+    } finally {
+      savingQuickWin = false;
+    }
+  }
+
+  function cancelQuickWinEdit() {
+    editingQuickWinId = null;
+    editQuickWinTitle = '';
+  }
+
   async function startEditBug(bug: Bug) {
     editingBugId = bug.id;
     editBugTitle = bug.title;
     editBugDescription = bug.description || '';
+    editBugSeverity = bug.severity as 'critical' | 'high' | 'medium' | 'low';
   }
 
   async function saveBugEdit() {
@@ -242,7 +283,8 @@
         body: JSON.stringify({
           bugId: editingBugId,
           title: editBugTitle,
-          description: editBugDescription
+          description: editBugDescription,
+          severity: editBugSeverity
         })
       });
       if (res.ok) {
@@ -258,6 +300,7 @@
     editingBugId = null;
     editBugTitle = '';
     editBugDescription = '';
+    editBugSeverity = 'medium';
   }
 
   // Handover notes
@@ -302,16 +345,42 @@
       };
     }
 
-    // Check for debug mode first
+    // Check for adhoc modes first (no spec task, just a description)
     if (session.mode === 'debugging') {
       return {
         state: 'DEBUG',
         stateColor: 'error',
         action: session.currentTask?.title || 'Fixing bug',
+        commands: session.currentTask?.id
+          ? [
+              { cmd: '/bugfix', desc: 'Research & fix' },
+              { cmd: 'chkd progress', desc: 'Check sub-items' },
+              { cmd: 'Stay focused', desc: 'Minimal changes only' }
+            ]
+          : [
+              { cmd: 'Stay focused', desc: 'Minimal changes' },
+              { cmd: 'chkd done', desc: 'End session' }
+            ]
+      };
+    }
+
+    if (session.mode === 'quickwin') {
+      return {
+        state: 'QUICKWIN',
+        stateColor: 'warning',
+        action: session.currentTask?.title || 'Working on quick win',
+        commands: ['chkd done - complete and end session', 'chkd promote - convert to story if too big']
+      };
+    }
+
+    if (session.mode === 'impromptu') {
+      return {
+        state: 'IMPROMPTU',
+        stateColor: 'warning',
+        action: session.currentTask?.title || 'Ad-hoc work',
         commands: [
-          { cmd: '/bugfix', desc: 'Research & fix' },
-          { cmd: 'chkd progress', desc: 'Check sub-items' },
-          { cmd: 'Stay focused', desc: 'Minimal changes only' }
+          { cmd: 'Build it', desc: 'Do the work' },
+          { cmd: 'chkd done', desc: 'End session' }
         ]
       };
     }
@@ -540,6 +609,8 @@
           currentTask: sessionRes.data?.currentTask?.title || null,
           currentItem: sessionRes.data?.currentItem?.title || null,
           status: sessionRes.data?.mode === 'debugging' ? 'debugging' :
+                  sessionRes.data?.mode === 'impromptu' ? 'impromptu' :
+                  sessionRes.data?.mode === 'quickwin' ? 'quickwin' :
                   sessionRes.data?.status === 'building' ? 'building' : 'idle',
           repoProgress: specRes.data?.progress || 0,
           taskProgress,
@@ -667,6 +738,8 @@
           currentTask: session?.currentTask?.title || null,
           currentItem: session?.currentItem?.title || null,
           status: session?.mode === 'debugging' ? 'debugging' :
+                  session?.mode === 'impromptu' ? 'impromptu' :
+                  session?.mode === 'quickwin' ? 'quickwin' :
                   session?.status === 'building' ? 'building' : 'idle',
           repoProgress: spec?.progress || 0,
           taskProgress,
@@ -1107,6 +1180,10 @@
                 <span class="repo-card-status building">●</span>
               {:else if status?.status === 'debugging'}
                 <span class="repo-card-status debugging">●</span>
+              {:else if status?.status === 'impromptu'}
+                <span class="repo-card-status impromptu">●</span>
+              {:else if status?.status === 'quickwin'}
+                <span class="repo-card-status quickwin">●</span>
               {:else}
                 <span class="repo-card-status idle">○</span>
               {/if}
@@ -1297,6 +1374,13 @@
                           on:click|stopPropagation
                           on:input={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                         ></textarea>
+                        <div class="bug-severity-selector" on:click|stopPropagation>
+                          <span class="severity-label">Severity:</span>
+                          <button class="severity-btn critical" class:selected={editBugSeverity === 'critical'} on:click={() => editBugSeverity = 'critical'}>🔴</button>
+                          <button class="severity-btn high" class:selected={editBugSeverity === 'high'} on:click={() => editBugSeverity = 'high'}>🟠</button>
+                          <button class="severity-btn medium" class:selected={editBugSeverity === 'medium'} on:click={() => editBugSeverity = 'medium'}>🟡</button>
+                          <button class="severity-btn low" class:selected={editBugSeverity === 'low'} on:click={() => editBugSeverity = 'low'}>🟢</button>
+                        </div>
                         <div class="bug-edit-actions" on:click|stopPropagation>
                           <button class="bug-save-btn" on:click={saveBugEdit} disabled={savingBug || !editBugTitle.trim()}>
                             {savingBug ? '...' : 'Save'}
@@ -1387,21 +1471,36 @@
           {:else}
             <ul class="quick-win-list">
               {#each displayWins as win}
-                <li class="quick-win-item" class:done={win.status === 'done'}>
-                  <button
-                    class="quick-win-check"
-                    on:click={() => handleCompleteQuickWin(win)}
-                    disabled={win.status === 'done'}
-                    title={win.status === 'done' ? 'Done' : 'Mark done'}
-                  >
-                    {win.status === 'done' ? '✓' : '○'}
-                  </button>
-                  <span class="quick-win-title">{win.title}</span>
-                  <button
-                    class="quick-win-delete"
-                    on:click|stopPropagation={() => handleDeleteQuickWin(win)}
-                    title="Delete"
-                  >×</button>
+                <li class="quick-win-item" class:done={win.status === 'done'} class:editing={editingQuickWinId === win.id}>
+                  {#if editingQuickWinId === win.id}
+                    <input
+                      type="text"
+                      class="quick-win-edit-input"
+                      bind:value={editQuickWinTitle}
+                      on:keydown={(e) => e.key === 'Enter' && saveQuickWinEdit()}
+                      on:keydown={(e) => e.key === 'Escape' && cancelQuickWinEdit()}
+                      on:click|stopPropagation
+                    />
+                    <button class="quick-win-save" on:click|stopPropagation={saveQuickWinEdit} disabled={savingQuickWin || !editQuickWinTitle.trim()}>
+                      {savingQuickWin ? '...' : '✓'}
+                    </button>
+                    <button class="quick-win-cancel" on:click|stopPropagation={cancelQuickWinEdit}>×</button>
+                  {:else}
+                    <button
+                      class="quick-win-check"
+                      on:click={() => handleCompleteQuickWin(win)}
+                      disabled={win.status === 'done'}
+                      title={win.status === 'done' ? 'Done' : 'Mark done'}
+                    >
+                      {win.status === 'done' ? '✓' : '○'}
+                    </button>
+                    <span class="quick-win-title" on:click|stopPropagation={() => startEditQuickWin(win)} title="Click to edit">{win.title}</span>
+                    <button
+                      class="quick-win-delete"
+                      on:click|stopPropagation={() => handleDeleteQuickWin(win)}
+                      title="Delete"
+                    >×</button>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -1533,7 +1632,7 @@
     <main>
     <!-- Context Helper Bar - only show when NOT building (session card handles that) -->
     {#if !loading && session && session.status !== 'building'}
-      <div class="context-bar" class:testing={contextHelp.state === 'TESTING'} class:complete={contextHelp.state === 'COMPLETE'} class:rework={contextHelp.state === 'REWORK'} class:debug={contextHelp.state === 'DEBUG'}>
+      <div class="context-bar" class:testing={contextHelp.state === 'TESTING'} class:complete={contextHelp.state === 'COMPLETE'} class:rework={contextHelp.state === 'REWORK'} class:debug={contextHelp.state === 'DEBUG'} class:impromptu={contextHelp.state === 'IMPROMPTU'}>
         <span class="ctx-badge {contextHelp.stateColor}">{contextHelp.state}</span>
         <span class="ctx-action">{contextHelp.action}</span>
         <div class="ctx-commands">
@@ -1587,9 +1686,15 @@
       {#if demoMode || (session && session.status === 'building' && session.currentTask)}
         {@const activeSession = demoMode ? demoSession : session}
         {@const checklist = demoMode ? demoProgress : []}
-        <div class="session-card" class:demo={demoMode}>
+        {@const sessionBadge = activeSession?.mode === 'debugging' ? 'DEBUG' :
+                               activeSession?.mode === 'impromptu' ? 'IMPROMPTU' :
+                               activeSession?.mode === 'quickwin' ? 'QUICKWIN' : 'BUILDING'}
+        {@const badgeClass = activeSession?.mode === 'debugging' ? 'debug' :
+                             activeSession?.mode === 'impromptu' ? 'impromptu' :
+                             activeSession?.mode === 'quickwin' ? 'quickwin' : ''}
+        <div class="session-card" class:demo={demoMode} class:debug={activeSession?.mode === 'debugging'} class:impromptu={activeSession?.mode === 'impromptu'} class:quickwin={activeSession?.mode === 'quickwin'}>
           <div class="session-header">
-            <span class="session-badge">BUILDING</span>
+            <span class="session-badge {badgeClass}">{sessionBadge}</span>
             <span class="session-time">{formatElapsed(activeSession?.elapsedMs || 0)}</span>
             {#if activeSession?.iteration > 1}
               <span class="session-iteration">#{activeSession.iteration}</span>
@@ -2219,6 +2324,16 @@
 
   .repo-card-status.debugging {
     color: var(--error);
+    animation: pulse 1.5s infinite;
+  }
+
+  .repo-card-status.impromptu {
+    color: var(--warning);
+    animation: pulse 1.5s infinite;
+  }
+
+  .repo-card-status.quickwin {
+    color: #f59e0b;  /* amber/gold */
     animation: pulse 1.5s infinite;
   }
 
@@ -2897,6 +3012,38 @@
     font-family: inherit;
   }
 
+  .bug-severity-selector {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin: var(--space-xs) 0;
+  }
+
+  .severity-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .severity-btn {
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0.5;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+
+  .severity-btn:hover {
+    opacity: 0.8;
+  }
+
+  .severity-btn.selected {
+    opacity: 1;
+    border-color: var(--border-color);
+  }
+
   .bug-edit-actions {
     display: flex;
     gap: var(--space-xs);
@@ -3171,6 +3318,43 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .quick-win-title:hover {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+  }
+
+  .quick-win-item.editing {
+    background: var(--bg-secondary);
+  }
+
+  .quick-win-edit-input {
+    flex: 1;
+    font-size: 12px;
+    padding: 2px 4px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .quick-win-save, .quick-win-cancel {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    color: var(--text-muted);
+  }
+
+  .quick-win-save:hover {
+    color: var(--success);
+  }
+
+  .quick-win-cancel:hover {
+    color: var(--danger);
   }
 
   .quick-win-delete {
@@ -3530,6 +3714,8 @@
   .context-bar.complete { border-left: 3px solid var(--success); }
   .context-bar.rework { border-left: 3px solid var(--warning); }
   .context-bar.debug { border-left: 3px solid var(--error); }
+  .context-bar.impromptu { border-left: 3px solid var(--warning); }
+  .context-bar.quickwin { border-left: 3px solid #f59e0b; }
 
   .ctx-badge {
     padding: 2px 8px;
@@ -3791,6 +3977,24 @@
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.5px;
+  }
+
+  .session-badge.debug {
+    background: var(--error);
+  }
+
+  .session-badge.impromptu {
+    background: var(--warning);
+    color: var(--text);
+  }
+
+  .session-badge.quickwin {
+    background: #f59e0b;  /* amber/gold */
+    color: #1a1a1a;
+  }
+
+  .session-card.quickwin {
+    border-left: 3px solid #f59e0b;
   }
 
   .session-task-title {

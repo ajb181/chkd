@@ -123,14 +123,20 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    return json({
-      success: true,
-      data: {
-        itemId: resolvedId,
-        itemTitle: resolvedTitle,
-        message: `Now working on: ${resolvedTitle || resolvedId}`
-      }
-    });
+    // Check if this is a Feedback item - needs user approval before ticking
+    const isFeedback = (resolvedTitle || '').toLowerCase().includes('feedback');
+
+    const response: Record<string, unknown> = {
+      itemId: resolvedId,
+      itemTitle: resolvedTitle,
+      message: `Now working on: ${resolvedTitle || resolvedId}`
+    };
+
+    if (isFeedback) {
+      response.warning = 'Get user approval before ticking. Use TodoWrite to stay on task.';
+    }
+
+    return json({ success: true, data: response });
   } catch (error) {
     return json({ success: false, error: String(error) }, { status: 500 });
   }

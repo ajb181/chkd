@@ -134,27 +134,40 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    // Find title if not set (search children too)
-    if (!targetTitle) {
-      const findTitle = (items: any[]): string | null => {
-        for (const item of items) {
-          if (item.id === targetId) {
-            return item.title;
-          }
-          if (item.children && item.children.length > 0) {
-            const found = findTitle(item.children);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
+    // Find title, parent info, and sibling info
+    let parentTitle = '';
+    let parentId = '';
+    let hasMoreSiblings = false;
 
-      for (const area of spec.areas) {
-        const found = findTitle(area.items);
-        if (found) {
-          targetTitle = found;
-          break;
+    const findItemWithContext = (items: any[], parent?: any): { title: string; parentTitle?: string; parentId?: string; hasMoreSiblings: boolean } | null => {
+      for (const item of items) {
+        if (item.id === targetId) {
+          // Check if there are incomplete siblings
+          const siblings = parent?.children || items;
+          const incompleteSiblings = siblings.filter((s: any) => s.id !== targetId && s.status !== 'done');
+          return {
+            title: item.title,
+            parentTitle: parent?.title,
+            parentId: parent?.id,
+            hasMoreSiblings: incompleteSiblings.length > 0
+          };
         }
+        if (item.children && item.children.length > 0) {
+          const found = findItemWithContext(item.children, item);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    for (const area of spec.areas) {
+      const found = findItemWithContext(area.items);
+      if (found) {
+        if (!targetTitle) targetTitle = found.title;
+        parentTitle = found.parentTitle || '';
+        parentId = found.parentId || '';
+        hasMoreSiblings = found.hasMoreSiblings;
+        break;
       }
     }
 
@@ -174,9 +187,6 @@ export const POST: RequestHandler = async ({ request }) => {
     // Get and clear queued items (user added while Claude was working)
     const queuedItems = clearQueue(repoPath);
 
-    // Check if ticking a Feedback item - needs user approval first
-    const isFeedbackItem = targetTitle.toLowerCase().startsWith('feedback');
-
     // Check for rapid ticks (rate limiting)
     const lastTickKey = `lastTick:${repo?.id}`;
     const now = Date.now();
@@ -186,22 +196,19 @@ export const POST: RequestHandler = async ({ request }) => {
     (global as any)[lastTickKey] = now;
 
     // Build response
+    const shortTitle = targetTitle.length > 40 ? targetTitle.slice(0, 40) + '...' : targetTitle;
+
     const response: Record<string, unknown> = {
       itemId: targetId,
       title: targetTitle,
-      message: `Marked complete: ${targetTitle}`,
+      parentTitle: parentTitle || null,
+      message: `✓ ${shortTitle}`,
     };
-
-    // Warn if Feedback item ticked (should have user approval first)
-    if (isFeedbackItem) {
-      response.warning = 'Feedback items require explicit user approval before ticking!';
-    }
 
     // Warn on rapid ticks
     if (isRapidTick) {
       response.rapidTick = true;
-      response.warning = (response.warning ? response.warning + ' ' : '') +
-        'Rapid ticking detected - tick items as you complete them, not in batches!';
+      response.warning = 'Rapid ticking detected - tick items as you complete them, not in batches!';
     }
 
     // If there are queued items, include them with instructions for Claude
@@ -209,6 +216,21 @@ export const POST: RequestHandler = async ({ request }) => {
       response.queuedItems = queuedItems.map(q => q.title);
       response.queuedCount = queuedItems.length;
       response.instruction = `USER QUEUED ${queuedItems.length} ITEM(S): ${queuedItems.map(q => `"${q.title}"`).join(', ')}. ADD these to your existing Claude Code TodoWrite list without losing any current items. Do NOT add to the spec.`;
+    }
+
+    // Smart next-step based on context
+    if (parentTitle) {
+      // This is a sub-task
+      if (hasMoreSiblings) {
+        response.nextStep = 'Continue to next sub-task.';
+      } else {
+        // Last sub-task - remind to close the main task
+        const shortParent = parentTitle.length > 30 ? parentTitle.slice(0, 30) + '...' : parentTitle;
+        response.nextStep = `Sub-tasks done. Close task: chkd tick "${shortParent}"`;
+      }
+    } else {
+      // This is a main task - warn about going idle
+      response.nextStep = 'Feature complete. You are now idle. Use chkd start for next task.';
     }
 
     return json({

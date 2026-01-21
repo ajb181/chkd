@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env -S npx tsx
 
 /**
  * chkd CLI - Setup and status commands
@@ -89,16 +89,17 @@ async function showContext() {
 
   console.log(`  ─────────────────────────────────`);
   if (session.currentTask) {
-    // Just show title (includes task number like FE.8), not the slug ID
-    console.log(`  📍 ${session.currentTask.title}`);
+    // Truncate long titles
+    const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '...' : s;
+    console.log(`  📍 ${truncate(session.currentTask.title, 50)}`);
     if (session.currentItem) {
-      console.log(`     └─ ${session.currentItem.title}`);
+      console.log(`     └─ ${truncate(session.currentItem.title, 45)}`);
     }
     if (session.iteration > 1) {
       console.log(`     #${session.iteration}`);
     }
   } else {
-    console.log(`  📍 Idle - no active task`);
+    console.log(`  📍 Idle → chkd start "TASK_ID"`);
   }
 }
 
@@ -137,14 +138,25 @@ async function tick(itemQuery: string) {
     return;
   }
 
-  console.log(`\n  ✓ ${res.data.message}`);
+  // Show what was ticked (with parent if sub-task)
+  const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '...' : s;
+  if (res.data.parentTitle) {
+    console.log(`\n  ✓ ${truncate(res.data.title, 45)}`);
+    console.log(`    (${truncate(res.data.parentTitle, 40)})`);
+  } else {
+    console.log(`\n  ✓ ${truncate(res.data.title, 50)}`);
+  }
 
   // Warn if Feedback item ticked without proper approval
   if (res.data.warning) {
     console.log(`  ⚠️  ${res.data.warning}`);
   }
 
-  await showContext();
+  // Reminder for next step
+  if (res.data.nextStep) {
+    console.log(`  → ${res.data.nextStep}`);
+  }
+
   console.log('');
 }
 
@@ -231,6 +243,20 @@ async function sync(action?: string) {
 
     let hasConflicts = false;
 
+    // Helper to backup file with timestamp
+    async function backupBeforeSync(filePath: string): Promise<string | null> {
+      const ext = path.extname(filePath);
+      const base = filePath.slice(0, -ext.length);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+      const backupPath = `${base}-${timestamp}${ext}`;
+      try {
+        await fs.copyFile(filePath, backupPath);
+        return path.basename(backupPath);
+      } catch {
+        return null;
+      }
+    }
+
     // Process each asset
     for (const asset of manifest.assets) {
       const srcPath = path.join(chkdRoot, asset.source);
@@ -260,8 +286,32 @@ async function sync(action?: string) {
         try {
           await fs.access(destPath);
           if (await contentDiffers(srcPath, destPath)) {
-            console.log(`  ⚠ Skipped ${asset.name} (merge mode - has local changes)`);
-            hasConflicts = true;
+            // Try LLM merge if available
+            const { isAvailable, mergeClaudeMd } = await import('./llm.js');
+            if (isAvailable()) {
+              try {
+                const existingContent = await fs.readFile(destPath, 'utf-8');
+                const templateContent = await fs.readFile(srcPath, 'utf-8');
+                const repoName = path.basename(cwd);
+
+                // Backup before merge
+                const backupName = await backupBeforeSync(destPath);
+                if (backupName) {
+                  console.log(`  📦 Backed up to ${backupName}`);
+                }
+
+                console.log(`  🔄 Merging ${asset.name} with LLM...`);
+                const merged = await mergeClaudeMd(existingContent, templateContent, repoName);
+                await fs.writeFile(destPath, merged, 'utf-8');
+                console.log(`  ✓ Merged ${asset.name} (LLM-assisted)`);
+              } catch (err) {
+                console.log(`  ⚠ LLM merge failed for ${asset.name}: ${err}`);
+                hasConflicts = true;
+              }
+            } else {
+              console.log(`  ⚠ Skipped ${asset.name} (merge mode - no API key for LLM merge)`);
+              hasConflicts = true;
+            }
           } else {
             console.log(`  · Skipped ${asset.name} (merge mode - no changes)`);
           }
@@ -289,6 +339,15 @@ async function sync(action?: string) {
         // Check for local modifications before overwriting
         const hadLocalChanges = await contentDiffers(srcPath, destPath);
         await fs.mkdir(path.dirname(destPath), { recursive: true });
+
+        // Backup if there are local changes
+        if (hadLocalChanges) {
+          const backupName = await backupBeforeSync(destPath);
+          if (backupName) {
+            console.log(`  📦 Backed up to ${backupName}`);
+          }
+        }
+
         await fs.copyFile(srcPath, destPath);
         if (hadLocalChanges) {
           console.log(`  ✓ Synced ${asset.name} (overwrote local changes)`);
@@ -409,6 +468,32 @@ async function pause(note?: string) {
 
 async function idle() {
   const cwd = process.cwd();
+
+  // Check if there's an active session first
+  const statusRes = await api(`/api/session?repoPath=${encodeURIComponent(cwd)}`);
+  if (statusRes.success && statusRes.data) {
+    const session = statusRes.data;
+    const status = session.status;
+    const mode = session.mode;
+
+    // Block if in any non-idle state
+    if (status !== 'idle' || session.currentTask) {
+      const stateLabel = mode === 'debugging' ? 'debugging' :
+                         mode === 'impromptu' ? 'in impromptu mode' :
+                         status === 'ready_for_testing' ? 'ready for testing' :
+                         status === 'rework' ? 'in rework' :
+                         status === 'complete' ? 'complete (pending confirmation)' :
+                         'building';
+      const task = session.currentTask?.title || 'Unknown task';
+      console.log(`\n  ❌ Cannot go idle while ${stateLabel}`);
+      console.log(`     Active: ${task}`);
+      console.log(`\n  Options:`);
+      console.log(`    • chkd done        - Complete the current work`);
+      console.log(`    • chkd pause       - Put task back in queue with handover note`);
+      console.log(`    • chkd sync idle   - Force idle (loses progress tracking)\n`);
+      return;
+    }
+  }
 
   const res = await api('/api/session/idle', {
     method: 'POST',
@@ -536,10 +621,18 @@ async function working(itemQuery: string) {
 
   console.log(`\n  🔨 ${res.data.message}`);
 
+  // Show API warning if any
+  if (res.data.warning) {
+    console.log(`  ⚠️  ${res.data.warning}`);
+  }
+
   // Phase-specific nudges for chkd workflow keywords
   const itemLower = itemQuery.toLowerCase();
   if (itemLower.startsWith('explore')) {
-    console.log(`  💡 Research first. If complex, ask the user questions.`);
+    console.log(`\n  💡 Research first:`);
+    console.log(`     - Review the code you'll touch`);
+    console.log(`     - Flag complexity or refactor opportunities to user`);
+    console.log(`     - If messy: suggest refactoring first, let user decide`);
   } else if (itemLower.startsWith('design')) {
     console.log(`  💡 Define the approach. Diagram if complex.`);
   } else if (itemLower.startsWith('prototype')) {
@@ -585,6 +678,38 @@ async function iterate() {
     console.log(`  💡 ${phaseNudge}`);
   }
   console.log(`  📋 ${reminder}`);
+  console.log('');
+}
+
+async function adhoc(type: 'impromptu' | 'debug', description: string) {
+  if (!description) {
+    const cmd = type === 'debug' ? 'chkd debug' : 'chkd impromptu';
+    const examples = type === 'debug'
+      ? ['chkd debug "Fixing login crash"', 'chkd debug "Investigation: slow API"']
+      : ['chkd impromptu "Quick script for data export"', 'chkd impromptu "Experimenting with new lib"'];
+    console.log(`\n  Usage: ${cmd} "description"\n`);
+    console.log(`  Examples:`);
+    examples.forEach(ex => console.log(`    ${ex}`));
+    console.log('');
+    return;
+  }
+
+  const cwd = process.cwd();
+  const res = await api('/api/session/adhoc', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath: cwd, type, description }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}`);
+    if (res.hint) console.log(`  💡 ${res.hint}`);
+    console.log('');
+    return;
+  }
+
+  console.log(`\n  ${res.data.message}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  💡 Use 'chkd done' when finished.`);
   console.log('');
 }
 
@@ -678,6 +803,126 @@ async function fix(bugQuery: string) {
   console.log(`  💡 Run /retro to capture learnings.\n`);
 }
 
+async function startBugfix(query: string) {
+  if (!query) {
+    console.log(`\n  Usage: chkd bugfix "bug title or ID"`);
+    console.log(`\n  Start working on a bug with confirmation.`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd bugfix "save button"    # By partial title`);
+    console.log(`    chkd bugfix "a1b2c3"         # By ID\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+
+  // First, find the bug
+  const listRes = await api(`/api/bugs?repoPath=${encodeURIComponent(cwd)}`);
+  if (!listRes.success) {
+    console.log(`\n  ❌ ${listRes.error}\n`);
+    return;
+  }
+
+  const bugs = listRes.data || [];
+  const queryLower = query.toLowerCase();
+
+  // Find by ID or title
+  const bug = bugs.find((b: any) =>
+    b.id === query ||
+    (typeof b.id === 'string' && b.id.startsWith(query)) ||
+    b.title.toLowerCase().includes(queryLower)
+  );
+
+  if (!bug) {
+    console.log(`\n  ❌ Bug not found: "${query}"`);
+    console.log(`\n  Run 'chkd bugs' to see available bugs.\n`);
+    return;
+  }
+
+  if (bug.status === 'fixed') {
+    console.log(`\n  ⚠ This bug is already fixed: ${bug.title}\n`);
+    return;
+  }
+
+  // Show the bug and confirm
+  const sevIcon = bug.severity === 'critical' ? '🔴' :
+                  bug.severity === 'high' ? '🟠' :
+                  bug.severity === 'low' ? '🟢' : '🟡';
+
+  console.log(`\n  🐛 Bug: ${bug.title}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  Severity: ${sevIcon} ${bug.severity.toUpperCase()}`);
+  if (bug.description) {
+    console.log(`  Description: ${bug.description}`);
+  }
+  console.log(`\n  Is this a quick fix (<10 lines, clear cause)?`);
+  console.log(`    y = Yes, start debug session`);
+  console.log(`    n = No, cancel`);
+  console.log(`    c = Convert to a proper story/task (if bigger)\n`);
+
+  const answer = await confirm('  Your choice [y/n/c]: ');
+
+  if (answer === 'c' || answer === 'convert') {
+    // Convert to story
+    console.log(`\n  Converting to story...\n`);
+
+    const addRes = await api('/api/spec/add', {
+      method: 'POST',
+      body: JSON.stringify({
+        repoPath: cwd,
+        title: `Fix: ${bug.title}`,
+        description: bug.description || undefined,
+        withWorkflow: true,
+      }),
+    });
+
+    if (addRes.success) {
+      // Mark bug as linked to story (or delete it)
+      await api('/api/bugs', {
+        method: 'PATCH',
+        body: JSON.stringify({ repoPath: cwd, bugQuery: bug.id, status: 'wont_fix' }),
+      });
+
+      console.log(`  ✓ Created story: ${addRes.data.itemId}`);
+      console.log(`  ✓ Bug marked as converted`);
+      console.log(`\n  Run '/chkd ${addRes.data.itemId}' to start building it.\n`);
+    } else {
+      console.log(`  ❌ ${addRes.error}\n`);
+    }
+    return;
+  }
+
+  if (answer !== 'y' && answer !== 'yes') {
+    console.log(`\n  Cancelled.\n`);
+    return;
+  }
+
+  // Start debug session
+  const sessionRes = await api('/api/session/adhoc', {
+    method: 'POST',
+    body: JSON.stringify({
+      repoPath: cwd,
+      type: 'debug',
+      description: bug.title,
+    }),
+  });
+
+  if (!sessionRes.success) {
+    console.log(`\n  ❌ ${sessionRes.error}\n`);
+    return;
+  }
+
+  // Mark bug as in_progress
+  await api('/api/bugs', {
+    method: 'PATCH',
+    body: JSON.stringify({ repoPath: cwd, bugQuery: bug.id, status: 'in_progress' }),
+  });
+
+  console.log(`\n  🔧 Debug session started: ${bug.title}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  💡 Research first, then fix minimally`);
+  console.log(`  💡 Run 'chkd fix "${bug.title.slice(0, 20)}..."' when verified fixed\n`);
+}
+
 async function repair() {
   const cwd = process.cwd();
   const path = await import('path');
@@ -733,25 +978,62 @@ async function repair() {
   }
 }
 
-async function bug(description: string, severity?: string) {
+async function bug(description: string, flags: Record<string, string | boolean>) {
   if (!description) {
-    console.log(`\n  Usage: chkd bug "description" [--severity high|medium|low|big]\n`);
-    console.log(`  Examples:`);
+    console.log(`\n  Usage: chkd bug "description" [options]\n`);
+    console.log(`  Options:`);
+    console.log(`    --severity high|medium|low|big   Set severity (big = needs /bugfix)`);
+    console.log(`    --ai                             Use AI to clean up description`);
+    console.log(`\n  Examples:`);
     console.log(`    chkd bug "Save button not working"`);
-    console.log(`    chkd bug "App randomly crashes" --severity big\n`);
+    console.log(`    chkd bug "App randomly crashes" --severity big`);
+    console.log(`    chkd bug "the thing is broken somewhere" --ai\n`);
     return;
   }
 
-  // "big" severity triggers /bugfix workflow
-  const isBig = severity?.toLowerCase() === 'big';
-  const actualSeverity = isBig ? 'high' : (severity || 'medium');
-
   const cwd = process.cwd();
+  const severity = typeof flags.severity === 'string' ? flags.severity : undefined;
+  const useAi = Boolean(flags.ai);
+
+  let title = description;
+  let bugDescription = '';
+  let actualSeverity = severity || 'medium';
+  let isSmall = true;
+
+  // AI processing if requested
+  if (useAi) {
+    try {
+      const { isAvailable, processBugReport } = await import('./llm.js');
+      if (isAvailable()) {
+        const spinner = createSpinner('Processing bug report...');
+        const processed = await processBugReport(description, { severityHint: severity });
+        spinner.stop('✓ Processed');
+
+        title = processed.title;
+        bugDescription = processed.description;
+        actualSeverity = processed.severity;
+        isSmall = processed.isSmall;
+
+        console.log(`\n  📋 Cleaned up:`);
+        console.log(`  Title: ${title}`);
+        console.log(`  Severity: ${actualSeverity}`);
+        if (bugDescription) console.log(`  Description: ${bugDescription}`);
+      }
+    } catch {
+      console.log(`\n  ⚠ AI unavailable, using raw input`);
+    }
+  }
+
+  // "big" severity triggers /bugfix workflow
+  const isBig = actualSeverity === 'big';
+  if (isBig) actualSeverity = 'high';
+
   const res = await api('/api/bugs', {
     method: 'POST',
     body: JSON.stringify({
       repoPath: cwd,
-      title: description,
+      title,
+      description: bugDescription,
       severity: actualSeverity,
     }),
   });
@@ -761,10 +1043,10 @@ async function bug(description: string, severity?: string) {
     return;
   }
 
-  console.log(`\n  ✓ Bug logged: ${description}`);
+  console.log(`\n  ✓ Bug logged: ${title}`);
 
-  if (isBig) {
-    console.log(`  🔍 Big bug → run /bugfix for guided debugging`);
+  if (isBig || !isSmall) {
+    console.log(`  🔍 Complex bug → run /bugfix for guided debugging`);
   } else {
     console.log(`  💡 Quick fix (<10 lines). Get user acceptance before 'chkd fix'.`);
   }
@@ -775,16 +1057,39 @@ async function bug(description: string, severity?: string) {
 }
 
 async function also(description: string) {
+  const cwd = process.cwd();
+
+  // If no description, list current "also did" items
   if (!description) {
-    console.log(`\n  Usage: chkd also "description of off-plan work"`);
-    console.log(`\n  Examples:`);
-    console.log(`    chkd also "Fixed typo in README"`);
-    console.log(`    chkd also "Updated error handling in auth"`);
-    console.log(`\n  Note: Requires an active task session.\n`);
+    const res = await api(`/api/session?repoPath=${encodeURIComponent(cwd)}`);
+    if (!res.success) {
+      console.log(`\n  ❌ ${res.error}\n`);
+      return;
+    }
+
+    const data = res.data;
+    const alsoDid = data?.alsoDid || [];
+
+    if (!data?.currentTask) {
+      console.log(`\n  No active session.`);
+      console.log(`\n  Usage: chkd also "description"`);
+      console.log(`  Logs off-plan work during a task.\n`);
+      return;
+    }
+
+    console.log(`\n  📝 Also Did (${alsoDid.length} items)`);
+    console.log(`  ${'─'.repeat(35)}`);
+    if (alsoDid.length === 0) {
+      console.log(`  (none yet)`);
+    } else {
+      for (const item of alsoDid) {
+        console.log(`  • ${item}`);
+      }
+    }
+    console.log(`\n  Add more: chkd also "description"\n`);
     return;
   }
 
-  const cwd = process.cwd();
   const res = await api('/api/session/also-did', {
     method: 'POST',
     body: JSON.stringify({
@@ -905,75 +1210,48 @@ async function add(title: string, flags: Record<string, string | boolean>) {
   if (!title) {
     console.log(`\n  Usage: chkd add "feature title" [options]`);
     console.log(`\n  Options:`);
-    console.log(`    --area SD|FE|BE    Target area for the feature`);
-    console.log(`    --dry-run          Preview without creating`);
-    console.log(`    --basic            Use default workflow (skip LLM)`);
+    console.log(`    --story "text"     User story (As a... I want... so that...)`);
+    console.log(`    --area SD|FE|BE    Target area (Site Design/Frontend/Backend)`);
+    console.log(`    --tasks "a,b,c"    Explicit task list (comma-separated)`);
     console.log(`    --no-workflow      No sub-tasks at all`);
-    console.log(`    --tasks "a,b,c"    Custom tasks to include`);
+    console.log(`    --dry-run          Preview without creating`);
     console.log(`\n  Examples:`);
-    console.log(`    chkd add "User authentication"           # Smart workflow via LLM`);
-    console.log(`    chkd add "Dark mode toggle" --area FE    # Specify area`);
-    console.log(`    chkd add "API caching" --dry-run         # Preview first`);
-    console.log(`    chkd add "Quick fix" --basic             # Default workflow steps\n`);
+    console.log(`    chkd add "Dark Mode Theme" --story "As a user, I want dark mode"`);
+    console.log(`    chkd add "User Auth" --area BE --tasks "Explore: check auth,Implement: login"`);
+    console.log(`    chkd add "Fix Bug" --no-workflow     # Single item, no tasks\n`);
     return;
   }
 
   const cwd = process.cwd();
 
-  // Parse flags
+  // Parse flags - direct pass-through, no AI processing
   const areaCode = typeof flags.area === 'string' ? flags.area.toUpperCase() : undefined;
+  const story = typeof flags.story === 'string' ? flags.story :
+                typeof flags.desc === 'string' ? flags.desc : undefined;
   const dryRun = Boolean(flags['dry-run'] || flags.dryRun);
   const noWorkflow = Boolean(flags['no-workflow'] || flags.noWorkflow);
   const confirmLarge = Boolean(flags['confirm-large'] || flags.confirmLarge);
 
-  // Parse user-provided tasks if any
-  let userTasks: string[] | undefined;
+  // Parse explicit tasks if provided
+  let tasks: string[] | undefined;
   if (typeof flags.tasks === 'string') {
-    userTasks = flags.tasks.split(',').map(t => t.trim()).filter(Boolean);
+    tasks = flags.tasks.split(',').map(t => t.trim()).filter(Boolean);
   }
 
-  // Generate smart workflow tasks using LLM (unless --no-workflow or --basic)
-  let smartTasks: string[] | undefined;
-  const useBasic = Boolean(flags.basic);
-
-  if (!noWorkflow && !useBasic) {
-    try {
-      const { isAvailable, generateSmartWorkflow } = await import('./llm.js');
-      if (isAvailable()) {
-        const spinner = createSpinner('Generating smart workflow...');
-        const result = await generateSmartWorkflow(title, {
-          description: typeof flags.description === 'string' ? flags.description : undefined,
-          userTasks,
-          areaCode
-        });
-        if (result.tasks && result.tasks.length > 0) {
-          smartTasks = result.tasks;
-          spinner.stop(`✓ Generated ${smartTasks.length} adapted tasks`);
-        } else {
-          spinner.stop(`· Using default workflow`);
-        }
-      }
-    } catch (err) {
-      // LLM unavailable - will fall back to default workflow
-      console.log(`\n  ⚠ LLM unavailable, using default workflow`);
-    }
-  }
-
-  // Build request body
+  // Build request body - pass through exactly what was specified
   const body: Record<string, unknown> = {
     repoPath: cwd,
     title,
-    withWorkflow: !noWorkflow,
+    withWorkflow: !noWorkflow && !tasks, // Only default workflow if no explicit tasks
     dryRun,
     confirmLarge,
   };
 
   if (areaCode) body.areaCode = areaCode;
-  // Use smart tasks if generated, otherwise user tasks, otherwise let API use defaults
-  if (smartTasks && smartTasks.length > 0) {
-    body.tasks = smartTasks;
-  } else if (userTasks && userTasks.length > 0) {
-    body.tasks = userTasks;
+  if (story) body.description = story;
+  if (tasks && tasks.length > 0) {
+    body.tasks = tasks;
+    body.withWorkflow = true; // Has explicit tasks
   }
 
   const res = await api('/api/spec/add', {
@@ -1056,6 +1334,158 @@ async function add(title: string, flags: Record<string, string | boolean>) {
   console.log(`\n  Use 'chkd list' to see all items.\n`);
 }
 
+async function edit(itemId: string, flags: Record<string, string | boolean>) {
+  if (!itemId) {
+    console.log(`\n  Usage: chkd edit "SD.1" [--story "text"] [--title "text"]`);
+    console.log(`\n  Options:`);
+    console.log(`    --story "text"    Update the story/description`);
+    console.log(`    --title "text"    Update the title`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd edit "SD.1" --story "New description for this feature"`);
+    console.log(`    chkd edit "FE.2" --title "Updated title"`);
+    console.log(`    chkd edit "BE.1" --title "New name" --story "With new story"\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+
+  const newTitle = typeof flags.title === 'string' ? flags.title : undefined;
+  const newStory = typeof flags.story === 'string' ? flags.story :
+                   typeof flags.desc === 'string' ? flags.desc : undefined;
+
+  if (!newTitle && !newStory) {
+    console.log(`\n  ❌ Provide --story or --title to update`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd edit "${itemId}" --story "New description"`);
+    console.log(`    chkd edit "${itemId}" --title "New title"\n`);
+    return;
+  }
+
+  const res = await api('/api/spec/edit', {
+    method: 'POST',
+    body: JSON.stringify({
+      repoPath: cwd,
+      itemId,
+      title: newTitle,
+      description: newStory,
+    }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  console.log(`\n  ✓ Updated: ${itemId}`);
+  if (newTitle) console.log(`  Title: ${newTitle}`);
+  if (newStory) console.log(`  Story: ${newStory}`);
+  console.log('');
+}
+
+async function create(rawInput: string, flags: Record<string, string | boolean>) {
+  if (!rawInput) {
+    console.log(`\n  Usage: chkd create "describe what you want"`);
+    console.log(`\n  AI-powered story creation. Transforms raw input into clean spec items.`);
+    console.log(`\n  Options:`);
+    console.log(`    --area SD|FE|BE    Hint for target area`);
+    console.log(`    --dry-run          Preview without creating`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd create "can we add dark mode toggle somewhere"`);
+    console.log(`    chkd create "the login is broken on mobile" --area FE`);
+    console.log(`    chkd create "I want cards across the top for switching repos"\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+  const areaHint = typeof flags.area === 'string' ? flags.area.toUpperCase() : undefined;
+  const dryRun = Boolean(flags['dry-run'] || flags.dryRun);
+
+  // Process with AI
+  let processed: {
+    title: string;
+    story: string;
+    area: string;
+    tasks: string[];
+  };
+
+  try {
+    const { isAvailable, processFeatureRequest } = await import('./llm.js');
+    if (!isAvailable()) {
+      console.log(`\n  ❌ No API key configured`);
+      console.log(`  Set CHKD_API_KEY or ANTHROPIC_API_KEY environment variable.\n`);
+      return;
+    }
+
+    const spinner = createSpinner('Processing request...');
+    processed = await processFeatureRequest(rawInput, { areaCode: areaHint });
+    spinner.stop('✓ Processed');
+  } catch (err) {
+    console.log(`\n  ❌ AI processing failed: ${err}\n`);
+    return;
+  }
+
+  // Show what was generated
+  console.log(`\n  📋 Generated Story:`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  Title: ${processed.title}`);
+  console.log(`  Area: ${processed.area}`);
+  if (processed.story) {
+    console.log(`  Story: ${processed.story}`);
+  }
+  if (processed.tasks.length > 0) {
+    console.log(`  Tasks:`);
+    for (const task of processed.tasks) {
+      console.log(`    - ${task}`);
+    }
+  }
+
+  if (dryRun) {
+    console.log(`\n  (dry-run mode - not created)\n`);
+    return;
+  }
+
+  // Confirm before creating
+  const rl = await import('readline');
+  const readline = rl.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>(resolve => {
+    readline.question('\n  Create this story? (y/n): ', resolve);
+  });
+  readline.close();
+
+  if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
+    console.log(`\n  Cancelled.\n`);
+    return;
+  }
+
+  // Create via API
+  const body: Record<string, unknown> = {
+    repoPath: cwd,
+    title: processed.title,
+    description: processed.story,
+    areaCode: processed.area,
+    withWorkflow: true,
+  };
+  if (processed.tasks.length > 0) {
+    body.tasks = processed.tasks;
+  }
+
+  const res = await api('/api/spec/add', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}`);
+    if (res.hint) console.log(`  💡 ${res.hint}`);
+    console.log('');
+    return;
+  }
+
+  console.log(`\n  ✓ Created: ${res.data.itemId}`);
+  console.log(`  Title: ${res.data.title}`);
+  console.log(`  Tasks: ${res.data.taskCount}\n`);
+}
+
 async function bugs(filter?: string) {
   const cwd = process.cwd();
   const res = await api(`/api/bugs?repoPath=${encodeURIComponent(cwd)}`);
@@ -1101,6 +1531,215 @@ async function bugs(filter?: string) {
   console.log(`\n  Use: chkd bug "description" to add more\n`);
 }
 
+// ============================================
+// Quick Wins
+// ============================================
+
+async function win(title: string) {
+  if (!title) {
+    console.log(`\n  Usage: chkd win "quick improvement title"`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd win "Add loading spinner to save button"`);
+    console.log(`    chkd win "Fix typo in footer"`);
+    console.log(`\n  Quick wins are stored in docs/QUICKWINS.md\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+  const res = await api('/api/quickwins', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath: cwd, title }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  console.log(`\n  ⚡ Quick win added: ${title}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  💡 Complete it with: chkd won "${title.slice(0, 20)}..."\n`);
+}
+
+async function wins() {
+  const cwd = process.cwd();
+  const res = await api(`/api/quickwins?repoPath=${encodeURIComponent(cwd)}`);
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  const winList = res.data || [];
+  const openWins = winList.filter((w: any) => w.status === 'open');
+  const doneWins = winList.filter((w: any) => w.status === 'done');
+
+  if (winList.length === 0) {
+    console.log(`\n  ✓ No quick wins yet\n`);
+    console.log(`  Use: chkd win "small improvement" to add one\n`);
+    return;
+  }
+
+  console.log(`\n  ⚡ Quick Wins (${openWins.length} open, ${doneWins.length} done)`);
+  console.log(`  ─────────────────`);
+
+  for (const w of openWins) {
+    console.log(`  ○ ${w.title}`);
+  }
+  for (const w of doneWins) {
+    console.log(`  ✓ ${w.title}`);
+  }
+
+  console.log(`\n  Use: chkd win "title" to add, chkd won "query" to complete\n`);
+}
+
+async function won(query: string) {
+  if (!query) {
+    console.log(`\n  Usage: chkd won "query"`);
+    console.log(`\n  Mark a quick win as complete by title or ID.`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd won "loading spinner"     # By partial title`);
+    console.log(`    chkd won "a1b2c3"              # By ID\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+  const res = await api('/api/quickwins', {
+    method: 'PATCH',
+    body: JSON.stringify({ repoPath: cwd, query }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  const newStatus = res.data.status;
+  const icon = newStatus === 'done' ? '✓' : '○';
+  const action = newStatus === 'done' ? 'Done' : 'Reopened';
+  console.log(`\n  ${icon} ${action}: ${res.data.title}\n`);
+}
+
+// Helper for confirmation prompts
+async function confirm(question: string): Promise<string> {
+  const readline = await import('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase().trim());
+    });
+  });
+}
+
+async function quickwin(query: string) {
+  if (!query) {
+    console.log(`\n  Usage: chkd quickwin "query"`);
+    console.log(`\n  Start working on a quick win with confirmation.`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd quickwin "loading spinner"   # By partial title`);
+    console.log(`    chkd quickwin "a1b2c3"            # By ID\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+
+  // First, find the quick win
+  const listRes = await api(`/api/quickwins?repoPath=${encodeURIComponent(cwd)}`);
+  if (!listRes.success) {
+    console.log(`\n  ❌ ${listRes.error}\n`);
+    return;
+  }
+
+  const wins = listRes.data || [];
+  const queryLower = query.toLowerCase();
+
+  // Find by ID or title
+  const win = wins.find((w: any) =>
+    w.id === query ||
+    w.id.startsWith(query) ||
+    w.title.toLowerCase().includes(queryLower)
+  );
+
+  if (!win) {
+    console.log(`\n  ❌ Quick win not found: "${query}"`);
+    console.log(`\n  Run 'chkd wins' to see available quick wins.\n`);
+    return;
+  }
+
+  if (win.status === 'done') {
+    console.log(`\n  ⚠ This quick win is already done: ${win.title}\n`);
+    return;
+  }
+
+  // Show the quick win and confirm
+  console.log(`\n  ⚡ Quick Win: ${win.title}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`\n  Is this actually quick (<30 min)?`);
+  console.log(`    y = Yes, start working on it`);
+  console.log(`    n = No, cancel`);
+  console.log(`    c = Convert to a proper story/task\n`);
+
+  const answer = await confirm('  Your choice [y/n/c]: ');
+
+  if (answer === 'c' || answer === 'convert') {
+    // Convert to story
+    console.log(`\n  Converting to story...\n`);
+
+    const addRes = await api('/api/spec/add', {
+      method: 'POST',
+      body: JSON.stringify({
+        repoPath: cwd,
+        title: win.title,
+        withWorkflow: true,
+      }),
+    });
+
+    if (addRes.success) {
+      // Delete from quick wins
+      await api(`/api/quickwins?repoPath=${encodeURIComponent(cwd)}&id=${win.id}`, {
+        method: 'DELETE',
+      });
+
+      console.log(`  ✓ Created story: ${addRes.data.itemId}`);
+      console.log(`  ✓ Removed from quick wins`);
+      console.log(`\n  Run '/chkd ${addRes.data.itemId}' to start building it.\n`);
+    } else {
+      console.log(`  ❌ ${addRes.error}\n`);
+    }
+    return;
+  }
+
+  if (answer !== 'y' && answer !== 'yes') {
+    console.log(`\n  Cancelled.\n`);
+    return;
+  }
+
+  // Start quickwin session
+  const sessionRes = await api('/api/session/adhoc', {
+    method: 'POST',
+    body: JSON.stringify({
+      repoPath: cwd,
+      mode: 'quickwin',
+      description: win.title,
+      quickwinId: win.id,
+    }),
+  });
+
+  if (!sessionRes.success) {
+    console.log(`\n  ❌ ${sessionRes.error}\n`);
+    return;
+  }
+
+  console.log(`\n  ⚡ Started: ${win.title}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  💡 Run 'chkd done' when finished (auto-completes the quick win)\n`);
+}
+
 async function status() {
   const cwd = process.cwd();
   const res = await api(`/api/status?repoPath=${encodeURIComponent(cwd)}`);
@@ -1117,7 +1756,12 @@ async function status() {
     return;
   }
 
-  console.log(`\n  📁 ${data.repo.name}`);
+  // Show repo name with state indicator
+  const stateLabel = data.session.mode === 'debugging' ? ' [DEBUG]' :
+                     data.session.mode === 'impromptu' ? ' [IMPROMPTU]' :
+                     data.session.mode === 'quickwin' ? ' [QUICKWIN]' :
+                     data.session.status === 'building' ? ' [BUILDING]' : '';
+  console.log(`\n  📁 ${data.repo.name}${stateLabel}`);
   console.log(`  ─────────────────────────`);
 
   if (data.spec) {
@@ -1292,9 +1936,15 @@ function help(command?: string) {
     sync [idle]         Check/fix app state (use 'idle' to reset)
     progress            Show current task's sub-items
 
+  ADHOC WORK (keeps UI engaged)
+
+    impromptu "desc"    Start ad-hoc work not in spec
+    debug "desc"        Start debug/investigation session
+
   SPEC
 
-    add "title"         Add a new feature to SPEC.md
+    add "title"         Add feature (explicit control - pass title/tasks/story)
+    create "request"    Create feature (AI processes raw input)
     check [--fix]       Validate SPEC.md format (--fix to auto-fix)
     repair              Reformat SPEC.md using AI (fixes formatting)
 
@@ -1493,13 +2143,14 @@ function showCommandHelp(command: string) {
   TIP: Use /retro in Claude Code for a full retrospective.
 `,
     also: `
-  chkd also "description"
+  chkd also [description]
   ─────────────────────────────────────────────────────────────
 
-  Log off-plan work during a task.
+  Log off-plan work during a task, or list current items.
 
-  ARGUMENTS:
-    "description"    What you did that wasn't in the spec
+  USAGE:
+    chkd also                  List current "also did" items
+    chkd also "description"    Add a new item
 
   WHAT IT DOES:
     - Adds to the "Also did" list for the current task
@@ -1512,9 +2163,9 @@ function showCommandHelp(command: string) {
     - Made an improvement you noticed was needed
 
   EXAMPLES:
-    chkd also "Fixed typo in README"
-    chkd also "Updated error handling in auth"
-    chkd also "Refactored date formatting utils"
+    chkd also                             # List items
+    chkd also "Fixed typo in README"      # Add item
+    chkd also "Updated error handling"    # Add item
 
   NOTE: Requires an active task session.
 `,
@@ -1892,10 +2543,15 @@ function showCommandHelp(command: string) {
     bug         Quick-create a bug
     bugs        List open bugs
     fix         Mark a bug as fixed
+    win         Add a quick win
+    wins        List quick wins
+    won         Complete a quick win
     start       Start working on a task
     tick        Mark an item complete
     working     Signal you're working on a sub-item
     progress    Show current task's sub-items
+    add         Add a feature to spec
+    edit        Update an item's title/story
     repair      Reformat SPEC.md using AI
     init        Initialize chkd in new project
     upgrade     Add/update chkd in existing project
@@ -1908,7 +2564,7 @@ function showCommandHelp(command: string) {
     chkd help repair       # How to repair spec
 `,
     add: `
-  chkd add "title" [--area SD|FE|BE] [--dry-run] [--tasks "t1,t2"]
+  chkd add "title" [--story "desc"] [--area SD|FE|BE] [--dry-run]
   ─────────────────────────────────────────────────────────────
 
   Add a new feature/item to SPEC.md.
@@ -1917,6 +2573,7 @@ function showCommandHelp(command: string) {
     "title"    The feature title (required)
 
   OPTIONS:
+    --story "text"    Story/description for the feature
     --area <code>     Target area: SD, FE, BE, FUT (default: auto)
     --dry-run         Preview what would be created without adding
     --tasks "a,b,c"   Custom tasks (comma-separated)
@@ -1925,21 +2582,23 @@ function showCommandHelp(command: string) {
 
   WHAT IT DOES:
     1. Validates the title isn't a duplicate
-    2. Adds the item to the specified area
-    3. Adds workflow sub-tasks (Explore, Design, etc.)
+    2. Adds the item exactly as specified (no AI processing)
+    3. Uses default workflow if no --tasks provided
     4. Returns the item ID and line number
 
   WHEN TO USE:
-    - Adding a new feature during planning
-    - Capturing ideas without editing SPEC.md directly
+    - Claude Code adding features (full control)
+    - Explicit, structured additions
     - Programmatic spec updates
+
+  For AI-assisted creation from raw input, use 'chkd create' instead.
 
   EXAMPLES:
     chkd add "User authentication"
+    chkd add "Dark mode" --story "Toggle between light and dark themes"
     chkd add "Dark mode" --area FE
     chkd add "API caching" --area BE --dry-run
     chkd add "Login form" --tasks "validation,tests,docs"
-    chkd add "Big feature" --confirm-large
 
   OUTPUT EXAMPLE:
     ✓ Added: User authentication
@@ -1954,6 +2613,186 @@ function showCommandHelp(command: string) {
     - Unknown parameter warnings
 
   TIP: Use --dry-run first to see what will be created.
+`,
+    create: `
+  chkd create "describe what you want"
+  ─────────────────────────────────────────────────────────────
+
+  AI-powered story creation. Takes raw input and produces clean spec items.
+
+  ARGUMENTS:
+    "request"    Natural language description of what you want (required)
+
+  OPTIONS:
+    --area <code>     Hint for target area: SD, FE, BE, FUT
+    --dry-run         Preview AI output without creating
+
+  WHAT IT DOES:
+    1. Sends your raw request to Claude AI
+    2. AI generates: clean title, user story, area, and tasks
+    3. Shows you what will be created
+    4. Asks for confirmation before adding to spec
+
+  EXAMPLES:
+    chkd create "can we add dark mode toggle somewhere"
+    chkd create "the login is broken on mobile" --area FE
+    chkd create "I want cards across the top for switching repos"
+
+  WHEN TO USE:
+    - You have a rough idea but want AI to structure it
+    - Human-driven feature requests (not Claude Code)
+    - Converting verbal requirements into spec items
+
+  COMPARISON WITH 'add':
+    add:    Pass explicit title, story, tasks - for programmatic use
+    create: Pass raw input, AI processes - for human use
+
+  REQUIRES: CHKD_API_KEY or ANTHROPIC_API_KEY environment variable
+`,
+    impromptu: `
+  chkd impromptu "description"
+  ─────────────────────────────────────────────────────────────
+
+  Start an ad-hoc work session not tied to a spec task.
+
+  ARGUMENTS:
+    "description"    What you're working on (required)
+
+  WHAT IT DOES:
+    - Starts a session without a spec task
+    - Shows IMPROMPTU state in UI (yellow indicator)
+    - Keeps the UI engaged during ad-hoc work
+    - Tracks time spent
+
+  WHEN TO USE:
+    - Quick scripts not worth adding to spec
+    - Experiments or prototyping
+    - Helping with something outside the project
+    - Any work that should show in the UI
+
+  EXAMPLES:
+    chkd impromptu "Quick data export script"
+    chkd impromptu "Experimenting with new library"
+    chkd impromptu "Helping teammate with their code"
+
+  END THE SESSION:
+    chkd done        # When finished
+
+  SEE ALSO:
+    chkd debug       # For debugging/investigation work
+`,
+    debug: `
+  chkd debug "description"
+  ─────────────────────────────────────────────────────────────
+
+  Start a debug/investigation session.
+
+  ARGUMENTS:
+    "description"    What you're debugging (required)
+
+  WHAT IT DOES:
+    - Starts a debug session without a spec task
+    - Shows DEBUG state in UI (red indicator)
+    - Keeps the UI engaged during investigation
+    - Tracks time spent
+
+  WHEN TO USE:
+    - Investigating a bug not yet logged
+    - Debugging production issues
+    - Performance investigation
+    - Any diagnostic work
+
+  EXAMPLES:
+    chkd debug "Login crash on Safari"
+    chkd debug "Slow API response investigation"
+    chkd debug "Memory leak in dashboard"
+
+  END THE SESSION:
+    chkd done        # When finished
+
+  DIFFERENCE FROM /bugfix:
+    - /bugfix works with bugs logged via 'chkd bug'
+    - chkd debug is for ad-hoc investigation
+    - Both show DEBUG state in UI
+
+  SEE ALSO:
+    chkd bug         # Log a bug for later
+    /bugfix          # Fix a logged bug
+    chkd impromptu   # For non-debug ad-hoc work
+`,
+    win: `
+  chkd win "title"
+  ─────────────────────────────────────────────────────────────
+
+  Add a quick win - a small improvement to do when you have time.
+
+  ARGUMENTS:
+    "title"    The quick win description (required)
+
+  WHAT IT DOES:
+    - Adds a checkbox to docs/QUICKWINS.md
+    - Quick wins are visible in the UI
+    - Great for small improvements that don't need a spec item
+
+  WHEN TO USE:
+    - Small UI tweaks
+    - Code cleanup ideas
+    - Performance micro-optimizations
+    - Anything that takes < 30 minutes
+
+  EXAMPLES:
+    chkd win "Add loading spinner to save button"
+    chkd win "Fix typo in footer"
+    chkd win "Remove unused import in utils.ts"
+
+  SEE ALSO:
+    chkd wins        # List quick wins
+    chkd won         # Complete a quick win
+`,
+    wins: `
+  chkd wins
+  ─────────────────────────────────────────────────────────────
+
+  List all quick wins for the current project.
+
+  WHAT IT SHOWS:
+    - Open quick wins (not yet done)
+    - Completed quick wins
+
+  OUTPUT EXAMPLE:
+    ⚡ Quick Wins (3 open, 2 done)
+    ─────────────────
+    ○ Add loading spinner
+    ○ Fix typo in footer
+    ○ Clean up unused imports
+    ✓ Add hover states
+    ✓ Update button colors
+
+  SEE ALSO:
+    chkd win         # Add a quick win
+    chkd won         # Complete a quick win
+`,
+    won: `
+  chkd won "query"
+  ─────────────────────────────────────────────────────────────
+
+  Mark a quick win as complete (or toggle it back to open).
+
+  ARGUMENTS:
+    "query"    ID or partial title to match (required)
+
+  MATCHING:
+    - Matches by ID (first 6+ chars)
+    - Matches by title substring (case-insensitive)
+
+  EXAMPLES:
+    chkd won "loading"          # Match "Add loading spinner"
+    chkd won "a1b2c3"           # Match by ID
+    chkd won "typo"             # Match "Fix typo in footer"
+
+  SEE ALSO:
+    chkd win         # Add a quick win
+    chkd wins        # List quick wins
 `,
     repair: `
   chkd repair
@@ -2451,7 +3290,7 @@ async function main() {
   const restArgs = args.slice(1);
 
   // Flags that expect a value
-  const valueFlagSet = new Set(['severity', 'area', 'tasks']);
+  const valueFlagSet = new Set(['severity', 'area', 'tasks', 'story', 'desc', 'title']);
 
   for (let i = 0; i < restArgs.length; i++) {
     const a = restArgs[i];
@@ -2487,9 +3326,12 @@ async function main() {
       workflow();
       break;
     case 'bug':
-      const severity = typeof flags.severity === 'string' ? flags.severity :
-                       flags.high ? 'high' : flags.low ? 'low' : flags.critical ? 'critical' : undefined;
-      await bug(arg, severity);
+      // Support shorthand severity flags
+      if (flags.high) flags.severity = 'high';
+      if (flags.low) flags.severity = 'low';
+      if (flags.critical) flags.severity = 'critical';
+      if (flags.big) flags.severity = 'big';
+      await bug(arg, flags);
       break;
     case 'also':
       await also(arg);
@@ -2499,6 +3341,21 @@ async function main() {
       break;
     case 'fix':
       await fix(arg);
+      break;
+    case 'bugfix':
+      await startBugfix(arg);
+      break;
+    case 'win':
+      await win(arg);
+      break;
+    case 'wins':
+      await wins();
+      break;
+    case 'won':
+      await won(arg);
+      break;
+    case 'quickwin':
+      await quickwin(arg);
       break;
     case 'tick':
       await tick(arg);
@@ -2525,11 +3382,23 @@ async function main() {
     case 'idle':
       await idle();
       break;
+    case 'impromptu':
+      await adhoc('impromptu', arg);
+      break;
+    case 'debug':
+      await adhoc('debug', arg);
+      break;
     case 'sync':
       await sync(arg || undefined);
       break;
     case 'add':
       await add(arg, flags);
+      break;
+    case 'create':
+      await create(arg, flags);
+      break;
+    case 'edit':
+      await edit(arg, flags);
       break;
     case 'repair':
       await repair();

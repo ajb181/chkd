@@ -18,12 +18,23 @@ chkd working "item"      # Signal you're working on an item
 chkd tick "item"         # Mark an item complete
 chkd iterate             # Increment iteration, get reminder
 
+# Ad-hoc Work (keeps UI engaged)
+chkd impromptu "desc"    # Start ad-hoc work not in spec
+chkd debug "desc"        # Start debug/investigation session
+
 # Bugs
 chkd bug "description"   # Quick-create a bug
 chkd bugs                # List open bugs
 chkd fix "bug"           # Mark a bug as fixed
 
+# Quick Wins
+chkd win "title"         # Add a quick win
+chkd wins                # List quick wins
+chkd won "query"         # Complete a quick win
+
 # Spec
+chkd add "title"         # Add a new feature/story to spec
+chkd edit "item"         # Update an item's title or story
 chkd repair              # AI-powered SPEC.md reformatting
 
 # Setup
@@ -228,6 +239,97 @@ During long feedback discussions, it's easy to lose focus on the process. Runnin
 
 ---
 
+## Ad-hoc Work Commands
+
+These commands let you track work that isn't in the spec, keeping the UI engaged.
+
+### `chkd impromptu "description"`
+
+Start an ad-hoc work session not tied to a spec task.
+
+```bash
+chkd impromptu "Quick data export script"
+chkd impromptu "Experimenting with new library"
+chkd impromptu "Helping teammate with their code"
+```
+
+**What it does:**
+- Starts a session without a spec task
+- Shows IMPROMPTU state in UI (yellow indicator)
+- Tracks time spent
+- Queue input available for notes
+
+**When to use:**
+- Quick scripts not worth adding to spec
+- Experiments or prototyping
+- Helping with something outside the project
+- Any work that should show in the UI
+
+**End the session:**
+```bash
+chkd done        # When finished
+```
+
+---
+
+### `chkd debug "description"`
+
+Start a debug/investigation session.
+
+```bash
+chkd debug "Login crash on Safari"
+chkd debug "Slow API response investigation"
+chkd debug "Memory leak in dashboard"
+```
+
+**What it does:**
+- Starts a debug session without a spec task
+- Shows DEBUG state in UI (red indicator)
+- Tracks time spent
+- Queue input available for notes
+
+**When to use:**
+- Investigating a bug not yet logged
+- Debugging production issues
+- Performance investigation
+- Any diagnostic work
+
+**Difference from `/bugfix`:**
+- `/bugfix` works with bugs logged via `chkd bug`
+- `chkd debug` is for ad-hoc investigation
+- Both show DEBUG state in UI
+
+**End the session:**
+```bash
+chkd done        # When finished
+```
+
+---
+
+### `chkd also [description]`
+
+Log additional work done during a session, or list current items.
+
+```bash
+chkd also                              # List current items
+chkd also "Fixed typo while debugging" # Add item
+chkd also "Refactored helper function" # Add item
+```
+
+**What it does:**
+- Without arg: Shows current "also did" items
+- With arg: Adds a note to current session
+- Shows in UI's "Also Did" section
+- Tracks off-task work without switching sessions
+
+**When to use:**
+- Review what side-work you've done
+- You fix something unrelated while working
+- You do some cleanup during another task
+- You want to track side work during sessions
+
+---
+
 ## Bug Commands
 
 ### `chkd bug "description"`
@@ -292,6 +394,62 @@ chkd fix "a1b2c3"           # By ID prefix
 
 ---
 
+## Quick Wins Commands
+
+Quick wins are small improvements stored in `docs/QUICKWINS.md`. Use them for ideas that don't need a full spec item.
+
+### `chkd win "title"`
+
+Add a quick win.
+
+```bash
+chkd win "Add loading spinner to save button"
+chkd win "Fix typo in footer"
+chkd win "Remove unused imports"
+```
+
+**When to use:**
+- Small UI tweaks
+- Code cleanup ideas
+- Performance micro-optimizations
+- Anything that takes < 30 minutes
+
+---
+
+### `chkd wins`
+
+List all quick wins.
+
+```bash
+chkd wins
+```
+
+**Output example:**
+```
+⚡ Quick Wins (3 open, 2 done)
+─────────────────
+○ Add loading spinner
+○ Fix typo in footer
+✓ Update button colors
+```
+
+---
+
+### `chkd won "query"`
+
+Complete a quick win (or toggle it back to open).
+
+```bash
+chkd won "loading spinner"   # By partial title
+chkd won "a1b2c3"            # By ID
+```
+
+**Matching:**
+- Matches by ID (first 6+ chars)
+- Matches by title substring (case-insensitive)
+
+---
+
 ## Setup Commands
 
 ### `chkd init [name]`
@@ -336,6 +494,77 @@ chkd upgrade "My App"    # Custom project name
 ---
 
 ## Spec Commands
+
+### `chkd add "title"`
+
+Add a new feature/story to SPEC.md with workflow sub-tasks.
+
+```bash
+chkd add "User authentication"
+chkd add "Dark mode" --story "Toggle between light and dark themes"
+chkd add "API endpoint" --area BE --story "Create REST endpoint for user data"
+chkd add "API caching" --area BE --dry-run
+chkd add "Login form" --tasks "validation,tests,docs"
+```
+
+**Options:**
+- `--story "text"` - Story/description for the feature
+- `--area <code>` - Target area: SD, FE, BE, FUT (default: auto-detected)
+- `--dry-run` - Preview what would be created without adding
+- `--tasks "a,b,c"` - Custom sub-tasks (comma-separated)
+- `--no-workflow` - Don't add workflow sub-tasks (Explore, Design, etc.)
+
+**What it does:**
+1. Validates the title isn't a duplicate
+2. Adds the item to the specified area with description
+3. Adds workflow sub-tasks (Explore, Design, Prototype, Feedback, Implement, Polish)
+4. Returns the item ID
+
+**Output example:**
+```
+✓ Added: User authentication
+Area: Frontend (FE)
+ID: FE.3
+Tasks: 6
+```
+
+**Result in SPEC.md:**
+```markdown
+- [ ] **FE.3 User authentication** - Login, logout, session management
+  - [ ] Explore: research existing patterns
+  - [ ] Design: plan approach + contracts
+  ...
+```
+
+**When to use:**
+- Adding a new feature during planning
+- Capturing ideas without editing SPEC.md directly
+- Quick story creation from the terminal
+
+**Tip:** Use `--dry-run` first to preview what will be created.
+
+---
+
+### `chkd edit "item"`
+
+Update an existing item's title or story/description.
+
+```bash
+chkd edit "SD.1" --story "New description for this feature"
+chkd edit "FE.2" --title "Updated title"
+chkd edit "BE.1" --title "New name" --story "With new story"
+```
+
+**Options:**
+- `--story "text"` - Update the story/description
+- `--title "text"` - Update the title
+
+**When to use:**
+- Refining a feature's description after planning
+- Fixing typos in titles
+- Adding context to existing items
+
+---
 
 ### `chkd repair`
 
