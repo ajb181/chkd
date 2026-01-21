@@ -34,6 +34,19 @@ chkd help [command]      # Get detailed help
 - `/commit` - Safe commit workflow
 - `/retro` - Capture learnings after fixing bugs
 
+## Staying Focused (IMPORTANT!)
+
+When working on a task:
+
+1. **User reports a bug/issue** → `chkd bug "description"` then CONTINUE your task
+2. **You notice a bug** → `chkd bug "description"` then CONTINUE your task
+3. **Something seems wrong** → Log it, don't fix it (unless it blocks you)
+
+**DON'T** derail from your current task to investigate/fix unrelated issues.
+**DO** quickly log issues and stay on track.
+
+The bugs list exists so nothing gets lost. Fix them later with `/bugfix`.
+
 ## Source of Truth
 
 - `docs/SPEC.md` - Feature checklist (SD.1, FE.1, BE.1 format)
@@ -81,6 +94,54 @@ src/
 | `src/routes/+page.svelte` | Main UI |
 | `docs/SPEC.md` | The task list |
 
+## Sync System
+
+chkd syncs skills and docs to other projects. See `docs/SYNC.md` for full details.
+
+### Sync Files (be careful editing these!)
+
+| File | Purpose |
+|------|---------|
+| `chkd-sync.json` | Manifest - what gets synced and how |
+| `templates/skills/*` | Skills synced to `.claude/skills/` |
+| `templates/docs/*` | Docs synced to `docs/` |
+| `templates/CLAUDE-chkd-section.md` | CLAUDE.md section for merge |
+| `templates/CLAUDE.md.template` | Full CLAUDE.md for new projects |
+| `templates/docs/SPEC.md.template` | SPEC.md for new projects |
+
+### When Editing Sync Files
+
+1. **templates/skills/*** - Changes sync to all projects on `chkd sync all`
+2. **chkd-sync.json** - Bump version when making significant changes
+3. **After changes** - Run `chkd sync all` to distribute
+
+### Commands
+
+```bash
+chkd sync skills   # Sync skills to current project
+chkd sync all      # Sync to ALL registered repos
+```
+
+## Development Standards
+
+### CLI Commands
+
+When adding or editing CLI commands, follow the checklist in `docs/CLI-QUALITY.md`:
+
+1. **Function**: Validate args, handle errors with hints, use consistent output format
+2. **Help text**: Add entry in `showCommandHelp()` with examples and use cases
+3. **Documentation**: Update `docs/CLI.md` with command reference
+4. **Main**: Add to switch statement and help() list
+5. **Test**: Verify help, no-args, normal case, and error handling
+
+### API Endpoints
+
+- Return `{ success, data?, error?, hint? }` format
+- Validate required params early
+- Return warnings for unknown parameters
+- Support dry-run mode for destructive operations
+- Check for duplicates before creating
+
 ## Spec Format
 
 Items must have section numbers:
@@ -99,10 +160,9 @@ Items must have section numbers:
 ## Workflow
 
 ### Basic Flow
-1. `chkd status` - See what's next
-2. Pick a task (e.g., SD.1)
-3. `/chkd SD.1` - Build it
-4. Review and iterate
+1. `chkd status` - See progress and what's next
+2. `/chkd SD.1` - Build a task (use task ID from spec)
+3. Review and iterate
 
 ### Sub-Item Workflow (IMPORTANT!)
 

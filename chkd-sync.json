@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "description": "chkd sync manifest - defines what gets synced to other projects",
+  "assets": [
+    {
+      "name": "skills",
+      "source": "templates/skills",
+      "destination": ".claude/skills",
+      "mode": "copy",
+      "description": "Claude Code skills (/chkd, /story, /bugfix, etc.)"
+    },
+    {
+      "name": "claude-section",
+      "source": "templates/CLAUDE-chkd-section.md",
+      "destination": "CLAUDE.md",
+      "mode": "merge",
+      "description": "chkd workflow section for CLAUDE.md"
+    },
+    {
+      "name": "guide",
+      "source": "templates/docs/GUIDE.md",
+      "destination": "docs/GUIDE.md",
+      "mode": "copy",
+      "description": "How to use chkd workflow"
+    },
+    {
+      "name": "cli-reference",
+      "source": "templates/docs/CLI.md",
+      "destination": "docs/CLI.md",
+      "mode": "copy",
+      "description": "CLI command reference"
+    },
+    {
+      "name": "spec-template",
+      "source": "templates/docs/SPEC.md.template",
+      "destination": "docs/SPEC.md",
+      "mode": "init-only",
+      "description": "Spec template (only for new projects)"
+    },
+    {
+      "name": "claude-template",
+      "source": "templates/CLAUDE.md.template",
+      "destination": "CLAUDE.md",
+      "mode": "init-only",
+      "description": "CLAUDE.md template (only for new projects without one)"
+    }
+  ],
+  "modes": {
+    "copy": "Replace destination with source",
+    "merge": "Intelligently merge (uses LLM if available)",
+    "init-only": "Only copy if destination doesn't exist"
+  }
+}

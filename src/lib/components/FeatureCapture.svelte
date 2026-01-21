@@ -7,9 +7,42 @@
   export let spec: ParsedSpec | null;
   export let initialTitle = '';
 
-  // DEBUG: Track if component is being recreated vs just re-rendered
-  onMount(() => console.log('[FeatureCapture] MOUNTED - component created'));
-  onDestroy(() => console.log('[FeatureCapture] DESTROYED - will lose state!'));
+  // Form persistence helpers - survive hot reloads
+  const STORAGE_KEY = 'chkd_feature_draft';
+
+  function saveDraft() {
+    if (typeof window === 'undefined') return;
+    try {
+      const draft = { title, description, userStory, selectedAreaCode, currentStep };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    } catch (e) { /* ignore */ }
+  }
+
+  function loadDraft() {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (draft.title) title = draft.title;
+        if (draft.description) description = draft.description;
+        if (draft.userStory) userStory = draft.userStory;
+        if (draft.selectedAreaCode) selectedAreaCode = draft.selectedAreaCode;
+        if (draft.currentStep) currentStep = draft.currentStep;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function clearDraft() {
+    if (typeof window === 'undefined') return;
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+  }
+
+  onMount(() => {
+    console.log('[FeatureCapture] MOUNTED - loading draft');
+    loadDraft();
+  });
+  onDestroy(() => console.log('[FeatureCapture] DESTROYED'));
 
   const dispatch = createEventDispatcher();
 
@@ -18,14 +51,20 @@
   let currentStep: Step = 'discuss';
   const steps: Step[] = ['discuss', 'analyze', 'place', 'review', 'add'];
 
-  // Default workflow tasks
+  // Default workflow tasks - follows the chkd workflow philosophy:
+  // 1. Research before building
+  // 2. Design with endpoint contracts
+  // 3. Prototype with mock data for quick iteration
+  // 4. Get user feedback BEFORE investing in real implementation
+  // 5. Only then build the real thing
+  // 6. Polish based on actual usage
   const DEFAULT_TASKS = [
-    'Explore: understand problem, search existing functions',
-    'Design: flow diagram if needed',
-    'Prototype: backend with test data + frontend calling it',
-    'Feedback: user reviews prototype',
-    'Implement: replace test data with real logic',
-    'Polish: iterate based on usage'
+    'Explore: research problem, check existing code/patterns',
+    'Design: plan approach + define endpoint contracts',
+    'Prototype: build UI with mock data, stub backend',
+    'Feedback: user reviews and approves UX',
+    'Implement: connect real backend logic',
+    'Polish: error states, edge cases, performance'
   ];
 
   // Feature data
@@ -33,8 +72,8 @@
   let description = '';
   let userStory = '';
 
-  // DEBUG: Log when title gets reset
-  $: if (title !== undefined) console.log('[FeatureCapture] title =', JSON.stringify(title));
+  // Auto-save draft on changes
+  $: if (title || description || userStory || selectedAreaCode) saveDraft();
   let selectedAreaCode: string | null = null;
   let tasks: string[] = [...DEFAULT_TASKS];
   let newTaskText = '';
@@ -44,6 +83,8 @@
   let aiDescription = '';
   let aiStory = '';
   let aiArea: string | null = null;
+  let aiPolishedTitle = '';
+  let aiTasks: string[] = [];
   let duplicates: DuplicateMatch[] = [];
   let verdict: 'new' | 'enhance' | 'duplicate' | null = null;
   let verdictReason = '';
@@ -66,14 +107,15 @@
     add: 'Add'
   };
 
-  // Step status
-  function getStepStatus(step: Step): 'done' | 'current' | 'pending' {
+  // Step status - reactive to ensure UI updates
+  $: stepStatuses = steps.reduce((acc, step) => {
     const currentIndex = steps.indexOf(currentStep);
     const stepIndex = steps.indexOf(step);
-    if (stepIndex < currentIndex) return 'done';
-    if (stepIndex === currentIndex) return 'current';
-    return 'pending';
-  }
+    if (stepIndex < currentIndex) acc[step] = 'done';
+    else if (stepIndex === currentIndex) acc[step] = 'current';
+    else acc[step] = 'pending';
+    return acc;
+  }, {} as Record<Step, 'done' | 'current' | 'pending'>);
 
   function close() {
     dispatch('close');
@@ -124,11 +166,16 @@
         aiDescription = expandRes.data.description || '';
         aiStory = expandRes.data.story || '';
         aiArea = expandRes.data.suggestedArea || null;
+        aiPolishedTitle = expandRes.data.polishedTitle || '';
+        aiTasks = expandRes.data.tasks || [];
 
-        // Auto-fill if not already set
+        // Auto-fill description/story/area if not already set
         if (!description && aiDescription) description = aiDescription;
         if (!userStory && aiStory) userStory = aiStory;
         if (!selectedAreaCode && aiArea) selectedAreaCode = aiArea;
+
+        // DON'T auto-apply polished title - let user choose
+        // DON'T auto-apply tasks - let user choose
       }
 
       // Determine verdict
@@ -177,6 +224,7 @@
     const res = await addFeature(repoPath, title.trim(), areaCode, fullDescription || undefined, customTasks);
 
     if (res.success) {
+      clearDraft();
       dispatch('added');
     } else {
       addError = res.error || 'Failed to add feature';
@@ -254,7 +302,7 @@
 
       <nav class="steps">
         {#each steps as step}
-          {@const status = getStepStatus(step)}
+          {@const status = stepStatuses[step]}
           <button
             class="step-item"
             class:done={status === 'done'}
@@ -359,9 +407,33 @@
             {/if}
 
             <!-- AI suggestions -->
-            {#if aiDescription || aiStory}
+            {#if aiPolishedTitle || aiDescription || aiStory || aiTasks.length > 0}
               <div class="ai-section">
                 <h3>AI Suggestions</h3>
+
+                <!-- Polished title with accept/keep buttons -->
+                {#if aiPolishedTitle && aiPolishedTitle !== title}
+                  <div class="ai-choice">
+                    <div class="ai-choice-header">
+                      <label>Polished Title</label>
+                      <div class="ai-choice-actions">
+                        <button class="btn-accept" on:click={() => { title = aiPolishedTitle; }}>Use this</button>
+                        <button class="btn-keep" on:click={() => { aiPolishedTitle = title; }}>Keep original</button>
+                      </div>
+                    </div>
+                    <div class="ai-choice-compare">
+                      <div class="choice-original">
+                        <span class="choice-label">Original:</span>
+                        <span class="choice-text">{title}</span>
+                      </div>
+                      <div class="choice-polished">
+                        <span class="choice-label">Polished:</span>
+                        <span class="choice-text">{aiPolishedTitle}</span>
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+
                 {#if aiDescription}
                   <div class="ai-item">
                     <label>Description</label>
@@ -372,6 +444,24 @@
                   <div class="ai-item">
                     <label>User Story</label>
                     <p class="user-story">{aiStory}</p>
+                  </div>
+                {/if}
+
+                <!-- Smart tasks with accept/keep buttons -->
+                {#if aiTasks.length > 0 && JSON.stringify(aiTasks) !== JSON.stringify(tasks)}
+                  <div class="ai-choice">
+                    <div class="ai-choice-header">
+                      <label>Smart Tasks ({aiTasks.length})</label>
+                      <div class="ai-choice-actions">
+                        <button class="btn-accept" on:click={() => { tasks = [...aiTasks]; }}>Use these</button>
+                        <button class="btn-keep" on:click={() => { aiTasks = []; }}>Keep defaults</button>
+                      </div>
+                    </div>
+                    <ul class="ai-tasks">
+                      {#each aiTasks as task, i}
+                        <li><span class="task-num">{i + 1}.</span> {task}</li>
+                      {/each}
+                    </ul>
                   </div>
                 {/if}
               </div>
@@ -910,6 +1000,123 @@
     background: var(--bg-tertiary);
     border-left: 3px solid var(--primary);
     border-radius: var(--radius-sm);
+  }
+
+  .ai-item.polished {
+    background: var(--success-bg);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-md);
+  }
+
+  .ai-item .polished-title {
+    font-weight: 600;
+    color: var(--success);
+  }
+
+  .ai-tasks {
+    list-style: none;
+    margin: var(--space-xs) 0 0;
+    padding: 0;
+    font-size: 13px;
+  }
+
+  .ai-tasks li {
+    padding: var(--space-xs) 0;
+    color: var(--text-muted);
+    display: flex;
+    gap: var(--space-sm);
+  }
+
+  .ai-tasks .task-num {
+    color: var(--primary);
+    font-weight: 500;
+    width: 20px;
+    flex-shrink: 0;
+  }
+
+  /* AI choice UI */
+  .ai-choice {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+  }
+
+  .ai-choice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-sm);
+  }
+
+  .ai-choice-header label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .ai-choice-actions {
+    display: flex;
+    gap: var(--space-xs);
+  }
+
+  .btn-accept, .btn-keep {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+
+  .btn-accept {
+    background: var(--success);
+    color: white;
+  }
+
+  .btn-accept:hover {
+    background: var(--success-hover, #3d9a50);
+  }
+
+  .btn-keep {
+    background: var(--bg);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-keep:hover {
+    background: var(--bg-secondary);
+    color: var(--text);
+  }
+
+  .ai-choice-compare {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .choice-original, .choice-polished {
+    display: flex;
+    gap: var(--space-sm);
+    font-size: 13px;
+  }
+
+  .choice-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    width: 60px;
+    flex-shrink: 0;
+  }
+
+  .choice-original .choice-text {
+    color: var(--text-muted);
+    text-decoration: line-through;
+  }
+
+  .choice-polished .choice-text {
+    color: var(--success);
+    font-weight: 500;
   }
 
   /* Area selection */

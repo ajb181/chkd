@@ -104,6 +104,162 @@ Merge these into a single, well-organized CLAUDE.md. Output only the merged mark
 /**
  * Repair and reformat a SPEC.md file to follow the correct chkd format
  */
+/**
+ * Determine if a story needs workflow tasks and generate appropriate sub-items
+ */
+export async function expandStory(
+  title: string,
+  context?: { existingAreas?: string[]; projectDescription?: string }
+): Promise<{
+  needsWorkflow: boolean;
+  suggestedArea: string;
+  description: string;
+  subItems: string[];
+}> {
+  const systemPrompt = `You are a spec assistant for chkd (spec-driven development).
+
+Your task: Analyze a new story/feature and determine:
+1. If it needs the standard workflow sub-items (Explore, Design, Prototype, etc.)
+2. What area it belongs to (SD=Site Design, FE=Frontend, BE=Backend, FUT=Future)
+3. A brief description
+4. Appropriate sub-items (workflow tasks OR custom tasks OR none)
+
+WORKFLOW TASKS (use for substantial features):
+- Explore: understand problem, search existing functions
+- Design: flow diagram if needed
+- Prototype: backend with test data + frontend calling it
+- Feedback: user reviews prototype
+- Implement: replace test data with real logic
+- Polish: iterate based on usage
+
+DON'T use workflow for:
+- Bug fixes (use /bugfix skill instead)
+- Simple config changes
+- One-liner tasks
+- Documentation updates
+
+DO use workflow for:
+- New features with UI + backend
+- Complex refactors
+- Major integrations
+
+Respond with JSON only:
+{
+  "needsWorkflow": true/false,
+  "suggestedArea": "SD|FE|BE|FUT",
+  "description": "Brief one-line description",
+  "subItems": ["Sub-item 1", "Sub-item 2"] // empty if no sub-items needed
+}`;
+
+  const userPrompt = `Story title: "${title}"
+${context?.projectDescription ? `Project: ${context.projectDescription}` : ''}
+${context?.existingAreas ? `Existing areas: ${context.existingAreas.join(', ')}` : ''}
+
+Analyze and return JSON:`;
+
+  const response = await prompt(systemPrompt + '\n\n' + userPrompt, {
+    maxTokens: 1024,
+    temperature: 0.2
+  });
+
+  try {
+    // Extract JSON from response (might have markdown code blocks)
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in response');
+    return JSON.parse(jsonMatch[0]);
+  } catch {
+    // Fallback if LLM doesn't return valid JSON
+    return {
+      needsWorkflow: title.length > 50, // heuristic: long titles = complex
+      suggestedArea: 'FE',
+      description: '',
+      subItems: []
+    };
+  }
+}
+
+/**
+ * Generate smart workflow steps adapted to a specific feature
+ * Takes the standard workflow template and adapts it to the feature context
+ */
+export async function generateSmartWorkflow(
+  title: string,
+  options?: {
+    description?: string;
+    userTasks?: string[];
+    areaCode?: string;
+  }
+): Promise<{
+  tasks: string[];
+  suggestedArea?: string;
+  reasoning?: string;
+}> {
+  const systemPrompt = `You are a workflow assistant for chkd (spec-driven development).
+
+Your task: Adapt the standard workflow steps to be specific and actionable for the given feature.
+
+THE WORKFLOW PHILOSOPHY:
+This workflow prevents wasted effort by getting user feedback BEFORE full implementation.
+Each stage has a PURPOSE - don't skip stages, adapt them to the feature.
+
+STANDARD WORKFLOW (6 stages):
+1. Explore - Research first: understand the problem, check existing code/patterns
+2. Design - Plan the approach: diagram if complex, identify edge cases
+3. Prototype - Build quickly with TEST DATA: working UI + backend stubs, not production-ready
+4. Feedback - USER REVIEWS prototype: get sign-off before investing in real implementation
+5. Implement - Replace test data with REAL LOGIC: now that approach is validated
+6. Polish - Iterate based on ACTUAL USAGE: edge cases, error states, performance
+
+KEY PRINCIPLES:
+- Feedback stage is CRITICAL - it's when users validate before you invest fully
+- Prototype uses test/mock data so you can iterate quickly
+- Implement only happens AFTER user approves the prototype
+- Every feature should have Explore (research) and Feedback (validation)
+- FOR FRONTEND: design with mock data + backend endpoint contract FIRST, get user sign-off on UX before building real backend
+- FOR BACKEND: stub the endpoint with test data, let frontend integrate, then implement real logic
+
+RULES:
+1. KEEP all 6 workflow stages unless truly irrelevant (e.g., pure config change)
+2. ADAPT each stage description to be specific to this feature
+3. MERGE user-provided tasks into appropriate stages
+4. Keep descriptions SHORT (under 10 words each)
+5. Simple tasks (bug fixes, config) can have fewer stages
+
+EXAMPLES:
+- "User authentication" → ["Explore: check existing auth patterns", "Design: auth flow + endpoint contract", "Prototype: login UI + mock API responses", "Feedback: user tests login UX", "Implement: real auth + session handling", "Polish: error states + remember me"]
+- "Dashboard charts" → ["Explore: check charting libraries", "Design: chart types + data endpoint contract", "Prototype: charts with mock data", "Feedback: user reviews chart UX", "Implement: real data endpoints", "Polish: loading states + responsiveness"]
+- "Fix button color" → ["Implement: update button color"] (simple fix, 1 step)
+- "API caching" → ["Explore: identify slow endpoints", "Design: cache invalidation strategy", "Prototype: cache with test data", "Feedback: verify cache behavior", "Implement: full cache layer", "Polish: monitoring + cache warming"]
+
+Respond with JSON only:
+{
+  "tasks": ["Task 1", "Task 2", ...],
+  "suggestedArea": "SD|FE|BE|FUT",
+  "reasoning": "Brief explanation of adaptations"
+}`;
+
+  const userPrompt = `Feature: "${title}"
+${options?.description ? `Description: ${options.description}` : ''}
+${options?.userTasks?.length ? `User wants these included: ${options.userTasks.join(', ')}` : ''}
+${options?.areaCode ? `Area: ${options.areaCode}` : ''}
+
+Generate adapted workflow tasks as JSON:`;
+
+  const response = await prompt(systemPrompt + '\n\n' + userPrompt, {
+    maxTokens: 1024,
+    temperature: 0.3
+  });
+
+  try {
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in response');
+    return JSON.parse(jsonMatch[0]);
+  } catch {
+    // Fallback - return empty to trigger default workflow
+    return { tasks: [] };
+  }
+}
+
 export async function repairSpec(specContent: string): Promise<string> {
   const systemPrompt = `You are a spec formatter for chkd (a spec-driven development workflow).
 

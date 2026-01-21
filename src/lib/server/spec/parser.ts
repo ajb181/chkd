@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 
-export type ItemStatus = 'open' | 'in-progress' | 'done' | 'skipped';
+export type ItemStatus = 'open' | 'in-progress' | 'done' | 'skipped' | 'blocked';
 export type Priority = 1 | 2 | 3 | null;  // P1=High, P2=Medium, P3=Low, null=Backlog
 
 export interface SpecItem {
@@ -151,7 +151,7 @@ export class SpecParser {
 
           // Stop at next area/phase header or checklist item
           if (nextLine.match(/^##\s+[^#]/) || nextLine.match(/^###\s+(?:Phase|Story)/)) break;
-          if (nextLine.match(/^\s*-\s+\[[ xX~\-]\]/)) break;
+          if (nextLine.match(/^\s*-\s+\[[ xX~\-!]\]/)) break;
 
           if (nextLine.startsWith('>')) {
             storyLines.push(nextLine.slice(1).trim());
@@ -167,8 +167,8 @@ export class SpecParser {
         continue;
       }
 
-      // Detect checklist items: [ ] open, [x] done, [~] in-progress, [-] skipped
-      const itemMatch = line.match(/^(\s*)-\s+\[([ xX~\-])\]\s+(.+)$/);
+      // Detect checklist items: [ ] open, [x] done, [~] in-progress, [-] skipped, [!] blocked
+      const itemMatch = line.match(/^(\s*)-\s+\[([ xX~\-!])\]\s+(.+)$/);
       const checkMatch = !itemMatch && line.match(/^(\s*)-\s+✓\s+(.+)$/);
 
       if ((itemMatch || checkMatch) && currentArea) {
@@ -190,6 +190,10 @@ export class SpecParser {
             break;
           case '-':
             status = 'skipped';
+            completed = false;
+            break;
+          case '!':
+            status = 'blocked';
             completed = false;
             break;
           default:
@@ -218,8 +222,18 @@ export class SpecParser {
           itemTitle = itemTitle.replace(/^\[P[123]\]\s*/i, '');  // Remove tag from display title
         }
 
+        // Handle nesting based on indent (need to do this first to know parent)
+        while (indentStack.length > 0 && indent <= indentStack[indentStack.length - 1]) {
+          indentStack.pop();
+          itemStack.pop();
+        }
+
+        // Generate ID with parent context if this is a nested item
+        const parentId = itemStack.length > 0 ? itemStack[itemStack.length - 1].id : null;
+        const itemId = this.generateId(currentArea.code, itemTitle, parentId);
+
         const item: SpecItem = {
-          id: this.generateId(currentArea.code, itemTitle),
+          id: itemId,
           title: itemTitle,
           description: itemDesc,
           completed,
@@ -228,12 +242,6 @@ export class SpecParser {
           children: [],
           line: lineNum,
         };
-
-        // Handle nesting based on indent
-        while (indentStack.length > 0 && indent <= indentStack[indentStack.length - 1]) {
-          indentStack.pop();
-          itemStack.pop();
-        }
 
         if (itemStack.length === 0) {
           currentArea.items.push(item);
@@ -377,7 +385,7 @@ export class SpecParser {
         currentAreaCode = areaCode;
       }
 
-      if (line.match(/^\s*-\s+\[[ xX]\]/)) {
+      if (line.match(/^\s*-\s+\[[ xX~\-!]\]/)) {
         currentAreaHasItems = true;
       }
     }
@@ -418,11 +426,19 @@ export class SpecParser {
     return words.map(w => w[0]).join('').toUpperCase().slice(0, 3);
   }
 
-  private generateId(areaCode: string, title: string): string {
+  private generateId(areaCode: string, title: string, parentId?: string | null): string {
     const slug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
+
+    if (parentId) {
+      // For nested items, include a short hash of parent to ensure uniqueness
+      // Extract the last meaningful part of the parent ID (after the area code)
+      const parentSlug = parentId.replace(/^[a-z]+-/, '').slice(0, 20);
+      return `${areaCode.toLowerCase()}-${parentSlug}-${slug}`.slice(0, 100);
+    }
+
     return `${areaCode.toLowerCase()}-${slug}`;
   }
 

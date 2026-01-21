@@ -10,7 +10,7 @@ args: task_id
 
 ---
 
-## On Startup
+## On Startup (Do these in order!)
 
 ### 1. Parse the task ID
 
@@ -39,9 +39,16 @@ chkd progress
 
 This shows sub-items and their status if the task has any.
 
-### 4. Start building
+### 4. Start the session
 
-Tell the user what you're building:
+```bash
+chkd start "SD.1"
+```
+
+This registers the task as active in the system.
+
+### 5. Tell the user what you're building
+
 > "Building **SD.1: [Task Title]**"
 
 ---
@@ -49,6 +56,21 @@ Tell the user what you're building:
 ## The Sub-Item Workflow (IMPORTANT!)
 
 **For tasks with sub-items, tick as you go. Don't batch at the end!**
+
+### Understanding the phases
+
+When you see these sub-items, here's what they mean:
+
+| Sub-item starts with | What to do |
+|---------------------|------------|
+| **Explore:** | Research only. Read code, find patterns. No building yet. |
+| **Design:** | Plan the approach. Define contracts. Still no building. |
+| **Prototype:** | Build with FAKE/MOCK data. Stub the backend. Make it look real but use test data. |
+| **Feedback:** | ⚠️ STOP. Show user. Get explicit approval. One approval ≠ blanket approval. |
+| **Implement:** | NOW build real backend. Only after Feedback approval. |
+| **Polish:** | Error states, loading, edge cases. |
+
+**Critical:** Prototype ≠ Implement. Prototype uses mock data so the user can approve the UX before you invest in real backend code.
 
 ### For EACH sub-item:
 
@@ -97,18 +119,28 @@ chkd tick "Password reset flow"
 
 ## While Building
 
-### Stay focused on the task
+### Follow the SPEC's sub-items, not your own plan
 
-Build what's in the spec for this task. Follow the checklist items.
+The spec has sub-items for a reason. Follow them in order:
 
-### Off-plan work → "Also did" list
+```
+- [ ] Explore: ...    ← Do this first
+- [ ] Design: ...     ← Then this
+- [ ] Prototype: ...  ← Then this
+```
+
+**Don't** create your own todo list or implementation plan. The spec IS the plan.
+
+### Off-plan work → Log it with `chkd also`
 
 If you do something not explicitly in the current task:
-1. Note it
-2. Tell the user: "Also did: [thing]"
-3. Keep going
 
-Examples of "also did":
+```bash
+chkd also "Fixed typo in README"
+chkd also "Updated error handling in auth"
+```
+
+This logs it to the system so it shows in the UI. Examples:
 - Fixed a bug you discovered
 - Updated related code
 - Added error handling elsewhere
@@ -120,6 +152,31 @@ chkd bug "description of the bug"
 ```
 
 Don't fix it now unless it blocks your task.
+
+### Feedback sub-items → Pause for user
+
+When you reach a sub-item like "Feedback: user reviews..." - STOP and ask:
+
+> "Prototype ready for review. Does this approach work for you?"
+
+Don't proceed to "Implement" until user approves.
+
+**Important: One approval ≠ blanket approval**
+
+- Approval for the login form doesn't mean approval for the signup form
+- Each distinct UI/feature needs its own feedback cycle
+- If user says "looks good", that's approval for THIS prototype only
+- When in doubt, check in again before building more
+
+**Stay anchored during Feedback:**
+
+Extended back-and-forth can cause you to lose focus. Use `chkd iterate` after each piece of work to stay anchored:
+
+```bash
+chkd iterate   # Increments counter, shows context reminder
+```
+
+This is especially important during Feedback - it's easy to get sidetracked.
 
 ### Polish is allowed
 
@@ -144,6 +201,20 @@ After all sub-items are ticked:
 chkd tick "SD.1"
 ```
 
+### Complete or pause the session
+
+**If done for now:**
+```bash
+chkd done
+```
+
+**If coming back later:**
+```bash
+chkd pause "Finished auth, need to test on mobile next"
+```
+
+The pause note helps you (or the next session) pick up where you left off.
+
 ### Tell the user
 
 > "Done with **SD.1: [Task Title]**
@@ -165,13 +236,20 @@ chkd tick "SD.1"
 ## Quick Reference
 
 ```bash
-# Status & Progress
+# Session
+chkd start "SD.1"    # Begin session on task
+chkd done            # Complete session
+chkd pause "note"    # Pause with handover note
+
+# Progress
 chkd status          # See overall progress
 chkd progress        # See current task's sub-items
 
 # During work
 chkd working "item"  # Signal you're starting an item
 chkd tick "item"     # Mark item complete
+chkd iterate         # Stay anchored (use during Feedback!)
+chkd also "desc"     # Log off-plan work
 
 # Issues
 chkd bug "problem"   # Log a bug for later
@@ -192,16 +270,18 @@ The spec uses these markers:
 ## Rules
 
 ### DO:
-- Build the specified task
+- Use `chkd start` to begin the session
 - **Tick sub-items as you complete them**
 - Use `chkd working` before starting each sub-item
-- Note off-plan work as "Also did"
+- Use `chkd also` to log off-plan work
+- Pause at "Feedback" sub-items for user approval
 - Add polish (loading, errors, etc.)
-- Search for existing code before writing new
+- Use `chkd done` or `chkd pause` when finished
 
 ### DON'T:
 - Work on wrong task
 - **Batch all ticks at the end**
-- Add features without noting them
-- Skip sub-items
+- Skip the Feedback pause
+- **Treat one approval as blanket approval** (each feature needs its own feedback)
+- Add features without logging with `chkd also`
 - Forget to mark complete

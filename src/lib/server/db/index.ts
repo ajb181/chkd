@@ -93,6 +93,30 @@ function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_bugs_repo_id ON bugs(repo_id);
     CREATE INDEX IF NOT EXISTS idx_bugs_status ON bugs(status);
 
+    -- Quick wins (small improvements)
+    CREATE TABLE IF NOT EXISTS quick_wins (
+      id TEXT PRIMARY KEY,
+      repo_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'open',  -- 'open' | 'done'
+      created_at TEXT DEFAULT (datetime('now')),
+      completed_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_quick_wins_repo_id ON quick_wins(repo_id);
+    CREATE INDEX IF NOT EXISTS idx_quick_wins_status ON quick_wins(status);
+
+    -- Item durations (time spent on each checklist item)
+    CREATE TABLE IF NOT EXISTS item_durations (
+      item_id TEXT PRIMARY KEY,
+      repo_id TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_item_durations_repo_id ON item_durations(repo_id);
+
     -- Session state (survives restart)
     CREATE TABLE IF NOT EXISTS sessions (
       repo_id TEXT PRIMARY KEY,
@@ -142,6 +166,10 @@ function runMigrations(db: Database.Database): void {
 
   if (!columnNames.includes('also_did')) {
     db.exec(`ALTER TABLE sessions ADD COLUMN also_did TEXT;`);
+  }
+
+  if (!columnNames.includes('current_item_start_time')) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN current_item_start_time TEXT;`);
   }
 }
 

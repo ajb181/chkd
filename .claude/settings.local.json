@@ -20,7 +20,12 @@
       "Bash(git commit:*)",
       "Skill(chkd)",
       "Bash(chkd:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(claude config list:*)",
+      "Bash(claude usage)",
+      "Bash(sqlite3:*)",
+      "Bash(npm run stable:build:*)",
+      "Skill(bugfix)"
     ]
   }
 }

@@ -52,6 +52,106 @@ Track your investigation in this file:
 
 ---
 
+## Bug Sizing: Small vs Big
+
+**Before diving in, size the bug. The approach differs significantly.**
+
+### Small Bug (Quick Fix Track)
+
+**Characteristics:**
+- Clear error message with stack trace
+- Points to a specific line/function
+- Single, obvious cause (typo, null check, off-by-one)
+- No architectural implications
+- Fix will be < 10 lines
+
+**Approach:**
+1. Quick research (1-2 searches max)
+2. Read the error, find the line
+3. Make the minimal fix
+4. Verify with user
+5. Done in one session
+
+**Example small bugs:**
+- `TypeError: Cannot read property 'x' of undefined`
+- "Button doesn't do anything" (forgot event handler)
+- "Shows wrong date" (timezone issue)
+- "Form submits twice" (missing preventDefault)
+
+### Big Bug (Deep Investigation Track)
+
+**Characteristics:**
+- Vague symptoms ("it's slow", "sometimes fails", "feels broken")
+- No clear error, or misleading error
+- Multiple possible causes
+- Involves multiple files/systems
+- Root cause is unclear
+- User can't reliably reproduce it
+
+**Approach:**
+1. Extended research (search thoroughly)
+2. Interview the user in detail
+3. Create hypotheses (list 3-5 possible causes)
+4. Add instrumentation/logging if needed
+5. Test hypotheses systematically
+6. May span multiple sessions
+7. Document everything in `.debug-notes.md`
+
+**Example big bugs:**
+- "The app is slow" (where? when? for whom?)
+- "Data sometimes disappears" (race condition?)
+- "It works on my machine" (environment issue)
+- "Users are complaining about X" (vague reports)
+
+### Sizing Questions
+
+Ask yourself:
+
+| Question | Small | Big |
+|----------|-------|-----|
+| Is there a clear error message? | Yes | No/vague |
+| Can I reproduce it in 30 seconds? | Yes | Maybe not |
+| Do I know which file to look at? | Yes | Not sure |
+| Is the fix obvious once found? | Probably | Unclear |
+| Could this have multiple causes? | No | Yes |
+
+**If 3+ answers point to "Big", treat it as a big bug.**
+
+---
+
+## Philosophy: How to Think About Bugs
+
+### Bugs are symptoms, not problems
+
+The bug you see is rarely the bug you have. A null pointer exception isn't the problem—it's a symptom of data not being where it should be. Ask: "Why is this null?" not "How do I handle null?"
+
+### Every bug exists because something was assumed
+
+Code works when assumptions are true. Bugs appear when assumptions break. Your job is to find the broken assumption:
+- "I assumed the user would be logged in"
+- "I assumed this array would have items"
+- "I assumed the API would return in order"
+
+### Fix the cause, not the symptom
+
+Adding a null check might stop the crash, but if the data should never be null, you've just hidden a deeper problem. Ask: "Should I prevent this state, or handle this state?"
+
+### The best fix is often the smallest
+
+Resist the urge to refactor. A surgical 2-line fix is better than a 50-line "improvement" that might introduce new bugs. You can always refactor later, deliberately.
+
+### When stuck, explain it out loud
+
+Rubber duck debugging works. Write out the problem in `.debug-notes.md`:
+- "The user clicks save"
+- "This calls handleSave()"
+- "Which calls api.save(data)"
+- "But data is undefined because..."
+
+Often you'll find the bug while explaining it.
+
+---
+
 ## CRITICAL: BUG FIX ONLY
 
 **You are in BUGFIX MODE. You fix what's broken, not what's missing.**
@@ -273,21 +373,35 @@ The bug is fixed. Want to plan that feature separately?"
 
 ## EXITING DEBUG MODE
 
+**⚠️ CRITICAL: Get explicit user acceptance before marking done!**
+
+Do NOT run `chkd fix` until the user has confirmed the bug is fixed.
+
 **You stay in debug mode until ALL of these are true:**
 
-1. ✅ User has confirmed the bug is fixed
+1. ✅ User has explicitly confirmed the bug is fixed ("yes it works", "looks good", etc.)
 2. ✅ You've updated `.debug-notes.md` with findings and fix
 3. ✅ No unrelated changes were made
-4. ✅ Any ideas discovered are captured with `chkd bug "..."`
 
-**Then exit debug mode by telling the user:**
-> "Bug fixed and verified. Debug notes saved to `.debug-notes.md`. Exiting debug mode."
+**Then mark it done:**
+```bash
+chkd fix "bug description"
+```
+
+**Only after user acceptance.** Don't assume the fix worked.
 
 ### If Bug Can't Be Fixed This Session
 
-Don't just leave it hanging. Capture it and tell the user:
+Don't just leave it hanging. Update notes and tell the user:
+
+```markdown
+### Status: BLOCKED
+- Need more info: [what's missing]
+- OR: This requires [bigger change]
+```
 
 ```bash
+# Capture for later
 chkd bug "Unresolved: [bug description] - needs [what]"
 ```
 

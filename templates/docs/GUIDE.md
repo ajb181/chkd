@@ -124,12 +124,11 @@ Once chkd is set up, here's your daily routine:
 
 ```
 1. Start chkd server     →  npm run dev (in chkd-v2 folder)
-2. Open UI               →  http://localhost:3847
-3. Pick a task           →  Note the ID (e.g., "2.3")
-4. Start Claude Code     →  claude (in your project folder)
-5. Build the task        →  /chkd 2.3
-6. When done             →  /commit
-7. Repeat                →  Pick next task
+2. Check status          →  chkd status
+3. Start Claude Code     →  claude (in your project folder)
+4. Build a task          →  /chkd SD.1 (use task ID from spec)
+5. When done             →  /commit
+6. Repeat                →  /chkd next-task-id
 ```
 
 ---
@@ -417,6 +416,60 @@ This copies the latest skills without touching your spec or custom files.
 
 ---
 
+## The Workflow Philosophy
+
+Every feature follows a 6-stage workflow designed to **get user feedback BEFORE investing in real implementation**.
+
+### The 6 Stages
+
+| Stage | Purpose | What Happens |
+|-------|---------|--------------|
+| **Explore** | Research first | Check existing code, understand the problem, find patterns |
+| **Design** | Plan the approach | Define endpoint contracts, diagram if complex |
+| **Prototype** | Build with mock data | UI + stubbed backend, iterate quickly |
+| **Feedback** | User reviews | Get sign-off on UX before building real backend |
+| **Implement** | Connect real logic | Replace mocks with actual implementation |
+| **Polish** | Refine based on usage | Error states, edge cases, performance |
+
+### Why This Matters
+
+**The Feedback stage is critical.** By prototyping with mock data first:
+
+- You can iterate on UX quickly without waiting for backend
+- Users validate the approach before you invest in real implementation
+- Frontend and backend can work in parallel (contract is defined)
+- Less wasted work if the approach needs to change
+
+### Example: Dashboard Feature
+
+```markdown
+- [ ] **FE.1 User Dashboard**
+  - [ ] Explore: check existing dashboard patterns
+  - [ ] Design: layout + data endpoint contracts
+  - [ ] Prototype: dashboard UI with mock data
+  - [ ] Feedback: user reviews dashboard UX
+  - [ ] Implement: connect to real API endpoints
+  - [ ] Polish: loading states, error handling
+```
+
+Notice how **Prototype** and **Feedback** happen before **Implement**. The user sees working UI (with fake data) and approves it. Only then do you build the real backend.
+
+### For Frontend Features
+
+1. Design with mock data + endpoint contract FIRST
+2. Build UI that works with the mocks
+3. Get user sign-off on the UX
+4. THEN implement the real backend
+
+### For Backend Features
+
+1. Stub the endpoint with test data
+2. Let frontend integrate against the stub
+3. Get feedback on the API contract
+4. THEN implement real logic
+
+---
+
 ## The Big Picture
 
 ```
@@ -424,7 +477,7 @@ This copies the latest skills without touching your spec or custom files.
 │                     YOU                              │
 │                                                      │
 │  1. Write features in docs/SPEC.md                  │
-│  2. Pick a task ID from the UI                      │
+│  2. Run chkd status to see what's next              │
 │  3. Run /chkd <task_id> in Claude Code              │
 │  4. Review what Claude built                        │
 │  5. Run /commit when happy                          │

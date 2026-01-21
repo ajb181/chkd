@@ -139,14 +139,19 @@ export async function addItem(
 
 /**
  * Default workflow steps for new features
+ *
+ * Philosophy: Get user feedback BEFORE investing in real implementation.
+ * - Prototype with mock data so you can iterate quickly
+ * - Define endpoint contracts upfront so FE and BE can work in parallel
+ * - Only build real backend AFTER user approves the UX
  */
 export const DEFAULT_WORKFLOW_STEPS = [
-  'Explore: understand problem, search existing functions',
-  'Design: flow diagram if needed',
-  'Prototype: backend with test data + frontend calling it',
-  'Feedback: user reviews prototype',
-  'Implement: replace test data with real logic',
-  'Polish: iterate based on usage'
+  'Explore: research problem, check existing code/patterns',
+  'Design: plan approach + define endpoint contracts',
+  'Prototype: build UI with mock data, stub backend',
+  'Feedback: user reviews and approves UX',
+  'Implement: connect real backend logic',
+  'Polish: error states, edge cases, performance'
 ];
 
 /**
@@ -315,11 +320,18 @@ function getAllItems(items: SpecItem[]): SpecItem[] {
   return result;
 }
 
-function generateId(areaCode: string, title: string): string {
+function generateId(areaCode: string, title: string, parentId?: string | null): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+
+  if (parentId) {
+    // For nested items, include a short hash of parent to ensure uniqueness
+    const parentSlug = parentId.replace(/^[a-z]+-/, '').slice(0, 20);
+    return `${areaCode.toLowerCase()}-${parentSlug}-${slug}`.slice(0, 100);
+  }
+
   return `${areaCode.toLowerCase()}-${slug}`;
 }
 
@@ -409,6 +421,62 @@ export async function unskipItem(specPath: string, itemId: string): Promise<void
 }
 
 /**
+ * Mark an item as blocked/roadblocked (changes [ ] or [~] to [!])
+ * Used when an item cannot proceed due to external blockers
+ */
+export async function markItemBlocked(specPath: string, itemId: string): Promise<void> {
+  const content = await fs.readFile(specPath, 'utf-8');
+  const lines = content.split('\n');
+  const parser = new SpecParser();
+  const spec = parser.parse(content);
+
+  const itemInfo = findItemById(spec, itemId);
+  if (!itemInfo) {
+    throw new Error(`Item ${itemId} not found`);
+  }
+
+  const lineIndex = itemInfo.item.line - 1;
+  const currentLine = lines[lineIndex];
+
+  // Change [ ] or [~] to [!] for blocked
+  const newLine = currentLine.replace(/\[[ ~]\]/, '[!]');
+
+  if (newLine === currentLine) {
+    throw new Error('Item already blocked, skipped, or completed');
+  }
+
+  lines[lineIndex] = newLine;
+  await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
+}
+
+/**
+ * Unblock an item (changes [!] back to [ ])
+ */
+export async function unblockItem(specPath: string, itemId: string): Promise<void> {
+  const content = await fs.readFile(specPath, 'utf-8');
+  const lines = content.split('\n');
+  const parser = new SpecParser();
+  const spec = parser.parse(content);
+
+  const itemInfo = findItemById(spec, itemId);
+  if (!itemInfo) {
+    throw new Error(`Item ${itemId} not found`);
+  }
+
+  const lineIndex = itemInfo.item.line - 1;
+  const currentLine = lines[lineIndex];
+
+  const newLine = currentLine.replace(/\[!\]/, '[ ]');
+
+  if (newLine === currentLine) {
+    throw new Error('Item is not blocked');
+  }
+
+  lines[lineIndex] = newLine;
+  await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
+}
+
+/**
  * Update a story/feature description
  */
 export async function updateStory(
@@ -475,7 +543,7 @@ export async function editItem(
   const currentLine = lines[lineIndex];
 
   // Parse the current line to preserve indent and checkbox state
-  const match = currentLine.match(/^(\s*-\s+\[[ xX~\-]\]\s+)(?:\*\*(.+?)\*\*\s*(?:-\s*)?(.*)|\S.*)$/);
+  const match = currentLine.match(/^(\s*-\s+\[[ xX~\-!]\]\s+)(?:\*\*(.+?)\*\*\s*(?:-\s*)?(.*)|\S.*)$/);
   if (!match) {
     throw new Error('Could not parse item line');
   }
@@ -565,13 +633,13 @@ export async function setPriority(
   let currentLine = lines[lineIndex];
 
   // Remove existing priority tag if present
-  currentLine = currentLine.replace(/(\s*-\s+\[[ xX~\-]\]\s+)\[P[123]\]\s*/, '$1');
+  currentLine = currentLine.replace(/(\s*-\s+\[[ xX~\-!]\]\s+)\[P[123]\]\s*/, '$1');
 
   // Add new priority tag if not null
   if (priority !== null) {
     // Insert priority tag after the checkbox
     currentLine = currentLine.replace(
-      /^(\s*-\s+\[[ xX~\-]\]\s+)/,
+      /^(\s*-\s+\[[ xX~\-!]\]\s+)/,
       `$1[P${priority}] `
     );
   }

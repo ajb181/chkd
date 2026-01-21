@@ -160,7 +160,8 @@ export function getSession(repoId: string): TaskSession {
     };
   }
 
-  const startTime = row.start_time ? new Date(row.start_time).getTime() : null;
+  // SQLite datetime('now') stores UTC, append 'Z' to parse correctly
+  const startTime = row.start_time ? new Date(row.start_time + 'Z').getTime() : null;
   const now = Date.now();
 
   return {
@@ -172,6 +173,7 @@ export function getSession(repoId: string): TaskSession {
     currentItem: row.current_item_id ? {
       id: row.current_item_id,
       title: row.current_item_title,
+      startTime: row.current_item_start_time,
     } : null,
     startTime: row.start_time,
     iteration: row.iteration || 0,
@@ -196,6 +198,9 @@ export function startSession(repoId: string, taskId: string, taskTitle: string, 
       current_task_id = excluded.current_task_id,
       current_task_title = excluded.current_task_title,
       current_task_phase = excluded.current_task_phase,
+      current_item_id = NULL,
+      current_item_title = NULL,
+      current_item_start_time = NULL,
       status = 'building',
       mode = 'building',
       start_time = datetime('now'),
@@ -205,6 +210,7 @@ export function startSession(repoId: string, taskId: string, taskTitle: string, 
       scope_changes = '[]',
       deviations = '[]',
       files_changed = '[]',
+      also_did = '[]',
       updated_at = datetime('now')
   `).run(repoId, taskId, taskTitle, phaseNumber);
 }
@@ -252,10 +258,10 @@ export function updateSession(repoId: string, updates: {
 
   if (updates.currentItem !== undefined) {
     if (updates.currentItem) {
-      sets.push('current_item_id = ?', 'current_item_title = ?');
+      sets.push('current_item_id = ?', 'current_item_title = ?', "current_item_start_time = datetime('now')");
       values.push(updates.currentItem.id, updates.currentItem.title);
     } else {
-      sets.push('current_item_id = NULL', 'current_item_title = NULL');
+      sets.push('current_item_id = NULL', 'current_item_title = NULL', 'current_item_start_time = NULL');
     }
   }
 
@@ -352,6 +358,18 @@ export function updateBugStatus(bugId: string, status: string): boolean {
   return result.changes > 0;
 }
 
+export function updateBug(bugId: string, title: string, description: string | null): boolean {
+  const db = getDb();
+
+  const result = db.prepare(`
+    UPDATE bugs
+    SET title = ?, description = ?
+    WHERE id = ?
+  `).run(title, description, bugId);
+
+  return result.changes > 0;
+}
+
 export function getBugByQuery(repoId: string, query: string): Bug | null {
   const bugs = getBugs(repoId);
   const queryLower = query.toLowerCase();
@@ -363,4 +381,32 @@ export function getBugByQuery(repoId: string, query: string): Bug | null {
   // Try title match
   const byTitle = bugs.find(b => b.title.toLowerCase().includes(queryLower));
   return byTitle || null;
+}
+
+// ============================================
+// Item Durations
+// ============================================
+
+export function saveItemDuration(repoId: string, itemId: string, durationMs: number): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO item_durations (item_id, repo_id, duration_ms, completed_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(item_id) DO UPDATE SET
+      duration_ms = duration_ms + excluded.duration_ms,
+      completed_at = datetime('now')
+  `).run(itemId, repoId, durationMs);
+}
+
+export function getItemDurations(repoId: string): Record<string, number> {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT item_id, duration_ms FROM item_durations WHERE repo_id = ?
+  `).all(repoId) as any[];
+
+  const result: Record<string, number> = {};
+  for (const row of rows) {
+    result[row.item_id] = row.duration_ms;
+  }
+  return result;
 }

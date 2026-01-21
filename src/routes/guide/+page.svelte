@@ -2,6 +2,9 @@
   import { onMount } from 'svelte';
   import { getSession, getSpec, getRepos, getProposals } from '$lib/api';
   import type { Session, ParsedSpec, Repository } from '$lib/api';
+  import { marked } from 'marked';
+
+  export let data: { docs: Record<string, string>; docFiles: { id: string; name: string; file: string }[] };
 
   let session: Session | null = null;
   let spec: ParsedSpec | null = null;
@@ -10,6 +13,12 @@
   let pendingProposals = 0;
   let loading = true;
   let activeSection = 'overview';
+  let activeDoc = 'guide';
+
+  // Render markdown to HTML
+  function renderMarkdown(md: string): string {
+    return marked(md) as string;
+  }
 
   // Get repoPath from URL or use first available repo
   let repoPath = typeof window !== 'undefined'
@@ -77,7 +86,7 @@
     const base: ContextHelp = {
       state: 'IDLE',
       stateColor: 'muted',
-      action: 'Pick a task to start',
+      action: 'Ready to build',
       commands: [],
       tips: [],
       warnings: []
@@ -93,7 +102,7 @@
         ...base,
         state: 'IDLE',
         stateColor: 'muted',
-        action: 'Pick a task to start',
+        action: 'Ready to build',
         commands: [
           { cmd: '/chkd 3.2', desc: 'Build task 3.2' },
           { cmd: '/story', desc: 'Refine specs first' }
@@ -170,7 +179,7 @@
           tips: [
             'Review the diff before committing',
             'Write a clear commit message',
-            'Pick the next priority task'
+            'Start next task with /chkd'
           ]
         };
       default:
@@ -205,63 +214,147 @@
   </div>
 </header>
 
+<!-- Doc Tabs -->
+<nav class="doc-tabs">
+  <button
+    class="doc-tab"
+    class:active={activeSection === 'overview'}
+    on:click={() => activeSection = 'overview'}
+  >
+    Quick Start
+  </button>
+  {#each data.docFiles as doc}
+    <button
+      class="doc-tab"
+      class:active={activeSection === 'docs' && activeDoc === doc.id}
+      on:click={() => { activeSection = 'docs'; activeDoc = doc.id; }}
+    >
+      {doc.name}
+    </button>
+  {/each}
+</nav>
+
+{#if activeSection === 'docs'}
+  <!-- Markdown Doc Viewer -->
+  <div class="docs-page">
+    <aside class="context-helper">
+      <div class="helper-header">
+        <span class="helper-badge info">DOCS</span>
+      </div>
+      <div class="helper-action">Reading: {data.docFiles.find(d => d.id === activeDoc)?.name}</div>
+      <div class="doc-nav">
+        {#each data.docFiles as doc}
+          <button
+            class="doc-nav-item"
+            class:active={activeDoc === doc.id}
+            on:click={() => activeDoc = doc.id}
+          >
+            {doc.name}
+          </button>
+        {/each}
+      </div>
+    </aside>
+    <main class="docs-content">
+      {@html renderMarkdown(data.docs[activeDoc] || '')}
+    </main>
+  </div>
+{:else}
 <div class="guide-page">
-  <!-- Context Helper (updates based on state) -->
-  <aside class="context-helper" class:building={contextHelp.state === 'BUILDING'} class:testing={contextHelp.state === 'TESTING'} class:complete={contextHelp.state === 'COMPLETE'} class:rework={contextHelp.state === 'REWORK'}>
-    <div class="helper-header">
-      <span class="helper-badge {contextHelp.stateColor}">{contextHelp.state}</span>
+  <!-- Command Reference Sidebar -->
+  <aside class="command-ref">
+    <div class="ref-header">
+      <span class="ref-badge {contextHelp.stateColor}">{contextHelp.state}</span>
       {#if session?.currentTask}
-        <span class="helper-time">{formatElapsed(session.elapsedMs)}</span>
+        <span class="ref-time">{formatElapsed(session.elapsedMs)}</span>
       {/if}
     </div>
 
-    {#if contextHelp.warnings.length > 0}
-      <div class="helper-warnings">
-        {#each contextHelp.warnings as warning}
-          <div class="warning-item">⚠️ {warning}</div>
-        {/each}
-      </div>
-    {/if}
-
-    <div class="helper-action">{contextHelp.action}</div>
-
     {#if session?.currentTask}
-      <div class="helper-task">
-        <strong>Task:</strong> {session.currentTask.title}
-        {#if session.currentItem}
-          <br/><strong>Item:</strong> {session.currentItem.title}
-        {/if}
-        {#if session.iteration > 1}
-          <br/><span class="iteration-badge">Iteration {session.iteration}</span>
-        {/if}
+      <div class="ref-task">
+        <div class="ref-task-label">Building:</div>
+        <div class="ref-task-name">{session.currentTask.title}</div>
       </div>
     {/if}
 
-    <div class="helper-commands">
-      <div class="commands-title">What you can do:</div>
-      {#each contextHelp.commands as cmd}
-        <div class="cmd-row">
-          <code>{cmd.cmd}</code>
-          <span>{cmd.desc}</span>
-        </div>
-      {/each}
+    <!-- All Commands with context highlighting -->
+    <div class="ref-section">
+      <div class="ref-section-title">Skills (Claude Code)</div>
+      <a href="#skills" class="ref-cmd" class:highlighted={contextHelp.state === 'BUILDING'}>
+        <code>/chkd ID</code>
+        <span>Build a task</span>
+      </a>
+      <a href="#story-mode" class="ref-cmd" class:highlighted={contextHelp.state === 'IDLE'}>
+        <code>/story</code>
+        <span>Plan & refine specs</span>
+      </a>
+      <a href="#fixing-bugs" class="ref-cmd">
+        <code>/bugfix</code>
+        <span>Fix bugs minimally</span>
+      </a>
+      <a href="#committing" class="ref-cmd" class:highlighted={contextHelp.state === 'COMPLETE'}>
+        <code>/commit</code>
+        <span>Safe commit flow</span>
+      </a>
     </div>
 
-    <div class="helper-tips">
-      <div class="tips-title">Tips:</div>
-      <ul>
-        {#each contextHelp.tips as tip}
-          <li>{tip}</li>
-        {/each}
-      </ul>
+    <div class="ref-section">
+      <div class="ref-section-title">During Work</div>
+      <a href="#sub-item-workflow" class="ref-cmd" class:highlighted={contextHelp.state === 'BUILDING'}>
+        <code>chkd working "item"</code>
+        <span>Start a sub-item</span>
+      </a>
+      <a href="#sub-item-workflow" class="ref-cmd" class:highlighted={contextHelp.state === 'BUILDING'}>
+        <code>chkd tick "item"</code>
+        <span>Complete sub-item</span>
+      </a>
+      <a href="#fixing-bugs" class="ref-cmd">
+        <code>chkd bug "desc"</code>
+        <span>Log a bug</span>
+      </a>
+      <a href="#" class="ref-cmd">
+        <code>chkd also "desc"</code>
+        <span>Log off-plan work</span>
+      </a>
+    </div>
+
+    <div class="ref-section">
+      <div class="ref-section-title">Status</div>
+      <a href="#quick-start" class="ref-cmd" class:highlighted={contextHelp.state === 'IDLE'}>
+        <code>chkd status</code>
+        <span>What's going on?</span>
+      </a>
+      <a href="#" class="ref-cmd">
+        <code>chkd progress</code>
+        <span>Current task items</span>
+      </a>
+      <a href="#fixing-bugs" class="ref-cmd">
+        <code>chkd bugs</code>
+        <span>List open bugs</span>
+      </a>
+    </div>
+
+    <div class="ref-section">
+      <div class="ref-section-title">Session</div>
+      <a href="#" class="ref-cmd">
+        <code>chkd start "task"</code>
+        <span>Begin a task</span>
+      </a>
+      <a href="#" class="ref-cmd">
+        <code>chkd pause</code>
+        <span>Pause with handover</span>
+      </a>
+      <a href="#" class="ref-cmd">
+        <code>chkd sync idle</code>
+        <span>Reset session</span>
+      </a>
     </div>
 
     {#if spec}
-      <div class="helper-progress">
+      <div class="ref-progress">
         <div class="progress-bar">
           <div class="progress-fill" style="width: {spec.progress}%"></div>
         </div>
-        <span class="progress-text">{spec.completedItems}/{spec.totalItems} items ({spec.progress}%)</span>
+        <span class="progress-text">{spec.completedItems}/{spec.totalItems} ({spec.progress}%)</span>
       </div>
     {/if}
   </aside>
@@ -697,9 +790,9 @@
           <div class="step"><span class="step-num">1</span> <code>cd your-existing-project</code></div>
           <div class="step"><span class="step-num">2</span> <code>chkd upgrade</code></div>
           <div class="step"><span class="step-num">3</span> Review your backed up files (<code>*-old.md</code>)</div>
-          <div class="step"><span class="step-num">4</span> In Claude, run <code>/discover</code> to analyze existing code</div>
-          <div class="step"><span class="step-num">5</span> Add discovered features to <code>docs/SPEC.md</code></div>
-          <div class="step"><span class="step-num">6</span> Mark existing features as [x] complete</div>
+          <div class="step"><span class="step-num">4</span> Edit <code>docs/SPEC.md</code> - add your features</div>
+          <div class="step"><span class="step-num">5</span> Mark existing features as [x] complete</div>
+          <div class="step"><span class="step-num">6</span> Use <code>/story</code> in Claude to refine specs</div>
         </div>
 
         <div class="info-callout">
@@ -712,26 +805,26 @@
         </div>
       </div>
 
-      <h3>After Brownfield Setup: Discovery</h3>
+      <h3>After Brownfield Setup: Populate Your Spec</h3>
       <div class="discovery-flow">
-        <p>Use Claude to understand your existing codebase:</p>
+        <p>Edit <code>docs/SPEC.md</code> to list your existing features and what's new:</p>
 
         <div class="code-block">
-          <code># In Claude Code terminal</code><br/>
-          <code>/discover</code><br/><br/>
-          <code># Claude will:</code><br/>
-          <code># 1. Scan your codebase</code><br/>
-          <code># 2. Identify existing features</code><br/>
-          <code># 3. Suggest spec entries</code><br/>
-          <code># 4. Help you populate SPEC.md</code>
+          <code># Mark existing features as complete</code><br/>
+          <code>- [x] **BE.1 User Authentication** - Login, logout, sessions</code><br/>
+          <code>- [x] **BE.2 Database Schema** - Users, posts, comments</code><br/><br/>
+          <code># Add new features to build</code><br/>
+          <code>- [ ] **BE.3 API Rate Limiting** - Protect endpoints</code>
         </div>
 
-        <p>Then update your spec:</p>
+        <p>Use <code>/story</code> in Claude to help refine and expand your spec:</p>
         <div class="code-block">
-          <code># Example: Mark existing features as complete</code><br/>
-          <code>- [x] **BE.1 User Authentication** - Login, logout, sessions</code><br/>
-          <code>- [x] **BE.2 Database Schema** - Users, posts, comments</code><br/>
-          <code>- [ ] **BE.3 API Rate Limiting** - New feature to build</code>
+          <code># In Claude Code terminal</code><br/>
+          <code>/story</code><br/><br/>
+          <code># Claude will help you:</code><br/>
+          <code># - Clarify requirements</code><br/>
+          <code># - Break down features into sub-tasks</code><br/>
+          <code># - Apply the workflow phases</code>
         </div>
       </div>
     </section>
@@ -767,6 +860,63 @@
     </section>
 
     <section>
+      <h2>Troubleshooting</h2>
+      <p class="intro-text">Common issues and how to fix them.</p>
+
+      <div class="trouble-grid">
+        <div class="trouble-item">
+          <h3>chkd command not found</h3>
+          <p><strong>Cause:</strong> CLI not installed globally</p>
+          <p><strong>Fix:</strong></p>
+          <div class="code-block">
+            <code>cd /path/to/chkd-v2</code><br/>
+            <code>sudo npm link</code>
+          </div>
+        </div>
+
+        <div class="trouble-item">
+          <h3>Cannot connect to chkd</h3>
+          <p><strong>Cause:</strong> Dev server not running</p>
+          <p><strong>Fix:</strong></p>
+          <div class="code-block">
+            <code>cd /path/to/chkd-v2</code><br/>
+            <code>npm run dev</code>
+          </div>
+        </div>
+
+        <div class="trouble-item">
+          <h3>Task not found in spec</h3>
+          <p><strong>Cause:</strong> Task ID doesn't match spec format</p>
+          <p><strong>Fix:</strong> Check docs/SPEC.md for correct task IDs (e.g., SD.1, BE.2)</p>
+        </div>
+
+        <div class="trouble-item">
+          <h3>Session stuck / wrong state</h3>
+          <p><strong>Cause:</strong> Session didn't sync properly</p>
+          <p><strong>Fix:</strong></p>
+          <div class="code-block">
+            <code>chkd sync idle</code>
+          </div>
+        </div>
+
+        <div class="trouble-item">
+          <h3>Spec not loading in UI</h3>
+          <p><strong>Cause:</strong> Server cache or parsing error</p>
+          <p><strong>Fix:</strong> Restart dev server, check SPEC.md format</p>
+        </div>
+
+        <div class="trouble-item">
+          <h3>Skills not working</h3>
+          <p><strong>Cause:</strong> Skills not synced to project</p>
+          <p><strong>Fix:</strong></p>
+          <div class="code-block">
+            <code>chkd sync skills</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
       <h2>Files That Matter</h2>
       <table class="files-table">
         <thead>
@@ -785,6 +935,7 @@
     </section>
   </main>
 </div>
+{/if}
 
 <style>
   /* Page Header */
@@ -857,7 +1008,7 @@
 
   .guide-page {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 220px 1fr;
     gap: var(--space-xl);
     max-width: 1200px;
     margin: 0 auto;
@@ -865,148 +1016,117 @@
     min-height: 100vh;
   }
 
-  /* Context Helper Card */
-  .context-helper {
+  /* Command Reference Sidebar */
+  .command-ref {
     position: sticky;
-    top: 80px; /* Account for sticky header */
+    top: 80px;
     height: fit-content;
     background: var(--bg-secondary);
-    border: 2px solid var(--border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-lg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    font-size: 13px;
   }
 
-  .context-helper.building {
-    border-color: var(--info);
-    background: var(--info-bg);
-  }
-
-  .context-helper.testing {
-    border-color: var(--warning);
-    background: rgba(255, 193, 7, 0.1);
-  }
-
-  .context-helper.complete {
-    border-color: var(--success);
-    background: rgba(76, 175, 80, 0.1);
-  }
-
-  .context-helper.rework {
-    border-color: var(--warning);
-    background: rgba(255, 193, 7, 0.08);
-  }
-
-  .helper-header {
+  .ref-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
   }
 
-  .helper-badge {
-    padding: 4px 10px;
+  .ref-badge {
+    padding: 3px 8px;
     border-radius: var(--radius-sm);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.5px;
     color: white;
   }
 
-  .helper-badge.muted { background: var(--text-muted); }
-  .helper-badge.info { background: var(--info); }
-  .helper-badge.warning { background: var(--warning); color: #333; }
-  .helper-badge.success { background: var(--success); }
+  .ref-badge.muted { background: var(--text-muted); }
+  .ref-badge.info { background: var(--info); }
+  .ref-badge.warning { background: var(--warning); color: #333; }
+  .ref-badge.success { background: var(--success); }
 
-  .helper-time {
+  .ref-time {
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: 12px;
     color: var(--text-muted);
   }
 
-  .helper-warnings {
-    margin-bottom: var(--space-md);
-  }
-
-  .warning-item {
-    background: rgba(255, 193, 7, 0.2);
-    border: 1px solid var(--warning);
-    padding: var(--space-sm);
-    border-radius: var(--radius-md);
-    font-size: 13px;
-    margin-bottom: var(--space-xs);
-  }
-
-  .helper-action {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: var(--space-md);
-    padding-bottom: var(--space-sm);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .helper-task {
-    font-size: 13px;
+  .ref-task {
     padding: var(--space-sm);
     background: var(--bg);
     border-radius: var(--radius-md);
     margin-bottom: var(--space-md);
   }
 
-  .iteration-badge {
-    display: inline-block;
-    background: var(--warning);
-    color: #333;
-    padding: 2px 6px;
-    border-radius: 4px;
+  .ref-task-label {
     font-size: 11px;
-    font-weight: 600;
-    margin-top: var(--space-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
-  .helper-commands {
+  .ref-task-name {
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .ref-section {
     margin-bottom: var(--space-md);
   }
 
-  .commands-title, .tips-title {
-    font-size: 12px;
+  .ref-section-title {
+    font-size: 10px;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-xs);
+    padding-bottom: var(--space-xs);
+    border-bottom: 1px solid var(--border);
   }
 
-  .cmd-row {
+  .ref-cmd {
     display: flex;
-    gap: var(--space-sm);
     align-items: center;
-    margin-bottom: var(--space-xs);
-    font-size: 13px;
+    gap: var(--space-sm);
+    padding: 4px 6px;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--text);
+    transition: background 0.15s;
   }
 
-  .cmd-row code {
+  .ref-cmd:hover {
     background: var(--bg);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 12px;
   }
 
-  .cmd-row span {
+  .ref-cmd.highlighted {
+    background: var(--info-bg);
+    border-left: 2px solid var(--info);
+  }
+
+  .ref-cmd code {
+    font-size: 11px;
+    background: var(--bg-tertiary);
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .ref-cmd.highlighted code {
+    background: var(--bg);
+  }
+
+  .ref-cmd span {
+    font-size: 11px;
     color: var(--text-muted);
   }
 
-  .helper-tips ul {
-    margin: 0;
-    padding-left: var(--space-lg);
-    font-size: 13px;
-    color: var(--text-muted);
-  }
-
-  .helper-tips li {
-    margin-bottom: var(--space-xs);
-  }
-
-  .helper-progress {
+  .ref-progress {
     margin-top: var(--space-md);
     padding-top: var(--space-md);
     border-top: 1px solid var(--border);
@@ -1027,7 +1147,7 @@
   }
 
   .progress-text {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
   }
 
@@ -1699,6 +1819,211 @@
 
   .rule-dont strong {
     color: var(--error);
+  }
+
+  /* Doc Tabs */
+  .doc-tabs {
+    display: flex;
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-xl);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .doc-tab {
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+
+  .doc-tab:hover {
+    background: var(--bg-tertiary);
+    color: var(--text);
+  }
+
+  .doc-tab.active {
+    background: var(--primary);
+    color: white;
+  }
+
+  /* Docs Page */
+  .docs-page {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: var(--space-xl);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+    min-height: 100vh;
+  }
+
+  .doc-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-top: var(--space-md);
+  }
+
+  .doc-nav-item {
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .doc-nav-item:hover {
+    background: var(--bg-tertiary);
+  }
+
+  .doc-nav-item.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  /* Docs Content - Markdown Styling */
+  .docs-content {
+    max-width: 800px;
+    line-height: 1.7;
+  }
+
+  .docs-content :global(h1) {
+    font-size: 28px;
+    margin: 0 0 var(--space-lg);
+    padding-bottom: var(--space-sm);
+    border-bottom: 2px solid var(--border);
+  }
+
+  .docs-content :global(h2) {
+    font-size: 22px;
+    margin: var(--space-2xl) 0 var(--space-md);
+    padding-bottom: var(--space-xs);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .docs-content :global(h3) {
+    font-size: 18px;
+    margin: var(--space-xl) 0 var(--space-sm);
+  }
+
+  .docs-content :global(p) {
+    margin: 0 0 var(--space-md);
+  }
+
+  .docs-content :global(ul),
+  .docs-content :global(ol) {
+    margin: 0 0 var(--space-md);
+    padding-left: var(--space-xl);
+  }
+
+  .docs-content :global(li) {
+    margin-bottom: var(--space-xs);
+  }
+
+  .docs-content :global(code) {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .docs-content :global(pre) {
+    background: var(--bg-tertiary);
+    padding: var(--space-md);
+    border-radius: var(--radius-lg);
+    overflow-x: auto;
+    margin: 0 0 var(--space-md);
+  }
+
+  .docs-content :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+
+  .docs-content :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 var(--space-md);
+  }
+
+  .docs-content :global(th),
+  .docs-content :global(td) {
+    padding: var(--space-sm) var(--space-md);
+    text-align: left;
+    border: 1px solid var(--border);
+  }
+
+  .docs-content :global(th) {
+    background: var(--bg-secondary);
+    font-weight: 600;
+  }
+
+  .docs-content :global(blockquote) {
+    margin: 0 0 var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border-left: 4px solid var(--primary);
+    background: var(--bg-secondary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+
+  .docs-content :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: var(--space-xl) 0;
+  }
+
+  .docs-content :global(a) {
+    color: var(--primary);
+    text-decoration: none;
+  }
+
+  .docs-content :global(a:hover) {
+    text-decoration: underline;
+  }
+
+  /* Troubleshooting */
+  .trouble-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-md);
+  }
+
+  .trouble-item {
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border-left: 4px solid var(--warning);
+  }
+
+  .trouble-item h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  .trouble-item p {
+    margin: 0 0 var(--space-xs);
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .trouble-item .code-block {
+    margin: var(--space-xs) 0 0;
+    padding: var(--space-sm);
+    font-size: 12px;
   }
 
   /* Responsive */

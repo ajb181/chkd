@@ -33,6 +33,14 @@ export interface ParsedSpec {
   progress: number;
 }
 
+export interface HandoverNote {
+  taskId: string;
+  taskTitle: string;
+  note: string;
+  pausedBy: string;
+  createdAt: string;
+}
+
 export interface Session {
   currentTask: {
     id: string;
@@ -49,6 +57,7 @@ export interface Session {
   iteration: number;
   lastActivity: string | null;
   alsoDid: string[];  // Off-plan work done during this task
+  handoverNotes?: HandoverNote[];  // Notes from paused tasks
 }
 
 export interface ApiResponse<T> {
@@ -171,6 +180,32 @@ export async function updateBug(repoPath: string, bugQuery: string, status: stri
   return res.json();
 }
 
+// Create a bug
+export async function createBug(repoPath: string, title: string, description?: string, severity?: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/bugs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, title, description, severity })
+  });
+  return res.json();
+}
+
+// Polish a bug title with AI
+export interface PolishedBug {
+  original: string;
+  polished: string;
+  aiGenerated: boolean;
+}
+
+export async function polishBug(title: string): Promise<ApiResponse<PolishedBug>> {
+  const res = await fetch(`${BASE_URL}/api/bugs/polish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+  return res.json();
+}
+
 // Skip an item
 export async function skipItem(repoPath: string, itemId: string, skip: boolean = true): Promise<ApiResponse<any>> {
   const res = await fetch(`${BASE_URL}/api/spec/skip`, {
@@ -281,9 +316,11 @@ export async function addRepo(path: string, name?: string, branch?: string): Pro
 // Smart feature expansion
 export interface ExpandedFeature {
   title: string;
+  polishedTitle: string;
   description: string;
   story: string;
   suggestedArea: string;
+  tasks: string[];
   aiGenerated: boolean;
 }
 
@@ -411,5 +448,54 @@ export async function removeFromQueue(repoPath: string, itemId: string): Promise
   const res = await fetch(`${BASE_URL}/api/session/queue?repoPath=${encodeURIComponent(repoPath)}&id=${encodeURIComponent(itemId)}`, {
     method: 'DELETE'
   });
+  return res.json();
+}
+
+// ============================================
+// Quick Wins
+// ============================================
+
+export interface QuickWin {
+  id: string;
+  repoId: string;
+  title: string;
+  description: string | null;
+  status: 'open' | 'done';
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export async function getQuickWins(repoPath: string): Promise<ApiResponse<QuickWin[]>> {
+  const res = await fetch(`${BASE_URL}/api/quickwins?repoPath=${encodeURIComponent(repoPath)}`);
+  return res.json();
+}
+
+export async function createQuickWin(repoPath: string, title: string, description?: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/quickwins`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, title, description })
+  });
+  return res.json();
+}
+
+export async function completeQuickWin(repoPath: string, query: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/quickwins`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, query })
+  });
+  return res.json();
+}
+
+export async function deleteQuickWin(repoPath: string, id: string): Promise<ApiResponse<void>> {
+  const res = await fetch(`${BASE_URL}/api/quickwins?repoPath=${encodeURIComponent(repoPath)}&id=${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
+  return res.json();
+}
+
+export async function getItemDurations(repoPath: string): Promise<ApiResponse<Record<string, number>>> {
+  const res = await fetch(`${BASE_URL}/api/spec/durations?repoPath=${encodeURIComponent(repoPath)}`);
   return res.json();
 }

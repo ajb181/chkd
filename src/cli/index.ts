@@ -61,6 +61,47 @@ function formatTime(ms: number): string {
   return `${minutes}m`;
 }
 
+// Animated spinner for long operations
+function createSpinner(message: string) {
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let i = 0;
+  const interval = setInterval(() => {
+    process.stdout.write(`\r  ${frames[i]} ${message}`);
+    i = (i + 1) % frames.length;
+  }, 80);
+
+  return {
+    stop: (finalMessage?: string) => {
+      clearInterval(interval);
+      process.stdout.write(`\r  ${finalMessage || '✓ ' + message}${' '.repeat(20)}\n`);
+    }
+  };
+}
+
+// Show current context footer (task/subtask or idle)
+async function showContext() {
+  const cwd = process.cwd();
+  const res = await api(`/api/session?repoPath=${encodeURIComponent(cwd)}`);
+
+  if (!res.success || !res.data) return;
+
+  const session = res.data;
+
+  console.log(`  ─────────────────────────────────`);
+  if (session.currentTask) {
+    // Just show title (includes task number like FE.8), not the slug ID
+    console.log(`  📍 ${session.currentTask.title}`);
+    if (session.currentItem) {
+      console.log(`     └─ ${session.currentItem.title}`);
+    }
+    if (session.iteration > 1) {
+      console.log(`     #${session.iteration}`);
+    }
+  } else {
+    console.log(`  📍 Idle - no active task`);
+  }
+}
+
 // ============================================
 // Commands
 // ============================================
@@ -80,7 +121,9 @@ async function tick(itemQuery: string) {
       return;
     }
 
-    console.log(`\n  ✓ ${res.data.message}\n`);
+    console.log(`\n  ✓ ${res.data.message}`);
+    await showContext();
+    console.log('');
     return;
   }
 
@@ -96,13 +139,367 @@ async function tick(itemQuery: string) {
 
   console.log(`\n  ✓ ${res.data.message}`);
 
-  if (res.data.queuedItems && res.data.queuedItems.length > 0) {
-    console.log(`\n  📋 Queued items (${res.data.queuedCount}):`);
-    for (const item of res.data.queuedItems) {
-      console.log(`     + ${item}`);
-    }
+  // Warn if Feedback item ticked without proper approval
+  if (res.data.warning) {
+    console.log(`  ⚠️  ${res.data.warning}`);
   }
+
+  await showContext();
   console.log('');
+}
+
+async function sync(action?: string) {
+  const cwd = process.cwd();
+  const path = await import('path');
+  const fs = await import('fs/promises');
+
+  // If action is "idle" or "reset", clear session
+  if (action === 'idle' || action === 'reset') {
+    const res = await api('/api/session/pause', {
+      method: 'POST',
+      body: JSON.stringify({ repoPath: cwd }),
+    });
+
+    if (!res.success) {
+      console.log(`\n  ❌ ${res.error}\n`);
+      return;
+    }
+
+    console.log(`\n  ✓ Session reset to idle`);
+    console.log(`  App will now show idle state.\n`);
+    return;
+  }
+
+  // If action is "skills" or "files", sync from chkd source
+  if (action === 'skills' || action === 'files') {
+    console.log(`\n  🔄 Syncing chkd assets...`);
+    console.log(`  ─────────────────────────────────`);
+
+    // Find chkd source directory (where this CLI is installed)
+    const { fileURLToPath } = await import('url');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const chkdRoot = path.resolve(__dirname, '..', '..');
+    const templatesDir = path.join(chkdRoot, 'templates');
+
+    // Read manifest
+    let manifest: any;
+    try {
+      const manifestPath = path.join(chkdRoot, 'chkd-sync.json');
+      const manifestContent = await fs.readFile(manifestPath, 'utf-8');
+      manifest = JSON.parse(manifestContent);
+    } catch (err) {
+      console.log(`  ❌ Could not read chkd-sync.json: ${err}`);
+      return;
+    }
+
+    console.log(`  Source version: ${manifest.version}`);
+    console.log(``);
+
+    // Helper to check if file content differs
+    async function contentDiffers(file1: string, file2: string): Promise<boolean> {
+      try {
+        const [content1, content2] = await Promise.all([
+          fs.readFile(file1, 'utf-8'),
+          fs.readFile(file2, 'utf-8'),
+        ]);
+        return content1 !== content2;
+      } catch {
+        return false; // If either file doesn't exist, no conflict
+      }
+    }
+
+    // Helper to copy directory
+    async function copyDir(src: string, dest: string, conflicts: string[] = []) {
+      await fs.mkdir(dest, { recursive: true });
+      const entries = await fs.readdir(src, { withFileTypes: true });
+      for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+          await copyDir(srcPath, destPath, conflicts);
+        } else {
+          // Check for local modifications
+          if (await contentDiffers(srcPath, destPath)) {
+            conflicts.push(entry.name);
+          }
+          await fs.copyFile(srcPath, destPath);
+        }
+      }
+      return conflicts;
+    }
+
+    let hasConflicts = false;
+
+    // Process each asset
+    for (const asset of manifest.assets) {
+      const srcPath = path.join(chkdRoot, asset.source);
+      const destPath = path.join(cwd, asset.destination);
+
+      try {
+        // Check if source exists
+        await fs.access(srcPath);
+      } catch {
+        console.log(`  ⚠ Source not found: ${asset.source}`);
+        continue;
+      }
+
+      // Handle different modes
+      if (asset.mode === 'init-only') {
+        try {
+          await fs.access(destPath);
+          console.log(`  · Skipped ${asset.name} (init-only, exists)`);
+          continue;
+        } catch {
+          // Doesn't exist, can copy
+        }
+      }
+
+      if (asset.mode === 'merge') {
+        // Check if local differs from source
+        try {
+          await fs.access(destPath);
+          if (await contentDiffers(srcPath, destPath)) {
+            console.log(`  ⚠ Skipped ${asset.name} (merge mode - has local changes)`);
+            hasConflicts = true;
+          } else {
+            console.log(`  · Skipped ${asset.name} (merge mode - no changes)`);
+          }
+        } catch {
+          // Destination doesn't exist, copy it
+          await fs.mkdir(path.dirname(destPath), { recursive: true });
+          await fs.copyFile(srcPath, destPath);
+          console.log(`  ✓ Created ${asset.name}`);
+        }
+        continue;
+      }
+
+      // Copy mode - check if it's a directory
+      const stat = await fs.stat(srcPath);
+      if (stat.isDirectory()) {
+        const conflicts: string[] = [];
+        await copyDir(srcPath, destPath, conflicts);
+        if (conflicts.length > 0) {
+          console.log(`  ✓ Synced ${asset.name}/ (overwrote ${conflicts.length} local changes)`);
+          hasConflicts = true;
+        } else {
+          console.log(`  ✓ Synced ${asset.name}/`);
+        }
+      } else {
+        // Check for local modifications before overwriting
+        const hadLocalChanges = await contentDiffers(srcPath, destPath);
+        await fs.mkdir(path.dirname(destPath), { recursive: true });
+        await fs.copyFile(srcPath, destPath);
+        if (hadLocalChanges) {
+          console.log(`  ✓ Synced ${asset.name} (overwrote local changes)`);
+          hasConflicts = true;
+        } else {
+          console.log(`  ✓ Synced ${asset.name}`);
+        }
+      }
+    }
+
+    if (hasConflicts) {
+      console.log(`\n  ⚠ Some local changes were overwritten or skipped.`);
+      console.log(`    Project customizations in 'copy' mode files are overwritten.`);
+      console.log(`    Files in 'merge' mode keep local changes (sync manually).`);
+    }
+
+    // Write version file
+    const versionFile = path.join(cwd, '.chkd-version');
+    await fs.writeFile(versionFile, manifest.version, 'utf-8');
+    console.log(`\n  ✅ Synced to version ${manifest.version}`);
+    console.log(`  Version written to .chkd-version\n`);
+    return;
+  }
+
+  // If action is "all", sync to all registered repos
+  if (action === 'all') {
+    const repos = await api('/api/repos');
+    if (!repos.success || !repos.data) {
+      console.log(`\n  ❌ Could not get repos list\n`);
+      return;
+    }
+
+    console.log(`\n  🔄 Syncing to all repos...`);
+    console.log(`  ─────────────────────────────────`);
+
+    for (const repo of repos.data) {
+      if (repo.path === cwd) {
+        console.log(`  · Skipping ${repo.name} (current)`);
+        continue;
+      }
+      console.log(`\n  → ${repo.name}`);
+      // Run sync in that directory
+      const origCwd = process.cwd();
+      try {
+        process.chdir(repo.path);
+        await sync('skills');
+      } catch (err) {
+        console.log(`    ❌ Failed: ${err}`);
+      } finally {
+        process.chdir(origCwd);
+      }
+    }
+    console.log(`\n  ✅ Done syncing all repos\n`);
+    return;
+  }
+
+  // Default: just report status
+  const res = await api(`/api/status?repoPath=${encodeURIComponent(cwd)}`);
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  const data = res.data;
+
+  console.log(`\n  🔄 Sync Status`);
+  console.log(`  ─────────────────────────────────`);
+
+  if (!data.registered) {
+    console.log(`  Not registered with chkd`);
+    console.log(`\n  Run 'chkd upgrade' to register.\n`);
+    return;
+  }
+
+  if (data.session.currentTask) {
+    console.log(`  Active task: ${data.session.currentTask.title}`);
+    console.log(`  Iteration: ${data.session.iteration}`);
+    console.log(`  Duration: ${formatTime(data.session.elapsedMs)}`);
+    console.log(`\n  Commands:`);
+    console.log(`    chkd sync idle     - Reset session to idle`);
+    console.log(`    chkd sync skills   - Sync skills from chkd source`);
+    console.log(`    chkd sync all      - Sync to all registered repos\n`);
+  } else {
+    console.log(`  Session is idle (no active task)`);
+    console.log(`\n  Commands:`);
+    console.log(`    chkd sync skills   - Sync skills from chkd source`);
+    console.log(`    chkd sync all      - Sync to all registered repos\n`);
+  }
+}
+
+async function pause(note?: string) {
+  const cwd = process.cwd();
+
+  const res = await api('/api/session/pause', {
+    method: 'POST',
+    body: JSON.stringify({
+      repoPath: cwd,
+      note: note || undefined,
+      pausedBy: 'cli',
+    }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  console.log(`\n  ⏸️  Paused: ${res.data.pausedTask}`);
+
+  if (res.data.handoverNote) {
+    console.log(`\n  📝 Handover note saved:`);
+    console.log(`     "${res.data.handoverNote.note}"`);
+  }
+
+  console.log(`\n  Task returned to queue. Session is idle.\n`);
+}
+
+async function idle() {
+  const cwd = process.cwd();
+
+  const res = await api('/api/session/idle', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath: cwd }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  console.log(`\n  ✅ Session returned to idle.\n`);
+}
+
+async function done(force: boolean = false) {
+  const cwd = process.cwd();
+
+  const res = await api('/api/session/complete', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath: cwd, force }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}`);
+
+    // Show incomplete items if that's the issue
+    if (res.incompleteItems && res.incompleteItems.length > 0) {
+      console.log(`\n  Incomplete sub-items:`);
+      for (const item of res.incompleteItems) {
+        console.log(`    ○ ${item}`);
+      }
+      console.log(`\n  Options:`);
+      console.log(`    • chkd pause "note"   - Pause task, come back later (recommended)`);
+      console.log(`    • chkd done --force   - Mark complete anyway (skips open items)\n`);
+    } else if (res.hint) {
+      console.log(`  💡 ${res.hint}\n`);
+    } else {
+      console.log('');
+    }
+    return;
+  }
+
+  console.log(`\n  ✅ Completed: ${res.data.completedTask}`);
+
+  if (res.data.nextTask) {
+    console.log(`\n  📋 Next up: ${res.data.nextTask}`);
+  } else {
+    console.log(`\n  🎉 All tasks complete!`);
+  }
+
+  console.log(`\n  Session is now idle.\n`);
+}
+
+async function start(taskQuery: string) {
+  if (!taskQuery) {
+    console.log(`\n  Usage: chkd start "SD.1" or chkd start "task title"\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+
+  const res = await api('/api/session/start', {
+    method: 'POST',
+    body: JSON.stringify({
+      repoPath: cwd,
+      taskQuery: taskQuery,
+    }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}`);
+    if (res.suggestion) {
+      console.log(`  💡 ${res.suggestion}`);
+    }
+    console.log('');
+    return;
+  }
+
+  console.log(`\n  🚀 Started: ${res.data.taskTitle}`);
+
+  // Warn if task was reopened
+  if (res.data.reopened) {
+    console.log(`  ⚠️  Reopened (was marked done)`);
+  }
+
+  // Show handover note if there was one
+  if (res.data.handoverNote) {
+    console.log(`  📝 "${res.data.handoverNote.note}"`);
+  }
+
+  console.log(`  💡 Run 'chkd progress' to see sub-items.\n`);
 }
 
 async function working(itemQuery: string) {
@@ -131,11 +528,64 @@ async function working(itemQuery: string) {
   });
 
   if (!res.success) {
-    console.log(`\n  ❌ ${res.error}\n`);
+    console.log(`\n  ❌ ${res.error}`);
+    if (res.hint) console.log(`  💡 ${res.hint}`);
+    console.log('');
     return;
   }
 
-  console.log(`\n  🔨 ${res.data.message}\n`);
+  console.log(`\n  🔨 ${res.data.message}`);
+
+  // Phase-specific nudges for chkd workflow keywords
+  const itemLower = itemQuery.toLowerCase();
+  if (itemLower.startsWith('explore')) {
+    console.log(`  💡 Research first. If complex, ask the user questions.`);
+  } else if (itemLower.startsWith('design')) {
+    console.log(`  💡 Define the approach. Diagram if complex.`);
+  } else if (itemLower.startsWith('prototype')) {
+    console.log(`  💡 Use mock/fake data. Real backend comes later.`);
+  } else if (itemLower.startsWith('feedback')) {
+    console.log(`  💡 Stop. Show user. Get explicit approval.`);
+    console.log(`  📋 Use 'chkd iterate' after each piece of work to stay anchored.`);
+  } else if (itemLower.startsWith('implement')) {
+    console.log(`  💡 Now build the real logic. Feedback was approved.`);
+  } else if (itemLower.startsWith('polish')) {
+    console.log(`  💡 Error states, edge cases, loading states.`);
+  } else {
+    console.log(`  💡 Run 'chkd tick' when done.`);
+  }
+  console.log('');
+}
+
+async function iterate() {
+  const cwd = process.cwd();
+
+  const res = await api('/api/session/iterate', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath: cwd }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}`);
+    if (res.hint) console.log(`  💡 ${res.hint}`);
+    console.log('');
+    return;
+  }
+
+  const { iteration, task, currentItem, phase, phaseNudge, reminder } = res.data;
+
+  console.log(`\n  🔄 Iteration #${iteration}`);
+  console.log(`     ${task.title}`);
+  if (currentItem) {
+    console.log(`     └─ ${currentItem.title}`);
+  }
+  console.log(`  ─────────────────────────────────`);
+
+  if (phaseNudge) {
+    console.log(`  💡 ${phaseNudge}`);
+  }
+  console.log(`  📋 ${reminder}`);
+  console.log('');
 }
 
 async function progress() {
@@ -199,6 +649,7 @@ async function progress() {
       const status = child.completed ? '✅' : (child.inProgress ? '🔨' : '⬚');
       console.log(`  ${status} ${child.title}`);
     }
+    console.log(`\n  💡 Work through sub-items in order. Tick each as you complete it.`);
   } else {
     console.log(`  No sub-items for this task`);
   }
@@ -224,29 +675,7 @@ async function fix(bugQuery: string) {
   }
 
   console.log(`\n  ✅ ${res.data.message}`);
-  console.log(`
-  ─────────────────────────────────────────────────────────────
-  📝 LEARNINGS PROMPT
-
-  Consider documenting what you learned:
-
-  1. ROOT CAUSE - What caused this bug?
-     → Could this happen elsewhere? Add to CLAUDE.md patterns?
-
-  2. PREVENTION - How to prevent similar bugs?
-     → Add linting rule? Update code review checklist?
-
-  3. DETECTION - How was it found?
-     → Add test case? Improve error messages?
-
-  Files to consider updating:
-    • CLAUDE.md - Coding patterns, gotchas
-    • .debug-notes.md - Investigation details
-    • docs/ARCHITECTURE.md - System behavior
-
-  Use /retro in Claude Code for a guided retrospective.
-  ─────────────────────────────────────────────────────────────
-`);
+  console.log(`  💡 Run /retro to capture learnings.\n`);
 }
 
 async function repair() {
@@ -306,9 +735,16 @@ async function repair() {
 
 async function bug(description: string, severity?: string) {
   if (!description) {
-    console.log(`\n  Usage: chkd bug "description" [--severity high|medium|low]\n`);
+    console.log(`\n  Usage: chkd bug "description" [--severity high|medium|low|big]\n`);
+    console.log(`  Examples:`);
+    console.log(`    chkd bug "Save button not working"`);
+    console.log(`    chkd bug "App randomly crashes" --severity big\n`);
     return;
   }
+
+  // "big" severity triggers /bugfix workflow
+  const isBig = severity?.toLowerCase() === 'big';
+  const actualSeverity = isBig ? 'high' : (severity || 'medium');
 
   const cwd = process.cwd();
   const res = await api('/api/bugs', {
@@ -316,7 +752,7 @@ async function bug(description: string, severity?: string) {
     body: JSON.stringify({
       repoPath: cwd,
       title: description,
-      severity: severity || 'medium',
+      severity: actualSeverity,
     }),
   });
 
@@ -325,8 +761,299 @@ async function bug(description: string, severity?: string) {
     return;
   }
 
-  const severityLabel = severity ? ` [${severity.toUpperCase()}]` : '';
-  console.log(`\n  ✓ Bug created${severityLabel}: ${description}\n`);
+  console.log(`\n  ✓ Bug logged: ${description}`);
+
+  if (isBig) {
+    console.log(`  🔍 Big bug → run /bugfix for guided debugging`);
+  } else {
+    console.log(`  💡 Quick fix (<10 lines). Get user acceptance before 'chkd fix'.`);
+  }
+
+  // Remind of current context (don't get distracted by the bug!)
+  await showContext();
+  console.log('');
+}
+
+async function also(description: string) {
+  if (!description) {
+    console.log(`\n  Usage: chkd also "description of off-plan work"`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd also "Fixed typo in README"`);
+    console.log(`    chkd also "Updated error handling in auth"`);
+    console.log(`\n  Note: Requires an active task session.\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+  const res = await api('/api/session/also-did', {
+    method: 'POST',
+    body: JSON.stringify({
+      repoPath: cwd,
+      description,
+    }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}`);
+    if (res.error === 'No active task') {
+      console.log(`  💡 Start a task first with: chkd start "task"\n`);
+    } else {
+      console.log('');
+    }
+    return;
+  }
+
+  console.log(`\n  ✓ Logged: "${description}"`);
+  await showContext();
+  console.log('');
+}
+
+async function check(flags: Record<string, string | boolean>) {
+  const cwd = process.cwd();
+  const fix = flags.fix === true;
+
+  const res = await api(`/api/spec/validate?repoPath=${encodeURIComponent(cwd)}&fix=${fix}`);
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  const { valid, issues, fixed } = res.data;
+
+  if (valid && issues.length === 0) {
+    console.log(`\n  ✅ SPEC.md is valid\n`);
+    return;
+  }
+
+  console.log(`\n  ${valid ? '⚠️' : '❌'}  SPEC.md Validation Results`);
+  console.log(`  ─────────────────────────────────────────────────────────────`);
+
+  if (issues.length > 0) {
+    const errors = issues.filter((i: any) => i.type === 'error');
+    const warnings = issues.filter((i: any) => i.type === 'warning');
+
+    if (errors.length > 0) {
+      console.log(`\n  Errors (${errors.length}):`);
+      for (const issue of errors) {
+        console.log(`    ❌ Line ${issue.line || '?'}: ${issue.message}`);
+      }
+    }
+
+    if (warnings.length > 0) {
+      console.log(`\n  Warnings (${warnings.length}):`);
+      for (const issue of warnings) {
+        console.log(`    ⚠️  Line ${issue.line || '?'}: ${issue.message}`);
+      }
+    }
+  }
+
+  if (fixed && fixed.length > 0) {
+    console.log(`\n  Fixed (${fixed.length}):`);
+    for (const f of fixed) {
+      console.log(`    ✓ ${f}`);
+    }
+  }
+
+  if (!fix && issues.some((i: any) => i.fixable)) {
+    console.log(`\n  💡 Run 'chkd check --fix' to auto-fix some issues`);
+  }
+
+  console.log('');
+}
+
+async function setupHosts(domain?: string) {
+  const hostname = domain || 'chkd.local';
+  const port = 3848;
+  const hostsEntry = `127.0.0.1   ${hostname}`;
+
+  console.log(`\n  🌐 Setting up local domain: ${hostname}`);
+  console.log(`  ─────────────────────────────────────────────────────────────`);
+
+  // Check if already exists
+  const { execSync } = await import('child_process');
+
+  try {
+    const hosts = execSync('cat /etc/hosts', { encoding: 'utf-8' });
+    if (hosts.includes(hostname)) {
+      console.log(`\n  ✓ ${hostname} already in /etc/hosts`);
+      console.log(`\n  Access stable version at: http://${hostname}:${port}`);
+      console.log(`\n  Make sure stable is running: npm run stable\n`);
+      return;
+    }
+  } catch (e) {
+    // Can't read hosts file
+  }
+
+  console.log(`\n  Adding to /etc/hosts: ${hostsEntry}`);
+  console.log(`\n  This requires sudo access.\n`);
+
+  try {
+    execSync(`echo '${hostsEntry}' | sudo tee -a /etc/hosts`, { stdio: 'inherit' });
+    console.log(`\n  ✓ Added ${hostname} to /etc/hosts`);
+    console.log(`\n  Access stable version at: http://${hostname}:${port}`);
+    console.log(`\n  Make sure stable is running: npm run stable\n`);
+  } catch (e) {
+    console.log(`\n  ❌ Failed to update /etc/hosts`);
+    console.log(`\n  You can add it manually:`);
+    console.log(`    sudo nano /etc/hosts`);
+    console.log(`    Add: ${hostsEntry}\n`);
+  }
+}
+
+async function add(title: string, flags: Record<string, string | boolean>) {
+  if (!title) {
+    console.log(`\n  Usage: chkd add "feature title" [options]`);
+    console.log(`\n  Options:`);
+    console.log(`    --area SD|FE|BE    Target area for the feature`);
+    console.log(`    --dry-run          Preview without creating`);
+    console.log(`    --basic            Use default workflow (skip LLM)`);
+    console.log(`    --no-workflow      No sub-tasks at all`);
+    console.log(`    --tasks "a,b,c"    Custom tasks to include`);
+    console.log(`\n  Examples:`);
+    console.log(`    chkd add "User authentication"           # Smart workflow via LLM`);
+    console.log(`    chkd add "Dark mode toggle" --area FE    # Specify area`);
+    console.log(`    chkd add "API caching" --dry-run         # Preview first`);
+    console.log(`    chkd add "Quick fix" --basic             # Default workflow steps\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+
+  // Parse flags
+  const areaCode = typeof flags.area === 'string' ? flags.area.toUpperCase() : undefined;
+  const dryRun = Boolean(flags['dry-run'] || flags.dryRun);
+  const noWorkflow = Boolean(flags['no-workflow'] || flags.noWorkflow);
+  const confirmLarge = Boolean(flags['confirm-large'] || flags.confirmLarge);
+
+  // Parse user-provided tasks if any
+  let userTasks: string[] | undefined;
+  if (typeof flags.tasks === 'string') {
+    userTasks = flags.tasks.split(',').map(t => t.trim()).filter(Boolean);
+  }
+
+  // Generate smart workflow tasks using LLM (unless --no-workflow or --basic)
+  let smartTasks: string[] | undefined;
+  const useBasic = Boolean(flags.basic);
+
+  if (!noWorkflow && !useBasic) {
+    try {
+      const { isAvailable, generateSmartWorkflow } = await import('./llm.js');
+      if (isAvailable()) {
+        const spinner = createSpinner('Generating smart workflow...');
+        const result = await generateSmartWorkflow(title, {
+          description: typeof flags.description === 'string' ? flags.description : undefined,
+          userTasks,
+          areaCode
+        });
+        if (result.tasks && result.tasks.length > 0) {
+          smartTasks = result.tasks;
+          spinner.stop(`✓ Generated ${smartTasks.length} adapted tasks`);
+        } else {
+          spinner.stop(`· Using default workflow`);
+        }
+      }
+    } catch (err) {
+      // LLM unavailable - will fall back to default workflow
+      console.log(`\n  ⚠ LLM unavailable, using default workflow`);
+    }
+  }
+
+  // Build request body
+  const body: Record<string, unknown> = {
+    repoPath: cwd,
+    title,
+    withWorkflow: !noWorkflow,
+    dryRun,
+    confirmLarge,
+  };
+
+  if (areaCode) body.areaCode = areaCode;
+  // Use smart tasks if generated, otherwise user tasks, otherwise let API use defaults
+  if (smartTasks && smartTasks.length > 0) {
+    body.tasks = smartTasks;
+  } else if (userTasks && userTasks.length > 0) {
+    body.tasks = userTasks;
+  }
+
+  const res = await api('/api/spec/add', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  // Handle dry-run response
+  if (res.success && res.dryRun) {
+    console.log(`\n  📋 DRY RUN - Would create:`);
+    console.log(`  ─────────────────────────────────`);
+    console.log(`  Title: ${res.data.wouldCreate.title}`);
+    if (res.data.wouldCreate.areaCode) {
+      console.log(`  Area: ${res.data.wouldCreate.areaName} (${res.data.wouldCreate.areaCode})`);
+    } else if (res.data.wouldCreate.phase) {
+      console.log(`  Phase: ${res.data.wouldCreate.phase}`);
+    }
+    console.log(`  Tasks: ${res.data.wouldCreate.taskCount}`);
+    if (res.data.wouldCreate.tasks && res.data.wouldCreate.tasks.length > 0) {
+      for (const task of res.data.wouldCreate.tasks) {
+        console.log(`    - ${task}`);
+      }
+    }
+    console.log(`\n  Run without --dry-run to create.\n`);
+    return;
+  }
+
+  // Handle errors
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}`);
+
+    // Show existing item if duplicate
+    if (res.existingItem) {
+      console.log(`  ─────────────────────────────────`);
+      console.log(`  Existing: ${res.existingItem.title}`);
+      console.log(`  Status: ${res.existingItem.status}`);
+      console.log(`  ID: ${res.existingItem.id}`);
+    }
+
+    // Show preview if confirmation needed
+    if (res.preview) {
+      console.log(`  ─────────────────────────────────`);
+      console.log(`  Would add ${res.preview.taskCount} tasks:`);
+      for (const task of res.preview.tasks.slice(0, 5)) {
+        console.log(`    - ${task}`);
+      }
+      if (res.preview.tasks.length > 5) {
+        console.log(`    ... and ${res.preview.tasks.length - 5} more`);
+      }
+      console.log(`\n  Use --confirm-large to proceed.\n`);
+      return;
+    }
+
+    if (res.hint) {
+      console.log(`  💡 ${res.hint}`);
+    }
+    console.log('');
+    return;
+  }
+
+  // Success
+  console.log(`\n  ✓ Added: ${res.data.title}`);
+  if (res.data.areaCode) {
+    console.log(`  Area: ${res.data.areaName} (${res.data.areaCode})`);
+  } else if (res.data.phase) {
+    console.log(`  Phase: ${res.data.phase}`);
+  }
+  console.log(`  ID: ${res.data.itemId}`);
+  console.log(`  Tasks: ${res.data.taskCount}`);
+
+  // Show warnings
+  if (res.warnings && res.warnings.length > 0) {
+    console.log(`\n  ⚠ Warnings:`);
+    for (const warning of res.warnings) {
+      console.log(`    ${warning}`);
+    }
+  }
+
+  console.log(`\n  💡 If this is user-facing, consider updating docs/GUIDE.md`);
+  console.log(`\n  Use 'chkd list' to see all items.\n`);
 }
 
 async function bugs(filter?: string) {
@@ -539,6 +1266,7 @@ function help(command?: string) {
 
     init [name]         Initialize chkd in a new project
     upgrade [name]      Add chkd to existing project (backs up files)
+    hosts [domain]      Set up local domain (default: chkd.local)
 
   STATUS
 
@@ -555,12 +1283,19 @@ function help(command?: string) {
 
   WORKFLOW
 
-    working "item"      Signal you're working on an item
+    start "task"        Start working on a task (e.g., "SD.1")
+    working "item"      Signal you're working on a sub-item
     tick "item"         Mark an item complete
+    iterate             Increment iteration, get context reminder
+    done                Complete current task, return to idle
+    pause "note"        Pause task, return to queue with handover note
+    sync [idle]         Check/fix app state (use 'idle' to reset)
     progress            Show current task's sub-items
 
   SPEC
 
+    add "title"         Add a new feature to SPEC.md
+    check [--fix]       Validate SPEC.md format (--fix to auto-fix)
     repair              Reformat SPEC.md using AI (fixes formatting)
 
   BUILDING (use in Claude Code)
@@ -574,6 +1309,7 @@ function help(command?: string) {
 
     chkd status         # See what's happening
     chkd bug "Broken"   # Quick-add a bug
+    chkd also "Fixed X" # Log off-plan work
     chkd bugs           # See open bugs
     chkd repair         # Fix SPEC.md formatting
     chkd init           # Set up new project
@@ -756,6 +1492,32 @@ function showCommandHelp(command: string) {
 
   TIP: Use /retro in Claude Code for a full retrospective.
 `,
+    also: `
+  chkd also "description"
+  ─────────────────────────────────────────────────────────────
+
+  Log off-plan work during a task.
+
+  ARGUMENTS:
+    "description"    What you did that wasn't in the spec
+
+  WHAT IT DOES:
+    - Adds to the "Also did" list for the current task
+    - Shows in the UI alongside the main task
+    - Keeps a record of unplanned but valuable work
+
+  WHEN TO USE:
+    - Fixed a bug while working on something else
+    - Updated related code that wasn't in the spec
+    - Made an improvement you noticed was needed
+
+  EXAMPLES:
+    chkd also "Fixed typo in README"
+    chkd also "Updated error handling in auth"
+    chkd also "Refactored date formatting utils"
+
+  NOTE: Requires an active task session.
+`,
     init: `
   chkd init [name]
   ─────────────────────────────────────────────────────────────
@@ -883,11 +1645,150 @@ function showCommandHelp(command: string) {
 
   TIP: Tick as you go! Don't batch them at the end.
 `,
+    sync: `
+  chkd sync [idle]
+  ─────────────────────────────────────────────────────────────
+
+  Check or fix the app's session state.
+
+  ARGUMENTS:
+    (none)    Just report current state
+    idle      Reset session to idle (clears active task)
+
+  WHAT IT DOES:
+    - Reports what the app thinks is happening
+    - Shows active task, iteration, duration
+    - Can reset to idle if state is wrong
+
+  WHEN TO USE:
+    - App shows "building" but Claude isn't running
+    - Session got stuck after a crash
+    - Want to verify app and terminal are in sync
+    - Need to manually reset state
+
+  EXAMPLES:
+    chkd sync              # Check current state
+    chkd sync idle         # Reset to idle
+
+  OUTPUT EXAMPLE:
+    🔄 Sync Status
+    ─────────────────────────────────
+    Active task: SD.11 Repo Cards
+    Iteration: 2
+    Duration: 45m
+
+    If this is wrong, run: chkd sync idle
+
+  TIP: If the app shows a task but Claude isn't working on it,
+       run 'chkd sync idle' to reset.
+`,
+    pause: `
+  chkd pause ["handover note"]
+  ─────────────────────────────────────────────────────────────
+
+  Pause the current task and return it to the queue.
+
+  ARGUMENTS:
+    "note"    Optional handover note for the next person
+
+  WHAT IT DOES:
+    - Returns current task to queue (NOT marked complete)
+    - Saves handover note (shown when task is started again)
+    - Clears active session - UI shows idle
+    - Task stays incomplete in SPEC.md
+
+  WHEN TO USE:
+    - Need to switch to something else mid-task
+    - Handing off to another person/session
+    - End of day, want to leave notes for tomorrow
+    - Blocked on something, parking the task
+
+  EXAMPLES:
+    chkd pause
+    chkd pause "Stuck on auth, need API key"
+    chkd pause "Tests passing, needs code review"
+
+  HANDOVER FLOW:
+    Session 1:
+      chkd start "SD.1"
+      # ... work on it ...
+      chkd pause "Fixed login, still need signup"
+
+    Session 2:
+      chkd start "SD.1"
+      # Shows: 📝 Handover note: "Fixed login, still need signup"
+
+  TIP: The handover note is shown once when the task is restarted, then cleared.
+`,
+    done: `
+  chkd done [--force]
+  ─────────────────────────────────────────────────────────────
+
+  Complete the current task and return to idle.
+
+  OPTIONS:
+    --force    Complete even if sub-items are incomplete
+
+  WHAT IT DOES:
+    - Checks all sub-items are complete (blocks if not)
+    - Marks current task as complete in SPEC.md
+    - Clears the active session
+    - Shows the next available task (if any)
+    - UI updates to show idle state
+
+  WHEN TO USE:
+    - Finished building a task
+    - Ready to move on to the next thing
+    - Want to signal "I'm done" to the UI
+
+  EXAMPLES:
+    chkd done              # Complete (fails if sub-items open)
+    chkd done --force      # Complete anyway
+
+  THE WORKFLOW:
+    1. chkd start "SD.1"     ← Start task
+    2. Build it
+    3. chkd tick "sub-item"  ← Mark sub-items done
+    4. chkd done             ← Complete task, go idle (YOU ARE HERE)
+
+  TIP: The UI will update to show you're idle and suggest the next task.
+`,
+    start: `
+  chkd start "task"
+  ─────────────────────────────────────────────────────────────
+
+  Start working on a task.
+
+  ARGUMENTS:
+    "task"    Task ID (e.g., "SD.1") or task title
+
+  WHAT IT DOES:
+    - Switches session to work on this task
+    - Starts a new iteration
+    - Shows the task in 'chkd status'
+
+  WHEN TO USE:
+    - Starting work on a new task
+    - Switching between tasks
+    - Resuming a specific task
+
+  EXAMPLES:
+    chkd start "SD.1"
+    chkd start "Login page"
+    chkd start "User Authentication"
+
+  THE WORKFLOW:
+    1. chkd start "SD.1"     ← Switch to task (YOU ARE HERE)
+    2. chkd progress         ← See sub-items
+    3. chkd working "item"   ← Start a sub-item
+    4. Build it
+    5. chkd tick "item"      ← Mark done
+`,
     working: `
   chkd working "item"
   ─────────────────────────────────────────────────────────────
 
-  Signal that you're working on an item.
+  Signal that you're working on a sub-item.
 
   ARGUMENTS:
     "item"    Item title or ID (required)
@@ -899,7 +1800,7 @@ function showCommandHelp(command: string) {
 
   WHEN TO USE:
     - Starting work on a sub-item
-    - Switching between items
+    - Switching between sub-items
     - Resuming work after a break
 
   EXAMPLES:
@@ -907,9 +1808,10 @@ function showCommandHelp(command: string) {
     chkd working "SD.1.2"
 
   THE WORKFLOW:
-    1. chkd working "item"   ← Signal start (YOU ARE HERE)
-    2. Build it
-    3. chkd tick "item"      ← Mark done
+    1. chkd start "SD.1"     ← Switch to task first
+    2. chkd working "item"   ← Signal sub-item start (YOU ARE HERE)
+    3. Build it
+    4. chkd tick "item"      ← Mark done
 `,
     progress: `
   chkd progress
@@ -942,6 +1844,38 @@ function showCommandHelp(command: string) {
     🔨 Remember me functionality
     ⬚  Session timeout handling
 `,
+    iterate: `
+  chkd iterate
+  ─────────────────────────────────────────────────────────────
+
+  Increment iteration counter and get a context reminder.
+
+  ALIASES:
+    chkd cycle           Same thing
+
+  WHAT IT DOES:
+    - Increments iteration count for current session
+    - Shows current phase and working item
+    - Provides phase-specific guidance
+    - Reminds you to stay focused
+
+  WHEN TO USE:
+    - After completing a piece of work
+    - During extended back-and-forth (especially Feedback phase)
+    - Whenever you want a context anchor
+
+  WHY IT MATTERS:
+    During long feedback discussions, it's easy to lose focus.
+    Running 'chkd iterate' keeps you anchored to the process.
+
+  EXAMPLE OUTPUT:
+    🔄 Iteration #3 on SD.1
+       Phase: Feedback
+       Working on: User reviews login UX
+    ─────────────────────────────────
+    💡 Get explicit approval. One approval ≠ blanket approval.
+    📋 Still in Feedback? Easy to get sidetracked here.
+`,
     help: `
   chkd help [command]
   ─────────────────────────────────────────────────────────────
@@ -958,8 +1892,9 @@ function showCommandHelp(command: string) {
     bug         Quick-create a bug
     bugs        List open bugs
     fix         Mark a bug as fixed
+    start       Start working on a task
     tick        Mark an item complete
-    working     Signal you're working on an item
+    working     Signal you're working on a sub-item
     progress    Show current task's sub-items
     repair      Reformat SPEC.md using AI
     init        Initialize chkd in new project
@@ -971,6 +1906,54 @@ function showCommandHelp(command: string) {
     chkd help list         # How to list items
     chkd help tick         # How to tick items
     chkd help repair       # How to repair spec
+`,
+    add: `
+  chkd add "title" [--area SD|FE|BE] [--dry-run] [--tasks "t1,t2"]
+  ─────────────────────────────────────────────────────────────
+
+  Add a new feature/item to SPEC.md.
+
+  ARGUMENTS:
+    "title"    The feature title (required)
+
+  OPTIONS:
+    --area <code>     Target area: SD, FE, BE, FUT (default: auto)
+    --dry-run         Preview what would be created without adding
+    --tasks "a,b,c"   Custom tasks (comma-separated)
+    --no-workflow     Don't add workflow sub-tasks
+    --confirm-large   Confirm adding >10 tasks
+
+  WHAT IT DOES:
+    1. Validates the title isn't a duplicate
+    2. Adds the item to the specified area
+    3. Adds workflow sub-tasks (Explore, Design, etc.)
+    4. Returns the item ID and line number
+
+  WHEN TO USE:
+    - Adding a new feature during planning
+    - Capturing ideas without editing SPEC.md directly
+    - Programmatic spec updates
+
+  EXAMPLES:
+    chkd add "User authentication"
+    chkd add "Dark mode" --area FE
+    chkd add "API caching" --area BE --dry-run
+    chkd add "Login form" --tasks "validation,tests,docs"
+    chkd add "Big feature" --confirm-large
+
+  OUTPUT EXAMPLE:
+    ✓ Added: User authentication
+    Area: Frontend (FE)
+    ID: fe-user-authentication
+    Tasks: 6
+
+  SAFETY FEATURES:
+    - Duplicate detection (blocks similar titles)
+    - Dry-run mode (preview before adding)
+    - Large addition confirmation (>10 tasks)
+    - Unknown parameter warnings
+
+  TIP: Use --dry-run first to see what will be created.
 `,
     repair: `
   chkd repair
@@ -1013,6 +1996,40 @@ function showCommandHelp(command: string) {
 
   SEE ALSO:
     /reorder-spec - Claude Code skill for interactive reorganization
+`,
+    hosts: `
+  chkd hosts [domain]
+  ─────────────────────────────────────────────────────────────
+
+  Set up a local domain to access chkd's stable version.
+
+  Adds an entry to /etc/hosts so you can use a custom URL
+  instead of localhost:3848.
+
+  ARGUMENTS:
+    domain    Custom domain (default: chkd.local)
+
+  REQUIRES:
+    - sudo access (to modify /etc/hosts)
+    - npm run stable running on port 3848
+
+  EXAMPLES:
+    chkd hosts                  # Use chkd.local:3848
+    chkd hosts chkd.com         # Use chkd.com:3848
+    chkd hosts myproject.dev    # Use myproject.dev:3848
+
+  SUGGESTED DOMAINS:
+    chkd.local      Safe, won't conflict with real sites
+    chkd.test       Another safe option
+    chkd.dev        Good for development
+    chkd.com        Works but blocks the real chkd.com site
+
+  AFTER SETUP:
+    1. Run: npm run stable
+    2. Visit: http://[domain]:3848
+
+  NOTE: Uses port 3848 (stable port). For port 80 access,
+  you'd need a reverse proxy like Caddy or nginx.
 `,
   };
 
@@ -1296,9 +2313,10 @@ async function upgrade(projectName?: string) {
     const { isAvailable, mergeClaudeMd } = await import('./llm.js');
 
     if (isAvailable()) {
-      console.log(`  ⏳ Merging CLAUDE.md intelligently...`);
+      const spinner = createSpinner('Merging CLAUDE.md intelligently...');
       try {
         const merged = await mergeClaudeMd(existing.content, templateContent, name);
+        spinner.stop('✓ Merged CLAUDE.md');
         const backupStatus = await backupFile('CLAUDE.md');
         if (backupStatus === 'backed_up') {
           console.log(`  ✓ Backed up CLAUDE.md`);
@@ -1306,7 +2324,8 @@ async function upgrade(projectName?: string) {
         await fs.writeFile(claudeMdPath, merged, 'utf-8');
         console.log(`  ✓ Merged CLAUDE.md (kept project content, added chkd sections)`);
       } catch (err) {
-        console.log(`  ⚠ LLM merge failed: ${err}`);
+        spinner.stop('⚠ LLM merge failed');
+        console.log(`    ${err}`);
         console.log(`  · CLAUDE.md unchanged (backup your content and retry)`);
       }
     } else {
@@ -1430,13 +2449,21 @@ async function main() {
   const flags: Record<string, string | boolean> = {};
   const cleanArgs: string[] = [];
   const restArgs = args.slice(1);
+
+  // Flags that expect a value
+  const valueFlagSet = new Set(['severity', 'area', 'tasks']);
+
   for (let i = 0; i < restArgs.length; i++) {
     const a = restArgs[i];
-    if (a === '--severity' && restArgs[i + 1]) {
-      flags.severity = restArgs[i + 1];
-      i++; // Skip next arg
-    } else if (a.startsWith('--')) {
-      flags[a.slice(2)] = true;
+    if (a.startsWith('--')) {
+      const flagName = a.slice(2);
+      // Check if this flag expects a value and next arg exists and isn't a flag
+      if (valueFlagSet.has(flagName) && restArgs[i + 1] && !restArgs[i + 1].startsWith('--')) {
+        flags[flagName] = restArgs[i + 1];
+        i++; // Skip next arg
+      } else {
+        flags[flagName] = true;
+      }
     } else {
       cleanArgs.push(a);
     }
@@ -1464,6 +2491,9 @@ async function main() {
                        flags.high ? 'high' : flags.low ? 'low' : flags.critical ? 'critical' : undefined;
       await bug(arg, severity);
       break;
+    case 'also':
+      await also(arg);
+      break;
     case 'bugs':
       await bugs(flags.high ? 'high' : (flags.all ? 'all' : undefined));
       break;
@@ -1473,14 +2503,42 @@ async function main() {
     case 'tick':
       await tick(arg);
       break;
+    case 'start':
+      await start(arg);
+      break;
     case 'working':
       await working(arg);
       break;
     case 'progress':
       await progress();
       break;
+    case 'iterate':
+    case 'cycle':
+      await iterate();
+      break;
+    case 'done':
+      await done(Boolean(flags.force));
+      break;
+    case 'pause':
+      await pause(arg || undefined);
+      break;
+    case 'idle':
+      await idle();
+      break;
+    case 'sync':
+      await sync(arg || undefined);
+      break;
+    case 'add':
+      await add(arg, flags);
+      break;
     case 'repair':
       await repair();
+      break;
+    case 'check':
+      await check(flags);
+      break;
+    case 'hosts':
+      await setupHosts(arg);
       break;
     case 'help':
     case '--help':

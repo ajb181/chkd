@@ -22,6 +22,7 @@ export interface TaskInfo {
 export interface ItemInfo {
   id: string;
   title: string;
+  startTime?: string | null;  // When work started on this item
 }
 
 export interface TaskSession {

@@ -16,6 +16,7 @@ chkd workflow            # Show development workflow
 # Building
 chkd working "item"      # Signal you're working on an item
 chkd tick "item"         # Mark an item complete
+chkd iterate             # Increment iteration, get reminder
 
 # Bugs
 chkd bug "description"   # Quick-create a bug
@@ -189,6 +190,41 @@ chkd tick "item"      # 2. Mark done immediately
 ```
 
 **Important:** Tick as you go! Don't batch at the end.
+
+---
+
+### `chkd iterate`
+
+Increment iteration counter and get a context reminder.
+
+```bash
+chkd iterate             # Increment and show context
+chkd cycle               # Alias for iterate
+```
+
+**What it does:**
+- Increments iteration count for current session
+- Shows current phase and working item
+- Provides phase-specific guidance
+- Reminds you to stay focused
+
+**Output example:**
+```
+🔄 Iteration #3 on SD.1
+   Phase: Feedback
+   Working on: User reviews login UX
+─────────────────────────────────
+💡 Get explicit approval. One approval ≠ blanket approval.
+📋 Still in Feedback? Easy to get sidetracked here.
+```
+
+**When to use:**
+- After completing a discrete piece of work
+- During extended back-and-forth (especially Feedback phase)
+- Whenever you need a context anchor
+
+**Why it matters:**
+During long feedback discussions, it's easy to lose focus on the process. Running `chkd iterate` keeps you anchored to where you are and what you should be doing.
 
 ---
 
@@ -386,6 +422,33 @@ chkd tick "SD.1"
 2. User knows exactly where you are
 3. If interrupted, work isn't lost
 4. Spec stays accurate
+
+---
+
+## Phase Keywords
+
+When sub-items start with these keywords, they have special meaning in chkd. The CLI provides contextual guidance for each phase.
+
+| Keyword | Meaning | CLI Nudge |
+|---------|---------|-----------|
+| **Explore:** | Research before building | "If complex, ask the user questions" |
+| **Design:** | Plan the approach | "Diagram if complex" |
+| **Prototype:** | Build with fake data | "Real backend comes later" |
+| **Feedback:** | User review checkpoint | "Stop. Document their feedback in the story" |
+| **Implement:** | Build real logic | "Feedback was approved" |
+| **Polish:** | Refinement | "Error states, edge cases, loading" |
+
+These keywords are automatically added when creating features with `chkd add`. They enforce the workflow philosophy: **get user feedback before investing in real implementation**.
+
+Example sub-items:
+```markdown
+- [ ] Explore: check existing auth patterns
+- [ ] Design: auth flow + endpoint contract
+- [ ] Prototype: login UI with mock data
+- [ ] Feedback: user reviews login UX
+- [ ] Implement: real auth + session handling
+- [ ] Polish: error states, remember me
+```
 
 ---
 

@@ -22,9 +22,11 @@ export const POST: RequestHandler = async ({ request }) => {
         success: true,
         data: {
           title,
+          polishedTitle: title,
           description: '',
           story: `As a user, I want ${title.toLowerCase()} so that I can improve my workflow.`,
           suggestedArea: areaCode || guessArea(title),
+          tasks: [],
           aiGenerated: false
         }
       });
@@ -44,7 +46,7 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    // Call Anthropic API
+    // Call Anthropic API with enhanced prompt
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -53,24 +55,42 @@ export const POST: RequestHandler = async ({ request }) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 300,
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
         messages: [{
           role: 'user',
-          content: `You are helping expand a feature idea into a brief user story for a software spec.
+          content: `You help prepare feature ideas for a software spec. Your job:
+
+1. POLISH the title: Fix spelling/grammar, make it concise (under 80 chars ideally)
+2. PRESERVE context: If the title is long/rambling, extract the key idea as title and move details to description
+3. DON'T over-polish: Keep the user's voice and intent. Just clean it up.
+4. Generate a brief user story
+5. Suggest which area it belongs to
+6. Generate smart workflow tasks adapted to this specific feature
+
+WORKFLOW PHILOSOPHY:
+- Explore first (research problem, check existing code)
+- Design approach + endpoint contracts
+- Prototype with mock data (fast iteration)
+- Get user feedback BEFORE full implementation
+- Then implement real logic
+- Polish based on actual usage
 
 Feature idea: "${title}"
 ${areaCode ? `Target area: ${areaCode}` : ''}
 ${specContext}
 
-Respond with JSON only (no markdown):
+Respond with JSON only (no markdown code blocks):
 {
+  "polishedTitle": "Clean, concise title (under 80 chars)",
+  "description": "Any context moved from title + brief expansion. Can be empty if title was already concise.",
   "story": "As a [user type], I want [feature] so that [benefit].",
-  "description": "One sentence expanding on the feature.",
-  "suggestedArea": "SD" or "FE" or "BE" (Site Design, Frontend, or Backend)
+  "suggestedArea": "SD" or "FE" or "BE",
+  "tasks": ["Task 1: specific to this feature", "Task 2: adapted step", ...]
 }
 
-Keep it brief and practical. Max 2 sentences each.`
+For tasks: Adapt the standard 6-step workflow to this feature. Keep tasks SHORT (under 60 chars).
+Simple fixes can have fewer steps. Complex features need all 6.`
         }]
       })
     });
@@ -83,9 +103,11 @@ Keep it brief and practical. Max 2 sentences each.`
         success: true,
         data: {
           title,
+          polishedTitle: title,
           description: '',
           story: `As a user, I want ${title.toLowerCase()} so that I can improve my workflow.`,
           suggestedArea: areaCode || guessArea(title),
+          tasks: [],
           aiGenerated: false
         }
       });
@@ -100,9 +122,11 @@ Keep it brief and practical. Max 2 sentences each.`
         success: true,
         data: {
           title,
+          polishedTitle: parsed.polishedTitle || title,
           description: parsed.description || '',
           story: parsed.story || '',
           suggestedArea: areaCode || parsed.suggestedArea || guessArea(title),
+          tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
           aiGenerated: true
         }
       });
@@ -112,9 +136,11 @@ Keep it brief and practical. Max 2 sentences each.`
         success: true,
         data: {
           title,
+          polishedTitle: title,
           description: '',
           story: `As a user, I want ${title.toLowerCase()} so that I can improve my workflow.`,
           suggestedArea: areaCode || guessArea(title),
+          tasks: [],
           aiGenerated: false
         }
       });

@@ -124,12 +124,11 @@ Once chkd is set up, here's your daily routine:
 
 ```
 1. Start chkd server     →  npm run dev (in chkd-v2 folder)
-2. Open UI               →  http://localhost:3847
-3. Pick a task           →  Note the ID (e.g., "2.3")
-4. Start Claude Code     →  claude (in your project folder)
-5. Build the task        →  /chkd 2.3
-6. When done             →  /commit
-7. Repeat                →  Pick next task
+2. Check status          →  chkd status
+3. Start Claude Code     →  claude (in your project folder)
+4. Build a task          →  /chkd SD.1 (use task ID from spec)
+5. When done             →  /commit
+6. Repeat                →  /chkd next-task-id
 ```
 
 ---
@@ -378,6 +377,49 @@ This copies the latest skills without touching your spec or custom files.
 
 ---
 
+## Development Tips
+
+### Running a Stable Version
+
+When developing chkd itself, hot reloads can interrupt your work. Run a stable build on a separate port:
+
+```bash
+# First time: Build and save a stable snapshot
+npm run stable:build
+
+# Then run stable on port 3848
+npm run stable
+```
+
+**Two-step process:**
+1. `stable:build` - Compiles current code and saves to `build-stable/` folder
+2. `stable` - Runs the saved snapshot on port 3848
+
+Use `http://localhost:3848` when you want a stable UI that won't reload while coding.
+
+**Custom domain (optional):**
+```bash
+# Set up a friendly URL like http://chkd.com:3848
+chkd hosts chkd.com
+
+# See all options
+chkd help hosts
+```
+
+> **Why two steps?** Development builds (`npm run build`) output to `build/`. If stable ran from that same folder, dev builds would overwrite your stable version mid-session. The separate `build-stable/` folder keeps them isolated.
+
+### Form Persistence
+
+Form inputs automatically save as you type and survive page reloads:
+
+- **Bug input** - Quick bug capture field
+- **Queue messages** - Messages for Claude
+- **Feature capture** - Title, description, story, area, and wizard step
+
+Drafts clear automatically when you submit. If you close the feature capture wizard accidentally, reopen it to get your draft back.
+
+---
+
 ## Files chkd Creates
 
 | File | What it's for |
@@ -417,6 +459,113 @@ This copies the latest skills without touching your spec or custom files.
 
 ---
 
+## The Workflow Philosophy
+
+Every feature follows a 6-stage workflow designed to **get user feedback BEFORE investing in real implementation**.
+
+### The 6 Stages
+
+| Stage | Purpose | What Happens |
+|-------|---------|--------------|
+| **Explore** | Research first | Check existing code, understand the problem, find patterns |
+| **Design** | Plan the approach | Define endpoint contracts, diagram if complex |
+| **Prototype** | Build with mock data | UI + stubbed backend, iterate quickly |
+| **Feedback** | User reviews | Get sign-off on UX before building real backend |
+| **Implement** | Connect real logic | Replace mocks with actual implementation |
+| **Polish** | Refine based on usage | Error states, edge cases, performance |
+
+### Why This Matters
+
+**The Feedback stage is critical.** By prototyping with mock data first:
+
+- You can iterate on UX quickly without waiting for backend
+- Users validate the approach before you invest in real implementation
+- Frontend and backend can work in parallel (contract is defined)
+- Less wasted work if the approach needs to change
+
+### Example: Dashboard Feature
+
+```markdown
+- [ ] **FE.1 User Dashboard**
+  - [ ] Explore: check existing dashboard patterns
+  - [ ] Design: layout + data endpoint contracts
+  - [ ] Prototype: dashboard UI with mock data
+  - [ ] Feedback: user reviews dashboard UX
+  - [ ] Implement: connect to real API endpoints
+  - [ ] Polish: loading states, error handling
+```
+
+Notice how **Prototype** and **Feedback** happen before **Implement**. The user sees working UI (with fake data) and approves it. Only then do you build the real backend.
+
+### For Frontend Features
+
+1. Design with mock data + endpoint contract FIRST
+2. Build UI that works with the mocks
+3. Get user sign-off on the UX
+4. THEN implement the real backend
+
+### For Backend Features
+
+1. Stub the endpoint with test data
+2. Let frontend integrate against the stub
+3. Get feedback on the API contract
+4. THEN implement real logic
+
+---
+
+## Why chkd Works: Contextual AI Guidance
+
+**The secret sauce:** chkd gives the AI small, contextual reminders at exactly the right moments.
+
+### The Problem with AI Coding
+
+AI assistants are powerful but can drift:
+- Forget to log work → progress invisible
+- Skip documentation → users confused
+- Go off-plan → scope creep
+- Miss patterns → inconsistent code
+
+### The chkd Approach
+
+Instead of one big instruction dump, chkd uses **micro-nudges** - small reminders that appear at decision points:
+
+| When AI does... | chkd reminds... |
+|-----------------|-----------------|
+| `chkd add` (new feature) | "If user-facing, update docs" |
+| `chkd also` (off-plan work) | "If affects users, update docs" |
+| `chkd done` (incomplete items) | "Use pause if coming back later" |
+| `chkd tick` (completes item) | Shows queued items from user |
+| `chkd start` (begins task) | Shows handover notes from last session |
+
+### Why This Works
+
+1. **Right time, right place** - Reminders appear when relevant, not upfront
+2. **Low friction** - Short nudges, not walls of text
+3. **Builds habits** - Consistent prompts create consistent behavior
+4. **Self-reinforcing** - Good practices become automatic
+
+### It's Not Just for the AI
+
+The same constraints that keep AI on track also help **users** develop better habits:
+
+- **Spec-first thinking** - Forces you to plan before building
+- **Breaking work into stages** - Explore → Design → Prototype → Feedback → Implement → Polish
+- **Visible progress** - See what's done, what's next, what's blocked
+- **Capturing off-plan work** - Nothing gets lost or forgotten
+- **Handover notes** - Context survives between sessions
+
+**This is especially valuable if you're new to software development.** You get healthy workflows built in, not bolted on. The structure that makes AI effective also teaches good practices.
+
+### The Principle
+
+> Don't rely on the AI remembering everything. Build guidance into the tool responses themselves.
+
+> Constraints that improve AI output also improve human planning. Good structure benefits everyone.
+
+This is why chkd isn't just a spec file - it's an interactive system that guides both human and AI through healthy development practices.
+
+---
+
 ## The Big Picture
 
 ```
@@ -424,7 +573,7 @@ This copies the latest skills without touching your spec or custom files.
 │                     YOU                              │
 │                                                      │
 │  1. Write features in docs/SPEC.md                  │
-│  2. Pick a task ID from the UI                      │
+│  2. Run chkd status to see what's next              │
 │  3. Run /chkd <task_id> in Claude Code              │
 │  4. Review what Claude built                        │
 │  5. Run /commit when happy                          │
@@ -451,6 +600,44 @@ This copies the latest skills without touching your spec or custom files.
 │  - Helps you pick what's next                      │
 └─────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Learnings & Gotchas
+
+Things we've learned the hard way while building with chkd:
+
+### Build folder isolation
+
+**Problem:** Running `npm run build` during development overwrote the stable version, causing 500 errors on the stable UI.
+
+**Cause:** Both dev builds and stable were using the same `build/` folder. When Claude tested changes with `npm run build`, it replaced the stable version mid-session.
+
+**Solution:** Stable now uses a separate `build-stable/` folder. Use `npm run stable:build` to create a snapshot, then `npm run stable` to run it. Dev builds go to `build/` and don't touch stable.
+
+**Lesson:** When running multiple environments (dev, stable, production), keep their build artifacts separate.
+
+### Log off-plan work as you go
+
+**Problem:** "Also did" list in UI was empty despite doing significant extra work.
+
+**Cause:** Claude mentioned off-plan work in text responses but didn't use `chkd also` to log it to the system.
+
+**Solution:** Use `chkd also "description"` immediately when doing off-plan work, not just at the end.
+
+**Lesson:** The system only knows what you tell it. Logging as you go keeps the UI accurate.
+
+### Keep documentation in sync
+
+**Problem:** Features get built but documentation lags behind, leaving users confused.
+
+**Cause:** Documentation updates are easy to forget when focused on code.
+
+**Solution:** The CLI now reminds you:
+- `chkd add` → "If this is user-facing, consider updating docs/GUIDE.md"
+- `chkd also` → "If this affects users, update docs/GUIDE.md too"
+
+**Lesson:** Build reminders into your tools. Don't rely on memory for important habits.
 
 ---
 
