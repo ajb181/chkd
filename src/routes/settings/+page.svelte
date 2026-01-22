@@ -1,17 +1,129 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
+  // API Key state
   let hasApiKey = false;
   let apiKeyPreview = '';
   let newApiKey = '';
+
+  // Theme state
+  let theme: 'system' | 'light' | 'dark' = 'system';
+
+  // Repos state
+  interface Repo {
+    id: string;
+    name: string;
+    path: string;
+    enabled: boolean;
+  }
+  let repos: Repo[] = [];
+  let newRepoPath = '';
+  let addingRepo = false;
+
+  // LLM Personalization
+  let llmTone: 'default' | 'formal' | 'casual' | 'concise' = 'default';
+  let llmCustomPrefix = '';
+  let savingLlm = false;
+
+  // General state
   let saving = false;
   let message = '';
   let messageType: 'success' | 'error' = 'success';
   let loading = true;
 
   onMount(async () => {
+    // Load saved theme preference
+    const savedTheme = localStorage.getItem('chkd-theme') as 'system' | 'light' | 'dark' | null;
+    if (savedTheme) {
+      theme = savedTheme;
+      applyTheme(theme);
+    }
+
     await loadSettings();
+    await loadRepos();
+    await loadLlmSettings();
   });
+
+  function applyTheme(newTheme: 'system' | 'light' | 'dark') {
+    const root = document.documentElement;
+
+    if (newTheme === 'system') {
+      root.removeAttribute('data-theme');
+    } else {
+      root.setAttribute('data-theme', newTheme);
+    }
+
+    localStorage.setItem('chkd-theme', newTheme);
+  }
+
+  function handleThemeChange() {
+    applyTheme(theme);
+  }
+
+  async function loadRepos() {
+    try {
+      const res = await fetch('/api/repos');
+      const data = await res.json();
+      if (data.success) {
+        repos = data.data || [];
+      }
+    } catch (e) {
+      console.error('Failed to load repos:', e);
+    }
+  }
+
+  async function addRepo() {
+    if (!newRepoPath.trim()) return;
+
+    addingRepo = true;
+    message = '';
+
+    try {
+      const res = await fetch('/api/repos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newRepoPath.trim() })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        message = `Repository added: ${data.data.name}`;
+        messageType = 'success';
+        newRepoPath = '';
+        await loadRepos();
+      } else {
+        message = data.error || 'Failed to add repository';
+        messageType = 'error';
+      }
+    } catch (e) {
+      message = 'Failed to add repository';
+      messageType = 'error';
+    }
+
+    addingRepo = false;
+  }
+
+  async function removeRepo(repoId: string) {
+    if (!confirm('Are you sure you want to remove this repository?')) return;
+
+    try {
+      const res = await fetch(`/api/repos?id=${repoId}`, { method: 'DELETE' });
+      const data = await res.json();
+
+      if (data.success) {
+        message = 'Repository removed';
+        messageType = 'success';
+        await loadRepos();
+      } else {
+        message = data.error || 'Failed to remove repository';
+        messageType = 'error';
+      }
+    } catch (e) {
+      message = 'Failed to remove repository';
+      messageType = 'error';
+    }
+  }
 
   async function loadSettings() {
     loading = true;
@@ -75,6 +187,50 @@
     }
 
     saving = false;
+  }
+
+  async function loadLlmSettings() {
+    try {
+      const res = await fetch('/api/settings/llm');
+      const data = await res.json();
+      if (data.success) {
+        llmTone = data.data.tone || 'default';
+        llmCustomPrefix = data.data.customPrefix || '';
+      }
+    } catch (e) {
+      console.error('Failed to load LLM settings:', e);
+    }
+  }
+
+  async function saveLlmSettings() {
+    savingLlm = true;
+    message = '';
+
+    try {
+      const res = await fetch('/api/settings/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tone: llmTone,
+          customPrefix: llmCustomPrefix
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        message = 'LLM settings saved!';
+        messageType = 'success';
+      } else {
+        message = data.error || 'Failed to save LLM settings';
+        messageType = 'error';
+      }
+    } catch (e) {
+      message = 'Failed to save LLM settings';
+      messageType = 'error';
+    }
+
+    savingLlm = false;
   }
 </script>
 
@@ -142,6 +298,144 @@
         </div>
       {/if}
     {/if}
+  </section>
+
+  <section class="settings-section">
+    <h2>Theme</h2>
+    <p class="section-desc">
+      Choose your preferred color scheme.
+    </p>
+
+    <div class="theme-options">
+      <label class="theme-option" class:selected={theme === 'system'}>
+        <input
+          type="radio"
+          name="theme"
+          value="system"
+          bind:group={theme}
+          on:change={handleThemeChange}
+        />
+        <span class="theme-icon">💻</span>
+        <span class="theme-label">System</span>
+        <span class="theme-desc">Match your OS setting</span>
+      </label>
+
+      <label class="theme-option" class:selected={theme === 'light'}>
+        <input
+          type="radio"
+          name="theme"
+          value="light"
+          bind:group={theme}
+          on:change={handleThemeChange}
+        />
+        <span class="theme-icon">☀️</span>
+        <span class="theme-label">Light</span>
+        <span class="theme-desc">Always use light mode</span>
+      </label>
+
+      <label class="theme-option" class:selected={theme === 'dark'}>
+        <input
+          type="radio"
+          name="theme"
+          value="dark"
+          bind:group={theme}
+          on:change={handleThemeChange}
+        />
+        <span class="theme-icon">🌙</span>
+        <span class="theme-label">Dark</span>
+        <span class="theme-desc">Always use dark mode</span>
+      </label>
+    </div>
+  </section>
+
+  <section class="settings-section">
+    <h2>AI Personalization</h2>
+    <p class="section-desc">
+      Customize how the AI generates content for features, bugs, and quick wins.
+    </p>
+
+    <div class="llm-setting">
+      <label for="llm-tone">Response Tone</label>
+      <select id="llm-tone" class="form-select" bind:value={llmTone}>
+        <option value="default">Default</option>
+        <option value="formal">Formal</option>
+        <option value="casual">Casual</option>
+        <option value="concise">Concise</option>
+      </select>
+      <p class="input-help">
+        Formal: Professional language. Casual: Friendly tone. Concise: Shorter responses.
+      </p>
+    </div>
+
+    <div class="llm-setting">
+      <label for="llm-prefix">Custom Instructions</label>
+      <textarea
+        id="llm-prefix"
+        class="form-textarea"
+        bind:value={llmCustomPrefix}
+        placeholder="Add custom instructions for AI responses... e.g., 'Always use TypeScript types' or 'Prefer functional components'"
+        rows="3"
+      ></textarea>
+      <p class="input-help">
+        These instructions will be added to all AI prompts for feature creation, bug processing, etc.
+      </p>
+    </div>
+
+    <button
+      class="btn-primary"
+      on:click={saveLlmSettings}
+      disabled={savingLlm}
+    >
+      {savingLlm ? 'Saving...' : 'Save AI Settings'}
+    </button>
+  </section>
+
+  <section class="settings-section">
+    <h2>Repositories</h2>
+    <p class="section-desc">
+      Manage the repositories chkd tracks.
+    </p>
+
+    <div class="repos-list">
+      {#if repos.length === 0}
+        <div class="no-repos">No repositories configured yet.</div>
+      {:else}
+        {#each repos as repo}
+          <div class="repo-item">
+            <div class="repo-info">
+              <span class="repo-name">{repo.name}</span>
+              <span class="repo-path">{repo.path}</span>
+            </div>
+            <button class="btn-icon" on:click={() => removeRepo(repo.id)} title="Remove repository">
+              ✕
+            </button>
+          </div>
+        {/each}
+      {/if}
+    </div>
+
+    <div class="add-repo-form">
+      <label for="repo-path">Add Repository</label>
+      <div class="input-row">
+        <input
+          id="repo-path"
+          type="text"
+          bind:value={newRepoPath}
+          placeholder="/path/to/your/project"
+          class="form-input"
+        />
+        <button
+          class="btn-primary"
+          on:click={addRepo}
+          disabled={addingRepo || !newRepoPath.trim()}
+        >
+          {addingRepo ? 'Adding...' : 'Add'}
+        </button>
+      </div>
+      <p class="input-help">
+        Enter the full path to a git repository containing a docs/SPEC.md file.
+      </p>
+    </div>
   </section>
 
   <section class="settings-section">
@@ -376,5 +670,171 @@
 
   .about-list li {
     margin-bottom: var(--space-xs);
+  }
+
+  /* Theme Options */
+  .theme-options {
+    display: flex;
+    gap: var(--space-md);
+  }
+
+  .theme-option {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-lg) var(--space-md);
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .theme-option:hover {
+    border-color: var(--primary);
+  }
+
+  .theme-option.selected {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.05);
+  }
+
+  .theme-option input {
+    display: none;
+  }
+
+  .theme-icon {
+    font-size: 24px;
+    margin-bottom: var(--space-sm);
+  }
+
+  .theme-label {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  .theme-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* Repositories */
+  .repos-list {
+    margin-bottom: var(--space-lg);
+  }
+
+  .no-repos {
+    padding: var(--space-lg);
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    background: var(--bg);
+    border-radius: var(--radius-md);
+  }
+
+  .repo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-md);
+    background: var(--bg);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm);
+  }
+
+  .repo-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .repo-name {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .repo-path {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .btn-icon {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+  }
+
+  .btn-icon:hover {
+    background: var(--bg-tertiary);
+    color: var(--error);
+  }
+
+  .add-repo-form {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--border);
+  }
+
+  .add-repo-form label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: var(--space-sm);
+    color: var(--text-muted);
+  }
+
+  /* LLM Settings */
+  .llm-setting {
+    margin-bottom: var(--space-lg);
+  }
+
+  .llm-setting label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: var(--space-sm);
+    color: var(--text-muted);
+  }
+
+  .form-select {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .form-select:focus {
+    border-color: var(--primary);
+    outline: none;
+  }
+
+  .form-textarea {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .form-textarea:focus {
+    border-color: var(--primary);
+    outline: none;
   }
 </style>

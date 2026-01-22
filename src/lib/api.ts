@@ -18,9 +18,11 @@ export interface SpecItem {
   id: string;
   title: string;
   description: string;
+  story?: string;
   completed: boolean;
   status: ItemStatus;
   priority: Priority;
+  tags: string[];
   children: SpecItem[];
   line: number;
 }
@@ -72,6 +74,21 @@ export async function getSpec(repoPath: string): Promise<ApiResponse<ParsedSpec>
   return res.json();
 }
 
+// Recent spec item type
+export interface RecentSpecItem {
+  id: string;
+  title: string;
+  type: 'added' | 'completed';
+  date: string;
+  commitHash: string;
+}
+
+// Get recent spec changes (recently added and completed items)
+export async function getRecentSpec(repoPath: string): Promise<ApiResponse<{ recentAdded: RecentSpecItem[]; recentCompleted: RecentSpecItem[] }>> {
+  const res = await fetch(`${BASE_URL}/api/spec/recent?repoPath=${encodeURIComponent(repoPath)}`);
+  return res.json();
+}
+
 // Get current status (human-friendly)
 export async function getStatus(repoPath: string): Promise<ApiResponse<any>> {
   const res = await fetch(`${BASE_URL}/api/status?repoPath=${encodeURIComponent(repoPath)}`);
@@ -81,6 +98,16 @@ export async function getStatus(repoPath: string): Promise<ApiResponse<any>> {
 // Get current session
 export async function getSession(repoPath: string): Promise<ApiResponse<Session | null>> {
   const res = await fetch(`${BASE_URL}/api/session?repoPath=${encodeURIComponent(repoPath)}`);
+  return res.json();
+}
+
+// Set session state manually
+export async function setSessionState(repoPath: string, status: string, mode?: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/session`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, status, mode })
+  });
   return res.json();
 }
 
@@ -247,11 +274,11 @@ export async function logAlsoDid(repoPath: string, description: string): Promise
 }
 
 // Edit an item's title and/or description
-export async function editItem(repoPath: string, itemId: string, title?: string, description?: string): Promise<ApiResponse<any>> {
+export async function editItem(repoPath: string, itemId: string, title?: string, description?: string, story?: string): Promise<ApiResponse<any>> {
   const res = await fetch(`${BASE_URL}/api/spec/edit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, itemId, title, description })
+    body: JSON.stringify({ repoPath, itemId, title, description, story })
   });
   return res.json();
 }
@@ -262,6 +289,16 @@ export async function deleteItem(repoPath: string, itemId: string): Promise<ApiR
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repoPath, itemId })
+  });
+  return res.json();
+}
+
+// Add a child item to an existing item
+export async function addChildItem(repoPath: string, parentId: string, title: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/spec/add-child`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, parentId, title })
   });
   return res.json();
 }
@@ -282,6 +319,16 @@ export async function setPriority(repoPath: string, itemId: string, priority: Pr
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repoPath, itemId, priority })
+  });
+  return res.json();
+}
+
+// Set item tags
+export async function setTags(repoPath: string, itemId: string, tags: string[]): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/spec/tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, itemId, tags })
   });
   return res.json();
 }
@@ -452,6 +499,60 @@ export async function removeFromQueue(repoPath: string, itemId: string): Promise
 }
 
 // ============================================
+// Attachments
+// ============================================
+
+export interface Attachment {
+  filename: string;
+  originalName: string;
+  itemType: string;
+  itemId: string;
+  size: number;
+  createdAt: string;
+  path: string;
+}
+
+export async function getAttachments(repoPath: string, itemType?: string, itemId?: string): Promise<ApiResponse<Attachment[]>> {
+  const params = new URLSearchParams({ repoPath });
+  if (itemType) params.append('itemType', itemType);
+  if (itemId) params.append('itemId', itemId);
+  const res = await fetch(`${BASE_URL}/api/attachments?${params}`);
+  return res.json();
+}
+
+export async function attachFile(repoPath: string, itemType: string, itemId: string, filePath: string): Promise<ApiResponse<Attachment>> {
+  const res = await fetch(`${BASE_URL}/api/attachments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, itemType, itemId, filePath })
+  });
+  return res.json();
+}
+
+export async function deleteAttachment(repoPath: string, filename: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/attachments`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, filename })
+  });
+  return res.json();
+}
+
+export async function uploadAttachment(repoPath: string, itemType: string, itemId: string, file: File): Promise<ApiResponse<Attachment>> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('repoPath', repoPath);
+  formData.append('itemType', itemType);
+  formData.append('itemId', itemId);
+
+  const res = await fetch(`${BASE_URL}/api/attachments/upload`, {
+    method: 'POST',
+    body: formData
+  });
+  return res.json();
+}
+
+// ============================================
 // Quick Wins
 // ============================================
 
@@ -497,5 +598,168 @@ export async function deleteQuickWin(repoPath: string, id: string): Promise<ApiR
 
 export async function getItemDurations(repoPath: string): Promise<ApiResponse<Record<string, number>>> {
   const res = await fetch(`${BASE_URL}/api/spec/durations?repoPath=${encodeURIComponent(repoPath)}`);
+  return res.json();
+}
+
+// ============================================
+// Anchor System (User-set task control)
+// ============================================
+
+export interface AnchorInfo {
+  id: string;
+  title: string;
+  setAt: string | null;
+  setBy: 'ui' | 'cli' | null;
+}
+
+export interface AnchorStatus {
+  anchor: AnchorInfo | null;
+  currentTask: { id: string; title: string; phase: number | null } | null;
+  onTrack: boolean;
+  status: string;
+}
+
+export async function getAnchor(repoPath: string): Promise<ApiResponse<AnchorStatus>> {
+  const res = await fetch(`${BASE_URL}/api/session/anchor?repoPath=${encodeURIComponent(repoPath)}`);
+  return res.json();
+}
+
+export async function setAnchor(repoPath: string, taskId: string, taskTitle: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/session/anchor`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, taskId, taskTitle, setBy: 'ui' })
+  });
+  return res.json();
+}
+
+export async function clearAnchor(repoPath: string): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/session/anchor`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath })
+  });
+  return res.json();
+}
+
+// ============================================
+// Multi-Worker System
+// ============================================
+
+export type WorkerStatus = 'pending' | 'waiting' | 'working' | 'paused' | 'merging' | 'merged' | 'error' | 'cancelled';
+
+export interface Worker {
+  id: string;
+  repoId: string;
+  username: string;
+  taskId: string | null;
+  taskTitle: string | null;
+  status: WorkerStatus;
+  message: string | null;
+  progress: number;
+  worktreePath: string | null;
+  branchName: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  heartbeatAt: string | null;
+  nextTaskId: string | null;
+  nextTaskTitle: string | null;
+}
+
+export type SignalType = 'decision' | 'help' | 'warning' | 'info';
+
+export interface ManagerSignal {
+  id: string;
+  repoId: string;
+  workerId: string | null;
+  type: SignalType;
+  message: string;
+  details: Record<string, any> | null;
+  actionRequired: boolean;
+  actionOptions: string[] | null;
+  createdAt: string;
+  dismissedAt: string | null;
+}
+
+export async function getWorkers(repoPath: string): Promise<ApiResponse<Worker[]>> {
+  const res = await fetch(`${BASE_URL}/api/workers?repoPath=${encodeURIComponent(repoPath)}`);
+  return res.json();
+}
+
+export async function getWorker(workerId: string): Promise<ApiResponse<Worker>> {
+  const res = await fetch(`${BASE_URL}/api/workers/${encodeURIComponent(workerId)}`);
+  return res.json();
+}
+
+export async function spawnWorker(
+  repoPath: string,
+  taskId: string,
+  taskTitle: string,
+  nextTaskId?: string,
+  nextTaskTitle?: string
+): Promise<ApiResponse<Worker>> {
+  const res = await fetch(`${BASE_URL}/api/workers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, taskId, taskTitle, nextTaskId, nextTaskTitle })
+  });
+  return res.json();
+}
+
+export async function updateWorker(
+  workerId: string,
+  updates: { status?: WorkerStatus; message?: string; progress?: number }
+): Promise<ApiResponse<Worker>> {
+  const res = await fetch(`${BASE_URL}/api/workers/${encodeURIComponent(workerId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates)
+  });
+  return res.json();
+}
+
+export async function deleteWorker(workerId: string, force?: boolean): Promise<ApiResponse<void>> {
+  const params = new URLSearchParams();
+  if (force) params.append('force', 'true');
+  const url = `${BASE_URL}/api/workers/${encodeURIComponent(workerId)}${params.toString() ? '?' + params : ''}`;
+  const res = await fetch(url, { method: 'DELETE' });
+  return res.json();
+}
+
+export async function completeWorker(workerId: string, autoMerge?: boolean): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/workers/${encodeURIComponent(workerId)}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ autoMerge })
+  });
+  return res.json();
+}
+
+export async function resolveWorkerConflict(
+  workerId: string,
+  strategy: 'ours' | 'theirs' | 'abort',
+  files?: string[]
+): Promise<ApiResponse<any>> {
+  const res = await fetch(`${BASE_URL}/api/workers/${encodeURIComponent(workerId)}/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strategy, files })
+  });
+  return res.json();
+}
+
+// Signals API
+export async function getSignals(repoPath: string, activeOnly?: boolean): Promise<ApiResponse<ManagerSignal[]>> {
+  const params = new URLSearchParams({ repoPath });
+  if (activeOnly) params.append('activeOnly', 'true');
+  const res = await fetch(`${BASE_URL}/api/signals?${params}`);
+  return res.json();
+}
+
+export async function dismissSignal(signalId: string): Promise<ApiResponse<void>> {
+  const res = await fetch(`${BASE_URL}/api/signals/${encodeURIComponent(signalId)}`, {
+    method: 'DELETE'
+  });
   return res.json();
 }

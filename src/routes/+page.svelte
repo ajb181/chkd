@@ -2,9 +2,12 @@
   import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
   import { marked } from 'marked';
-  import { getSpec, getSession, skipItem as skipItemApi, editItem as editItemApi, deleteItem as deleteItemApi, moveItem as moveItemApi, setPriority as setPriorityApi, getRepos, addRepo, getProposals, getQueue, addToQueue, removeFromQueue, getBugs, polishBug, getQuickWins, createQuickWin, completeQuickWin, deleteQuickWin, getItemDurations } from '$lib/api';
-  import type { ParsedSpec, SpecArea, SpecItem, Session, ItemStatus, Priority, Repository, QueueItem, Bug, HandoverNote, QuickWin } from '$lib/api';
+  import { getSpec, getSession, setSessionState, tickItem, skipItem as skipItemApi, editItem as editItemApi, deleteItem as deleteItemApi, addChildItem as addChildItemApi, moveItem as moveItemApi, setPriority as setPriorityApi, setTags as setTagsApi, getRepos, addRepo, getProposals, getQueue, addToQueue, removeFromQueue, getBugs, polishBug, getQuickWins, createQuickWin, completeQuickWin, deleteQuickWin, getItemDurations, getAnchor, setAnchor, clearAnchor, getAttachments, attachFile, deleteAttachment, uploadAttachment, getWorkers, getSignals, spawnWorker, deleteWorker, updateWorker, dismissSignal, resolveWorkerConflict } from '$lib/api';
+  import type { Attachment, Worker, ManagerSignal, WorkerStatus } from '$lib/api';
+  import type { ParsedSpec, SpecArea, SpecItem, Session, ItemStatus, Priority, Repository, QueueItem, Bug, HandoverNote, QuickWin, AnchorInfo } from '$lib/api';
   import FeatureCapture from '$lib/components/FeatureCapture.svelte';
+  import SplitBrainView from '$lib/components/SplitBrainView.svelte';
+  import ConflictResolution from '$lib/components/ConflictResolution.svelte';
 
   // Terminal state - dynamic import to avoid SSR issues with xterm.js
   let showTerminal = false;
@@ -71,12 +74,76 @@
     completedItems: number;
     totalItems: number;
     queueCount: number;          // Items in queue
+    lastActivity: string | null; // ISO timestamp of last activity
+    workers: Worker[];           // Active workers for this repo
+    signals: ManagerSignal[];    // Active signals needing attention
   }
   let repoStatuses: Map<string, RepoStatus> = new Map();
 
   // Quick queue input for repo cards
   let quickQueueRepoId: string | null = null;
   let quickQueueInput = getDraft('queueInput');
+
+  // Spawn worker modal
+  let showSpawnWorker = false;
+  let spawnWorkerRepoId: string | null = null;
+  let spawnTaskId = '';
+  let spawnTaskTitle = '';
+  let spawningWorker = false;
+
+  // Conflict resolution modal
+  let showConflictResolution = false;
+  let conflictWorker: Worker | null = null;
+  let conflictSignal: ManagerSignal | null = null;
+
+  // Drag-to-scroll for repo cards
+  let repoCardsScrollEl: HTMLElement;
+  let isDragging = false;
+  let hasDragged = false;
+  let dragStartX = 0;
+  let scrollStartX = 0;
+  const DRAG_THRESHOLD = 5;
+
+  function handleDragStart(e: MouseEvent) {
+    // Skip inputs but allow buttons (we'll handle click prevention)
+    if ((e.target as HTMLElement).closest('input')) return;
+    isDragging = true;
+    hasDragged = false;
+    dragStartX = e.pageX;
+    scrollStartX = repoCardsScrollEl.scrollLeft;
+  }
+
+  function handleDragMove(e: MouseEvent) {
+    if (!isDragging) return;
+    const dx = e.pageX - dragStartX;
+    if (Math.abs(dx) > DRAG_THRESHOLD) {
+      hasDragged = true;
+      repoCardsScrollEl.style.cursor = 'grabbing';
+      repoCardsScrollEl.style.userSelect = 'none';
+    }
+    if (hasDragged) {
+      e.preventDefault();
+      repoCardsScrollEl.scrollLeft = scrollStartX - dx;
+    }
+  }
+
+  function handleDragEnd() {
+    isDragging = false;
+    repoCardsScrollEl.style.cursor = 'grab';
+    repoCardsScrollEl.style.userSelect = '';
+    // Reset hasDragged after a tick to allow click handler to check it
+    setTimeout(() => { hasDragged = false; }, 0);
+  }
+
+  function handleCardClick(e: MouseEvent, callback: () => void) {
+    // If user dragged, don't trigger the click
+    if (hasDragged) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    callback();
+  }
   $: saveDraft('queueInput', quickQueueInput);
 
   // Get repoPath from URL or use first available repo
@@ -86,12 +153,18 @@
 
   let spec: ParsedSpec | null = null;
   let session: Session | null = null;
+  let anchor: AnchorInfo | null = null;
+  let anchorOnTrack = true;
+  let settingAnchor = false;
   let loading = true;
   let error: string | null = null;
 
   // View mode
   type ViewMode = 'areas' | 'todo';
   let viewMode: ViewMode = 'todo';
+
+  // Tag filtering
+  let selectedTagFilter: string | null = null;
 
   // Quick capture (simple)
   let captureInput = '';
@@ -111,6 +184,7 @@
   let editing = false;
   let editTitle = '';
   let editDescription = '';
+  let editStory = '';
 
   // Filter
   let filterText = '';
@@ -135,6 +209,7 @@
   let showAllBugs = false;
   let bugInput = getDraft('bugInput');
   $: saveDraft('bugInput', bugInput);
+  let newBugSeverity: 'critical' | 'high' | 'medium' | 'low' = 'medium';
   let addingBug = false;
   let expandedBugId: string | null = null;
   let currentBugIndex = 0;
@@ -149,6 +224,59 @@
   let bugPolishedTitle = '';
   let bugOriginalTitle = '';
 
+  // Bug creation attachment
+  let bugCreationFile: File | null = null;
+  let bugCreationFileInputRef: HTMLInputElement;
+
+  function handleBugCreationFileSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      bugCreationFile = input.files[0];
+    }
+  }
+
+  function clearBugCreationFile() {
+    bugCreationFile = null;
+    if (bugCreationFileInputRef) bugCreationFileInputRef.value = '';
+  }
+
+  // Bug attachments
+  let bugAttachments: Map<string, Attachment[]> = new Map();
+  let attachingFile = false;
+  let bugFileInput: HTMLInputElement;
+
+  async function loadBugAttachments(bugId: string) {
+    const res = await getAttachments(repoPath, 'bug', bugId);
+    if (res.success && res.data) {
+      bugAttachments.set(bugId, res.data);
+      bugAttachments = bugAttachments; // Trigger reactivity
+    }
+  }
+
+  async function handleBugFileSelect(bugId: string, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || attachingFile) return;
+
+    attachingFile = true;
+    try {
+      const res = await uploadAttachment(repoPath, 'bug', bugId, file);
+      if (res.success) {
+        await loadBugAttachments(bugId);
+      }
+    } finally {
+      attachingFile = false;
+      input.value = ''; // Reset input
+    }
+  }
+
+  async function handleDeleteAttachment(filename: string, bugId: string) {
+    const res = await deleteAttachment(repoPath, filename);
+    if (res.success) {
+      await loadBugAttachments(bugId);
+    }
+  }
+
   // Quick Wins
   let quickWins: QuickWin[] = [];
   let quickWinsExpanded = false;
@@ -159,8 +287,28 @@
   let editingQuickWinId: string | null = null;
   let editQuickWinTitle = '';
   let savingQuickWin = false;
+  let expandedQuickWinId: string | null = null;
+
+  // Quick Win attachments
+  let qwAttachments: Map<string, Attachment[]> = new Map();
+  let qwAttachingFile = false;
 
   $: openQuickWins = quickWins.filter(w => w.status === 'open');
+
+  // Recent Activity
+  import { getRecentSpec, type RecentSpecItem } from '$lib/api';
+  let recentAdded: RecentSpecItem[] = [];
+  let recentCompleted: RecentSpecItem[] = [];
+  let recentExpanded = false;
+
+  async function loadRecentActivity() {
+    if (!repoPath) return;
+    const res = await getRecentSpec(repoPath);
+    if (res.success && res.data) {
+      recentAdded = res.data.recentAdded;
+      recentCompleted = res.data.recentCompleted;
+    }
+  }
 
   // Blocked/Roadblocked items
   let blockedExpanded = false;
@@ -266,6 +414,47 @@
     editQuickWinTitle = '';
   }
 
+  async function loadQWAttachments(winId: string) {
+    const res = await getAttachments(repoPath, 'quickwin', winId);
+    if (res.success && res.data) {
+      qwAttachments.set(winId, res.data);
+      qwAttachments = qwAttachments; // Trigger reactivity
+    }
+  }
+
+  async function handleQWFileSelect(winId: string, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || qwAttachingFile) return;
+
+    qwAttachingFile = true;
+    try {
+      const res = await uploadAttachment(repoPath, 'quickwin', winId, file);
+      if (res.success) {
+        await loadQWAttachments(winId);
+      }
+    } finally {
+      qwAttachingFile = false;
+      input.value = ''; // Reset input
+    }
+  }
+
+  async function handleDeleteQWAttachment(filename: string, winId: string) {
+    const res = await deleteAttachment(repoPath, filename);
+    if (res.success) {
+      await loadQWAttachments(winId);
+    }
+  }
+
+  function toggleQuickWinExpand(win: QuickWin) {
+    if (expandedQuickWinId === win.id) {
+      expandedQuickWinId = null;
+    } else {
+      expandedQuickWinId = win.id;
+      loadQWAttachments(win.id);
+    }
+  }
+
   async function startEditBug(bug: Bug) {
     editingBugId = bug.id;
     editBugTitle = bug.title;
@@ -301,6 +490,24 @@
     editBugTitle = '';
     editBugDescription = '';
     editBugSeverity = 'medium';
+  }
+
+  async function cycleBugSeverity(bug: Bug) {
+    const severities: Array<'critical' | 'high' | 'medium' | 'low'> = ['low', 'medium', 'high', 'critical'];
+    const currentIdx = severities.indexOf(bug.severity as any);
+    const nextSeverity = severities[(currentIdx + 1) % severities.length];
+
+    await fetch('/api/bugs/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bugId: bug.id,
+        title: bug.title,
+        description: bug.description,
+        severity: nextSeverity
+      })
+    });
+    await loadBugs();
   }
 
   // Handover notes
@@ -526,6 +733,21 @@
     return `${hours}h ${remainingMins}m`;
   }
 
+  function formatTimeAgo(isoString: string | null): string | null {
+    if (!isoString) return null;
+    const date = new Date(isoString + 'Z'); // Add Z for UTC
+    const now = Date.now();
+    const diffMs = now - date.getTime();
+    if (diffMs < 0) return null;
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
+
   onMount(() => {
     let interval: ReturnType<typeof setInterval>;
 
@@ -535,11 +757,9 @@
       await loadData();
     })();
 
-    // Poll for updates every 2 seconds when building
+    // Poll for updates every 2 seconds
     interval = setInterval(async () => {
-      if (session?.status === 'building') {
-        await loadData();
-      }
+      await loadData();
     }, 2000);
 
     // Rotate through bugs every 3 seconds
@@ -616,11 +836,12 @@
           taskProgress,
           completedItems: specRes.data?.completedItems || 0,
           totalItems: specRes.data?.totalItems || 0,
-          queueCount: queueRes.data?.items?.length || 0
+          queueCount: queueRes.data?.items?.length || 0,
+          lastActivity: sessionRes.data?.lastActivity || null
         };
         return { repoId: repo.id, status };
       } catch {
-        return { repoId: repo.id, status: { currentTask: null, currentItem: null, status: 'idle' as const, repoProgress: 0, taskProgress: 0, completedItems: 0, totalItems: 0, queueCount: 0 } };
+        return { repoId: repo.id, status: { currentTask: null, currentItem: null, status: 'idle' as const, repoProgress: 0, taskProgress: 0, completedItems: 0, totalItems: 0, queueCount: 0, lastActivity: null } };
       }
     });
 
@@ -670,14 +891,18 @@
   async function loadData() {
     if (!repoPath) return;
     try {
-      const [specRes, sessionRes, proposalsRes, queueRes, bugsRes, quickWinsRes, durationsRes] = await Promise.all([
+      const [specRes, sessionRes, proposalsRes, queueRes, bugsRes, quickWinsRes, durationsRes, anchorRes, workersRes, signalsRes, recentRes] = await Promise.all([
         getSpec(repoPath),
         getSession(repoPath),
         getProposals(repoPath),
         getQueue(repoPath),
         getBugs(repoPath),
         getQuickWins(repoPath),
-        getItemDurations(repoPath)
+        getItemDurations(repoPath),
+        getAnchor(repoPath),
+        getWorkers(repoPath),
+        getSignals(repoPath, true), // activeOnly
+        getRecentSpec(repoPath)
       ]);
 
       if (proposalsRes.success) {
@@ -694,6 +919,11 @@
 
       if (quickWinsRes.success && quickWinsRes.data) {
         quickWins = quickWinsRes.data;
+      }
+
+      if (recentRes.success && recentRes.data) {
+        recentAdded = recentRes.data.recentAdded;
+        recentCompleted = recentRes.data.recentCompleted;
       }
 
       if (durationsRes.success && durationsRes.data) {
@@ -718,6 +948,11 @@
         handoverNotes = session?.handoverNotes || [];
       }
 
+      if (anchorRes.success && anchorRes.data) {
+        anchor = anchorRes.data.anchor;
+        anchorOnTrack = anchorRes.data.onTrack;
+      }
+
       // Update current repo's status in the cards
       if (currentRepo && specRes.success && sessionRes.success) {
         // Calculate task progress
@@ -734,6 +969,16 @@
           }
         }
 
+        // Get active workers (not merged/cancelled)
+        const activeWorkers = (workersRes.success && Array.isArray(workersRes.data))
+          ? workersRes.data.filter((w: Worker) => !['merged', 'cancelled'].includes(w.status))
+          : [];
+
+        // Get active signals (not dismissed)
+        const activeSignals = (signalsRes.success && Array.isArray(signalsRes.data))
+          ? signalsRes.data
+          : [];
+
         const newStatus: RepoStatus = {
           currentTask: session?.currentTask?.title || null,
           currentItem: session?.currentItem?.title || null,
@@ -745,7 +990,10 @@
           taskProgress,
           completedItems: spec?.completedItems || 0,
           totalItems: spec?.totalItems || 0,
-          queueCount: queueItems.length
+          queueCount: queueItems.length,
+          lastActivity: session?.lastActivity || null,
+          workers: activeWorkers,
+          signals: activeSignals
         };
         repoStatuses.set(currentRepo.id, newStatus);
         repoStatuses = repoStatuses; // Trigger reactivity
@@ -779,6 +1027,71 @@
     }
   }
 
+  // Manual session state control
+  async function handleSetSessionState(status: string, mode?: string) {
+    if (!repoPath) return;
+    const res = await setSessionState(repoPath, status, mode);
+    if (res.success) {
+      await loadData();
+    }
+  }
+
+  // Click to tick checklist item
+  async function handleTickItem(itemId: string) {
+    if (!repoPath) return;
+    const res = await tickItem(repoPath, itemId);
+    if (res.success) {
+      await loadData();
+    }
+  }
+
+  // Delete a child/subtask item
+  async function handleDeleteChild(childId: string) {
+    if (!repoPath) return;
+    const res = await deleteItemApi(repoPath, childId);
+    if (res.success) {
+      await loadData();
+    }
+  }
+
+  // Add a child/subtask to an item
+  let newSubtaskInput = '';
+  let addingSubtask = false;
+  async function handleAddSubtask(parentId: string) {
+    if (!repoPath || !newSubtaskInput.trim() || addingSubtask) return;
+    addingSubtask = true;
+    try {
+      const res = await addChildItemApi(repoPath, parentId, newSubtaskInput.trim());
+      if (res.success) {
+        newSubtaskInput = '';
+        await loadData();
+      }
+    } finally {
+      addingSubtask = false;
+    }
+  }
+
+  // Edit subtask title inline
+  let editingChildId: string | null = null;
+  let editingChildTitle = '';
+  function startEditChild(childId: string, currentTitle: string) {
+    editingChildId = childId;
+    editingChildTitle = currentTitle;
+  }
+  async function saveEditChild() {
+    if (!repoPath || !editingChildId || !editingChildTitle.trim()) return;
+    const res = await editItemApi(repoPath, editingChildId, editingChildTitle.trim());
+    if (res.success) {
+      editingChildId = null;
+      editingChildTitle = '';
+      await loadData();
+    }
+  }
+  function cancelEditChild() {
+    editingChildId = null;
+    editingChildTitle = '';
+  }
+
   // Quick queue from repo cards
   let addingQuickQueue = false;
   async function handleQuickQueueSubmit(targetRepoPath: string) {
@@ -803,6 +1116,156 @@
     featureCaptureInitialTitle = captureInput.trim();
     captureInput = '';
     showFeatureCapture = true;
+  }
+
+  // Signal handlers
+  async function handleDismissSignal(signalId: string) {
+    try {
+      const res = await dismissSignal(signalId);
+      if (res.success) {
+        await loadData();
+      }
+    } catch (e) {
+      console.error('Failed to dismiss signal:', e);
+    }
+  }
+
+  async function handleSignalAction(signal: ManagerSignal, action: string) {
+    console.log('Signal action:', signal.id, action);
+
+    // Handle conflict resolution actions
+    if (action === 'View Conflicts' && isConflictSignal(signal)) {
+      const worker = getWorkerForSignal(signal);
+      if (worker) {
+        openConflictResolution(worker, signal);
+        return;
+      }
+    }
+
+    // Handle quick conflict resolution from signal actions
+    if (action === 'Keep Worker Changes' && signal.workerId) {
+      await resolveWorkerConflict(signal.workerId, 'ours');
+      await handleDismissSignal(signal.id);
+      await loadData();
+      return;
+    }
+
+    if (action === 'Keep Main' && signal.workerId) {
+      await resolveWorkerConflict(signal.workerId, 'theirs');
+      await handleDismissSignal(signal.id);
+      await loadData();
+      return;
+    }
+
+    if (action === 'Abort' && signal.workerId) {
+      await resolveWorkerConflict(signal.workerId, 'abort');
+      await handleDismissSignal(signal.id);
+      await loadData();
+      return;
+    }
+
+    // Default: just dismiss the signal
+    await handleDismissSignal(signal.id);
+  }
+
+  // Spawn worker handlers
+  function openSpawnWorker(repo: Repository) {
+    spawnWorkerRepoId = repo.id;
+    spawnTaskId = '';
+    spawnTaskTitle = '';
+    showSpawnWorker = true;
+  }
+
+  async function handleSpawnWorker() {
+    if (!spawnWorkerRepoId || !spawnTaskId.trim() || !spawnTaskTitle.trim() || spawningWorker) return;
+
+    const repo = repos.find(r => r.id === spawnWorkerRepoId);
+    if (!repo) return;
+
+    spawningWorker = true;
+    try {
+      const res = await spawnWorker(repo.path, spawnTaskId.trim(), spawnTaskTitle.trim());
+      if (res.success) {
+        showSpawnWorker = false;
+        spawnWorkerRepoId = null;
+        spawnTaskId = '';
+        spawnTaskTitle = '';
+        await loadData();
+      } else {
+        console.error('Failed to spawn worker:', res.error);
+      }
+    } finally {
+      spawningWorker = false;
+    }
+  }
+
+  // Worker action handlers
+  async function handleWorkerAction(workerId: string, action: 'pause' | 'resume' | 'stop') {
+    try {
+      if (action === 'stop') {
+        const res = await deleteWorker(workerId, true);
+        if (res.success) {
+          await loadData();
+        }
+      } else {
+        const status = action === 'pause' ? 'paused' : 'working';
+        const res = await updateWorker(workerId, { status });
+        if (res.success) {
+          await loadData();
+        }
+      }
+    } catch (e) {
+      console.error(`Failed to ${action} worker:`, e);
+    }
+  }
+
+  function handleViewWorkerCode(worktreePath: string | null) {
+    if (!worktreePath) return;
+    // Open terminal or code editor to the worktree path
+    // For now, just log - could integrate with terminal component
+    console.log('View code at:', worktreePath);
+    // Could dispatch to terminal or show a modal with path
+    alert(`Worker code is at:\n${worktreePath}`);
+  }
+
+  // Conflict resolution handlers
+  function openConflictResolution(worker: Worker, signal: ManagerSignal) {
+    conflictWorker = worker;
+    conflictSignal = signal;
+    showConflictResolution = true;
+  }
+
+  async function handleResolveConflict(e: CustomEvent<{ workerId: string; strategy: 'ours' | 'theirs' | 'abort'; signalId: string }>) {
+    const { workerId, strategy, signalId } = e.detail;
+    try {
+      const res = await resolveWorkerConflict(workerId, strategy);
+      if (res.success) {
+        showConflictResolution = false;
+        conflictWorker = null;
+        conflictSignal = null;
+        await loadData();
+      } else {
+        console.error('Failed to resolve conflict:', res.error);
+        alert(`Failed to resolve conflict: ${res.error}`);
+      }
+    } catch (error) {
+      console.error('Error resolving conflict:', error);
+    }
+  }
+
+  // Check if a signal is a conflict signal that can be resolved
+  function isConflictSignal(signal: ManagerSignal): boolean {
+    return signal.type === 'help' &&
+           signal.actionRequired === true &&
+           signal.actionOptions?.includes('View Conflicts');
+  }
+
+  // Find worker for a signal
+  function getWorkerForSignal(signal: ManagerSignal): Worker | null {
+    if (!signal.workerId || !currentRepo) return null;
+    const status = repoStatuses.get(currentRepo.id);
+    if (!status?.workers) return null;
+    return status.workers.find(w => w.id === signal.workerId) || null;
   }
 
   async function handleAddBug() {
@@ -833,11 +1296,20 @@
     const res = await fetch('/api/bugs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoPath, title, severity: 'medium' })
+      body: JSON.stringify({ repoPath, title, severity: newBugSeverity })
     });
     const data = await res.json();
     if (data.success) {
+      const newBugId = data.data?.id;
+
+      // Attach file if one was selected during creation
+      if (bugCreationFile && newBugId) {
+        await uploadAttachment(repoPath, 'bug', newBugId, bugCreationFile);
+        clearBugCreationFile();
+      }
+
       bugInput = '';
+      newBugSeverity = 'medium';
       bugPolishPending = false;
       bugOriginalTitle = '';
       bugPolishedTitle = '';
@@ -847,6 +1319,12 @@
         bugs = bugsRes.data;
       }
       bugsExpanded = true;
+
+      // If we attached a file, expand the bug to show it
+      if (newBugId && bugCreationFile) {
+        expandedBugId = newBugId;
+        loadBugAttachments(newBugId);
+      }
     }
   }
 
@@ -908,16 +1386,37 @@
     await loadData();
   }
 
+  async function handleSetAnchor(item: SpecItem) {
+    settingAnchor = true;
+    try {
+      await setAnchor(repoPath, item.id, item.title);
+      await loadData();
+    } finally {
+      settingAnchor = false;
+    }
+  }
+
+  async function handleClearAnchor() {
+    settingAnchor = true;
+    try {
+      await clearAnchor(repoPath);
+      await loadData();
+    } finally {
+      settingAnchor = false;
+    }
+  }
+
   function startEdit() {
     if (!selectedFeature) return;
     editTitle = selectedFeature.item.title;
     editDescription = selectedFeature.item.description;
+    editStory = selectedFeature.item.story || '';
     editing = true;
   }
 
   async function saveEdit() {
     if (!selectedFeature) return;
-    await editItemApi(repoPath, selectedFeature.item.id, editTitle, editDescription);
+    await editItemApi(repoPath, selectedFeature.item.id, editTitle, editDescription, editStory);
     editing = false;
     await loadData();
     // Update selected feature after reload
@@ -969,6 +1468,97 @@
         }
       }
     }
+  }
+
+  // Tags editing
+  let editingTags = false;
+  let tagInput = '';
+  let savingTags = false;
+
+  function startEditTags() {
+    if (!selectedFeature) return;
+    editingTags = true;
+    tagInput = selectedFeature.item.tags.join(' ');
+  }
+
+  function cancelEditTags() {
+    editingTags = false;
+    tagInput = '';
+  }
+
+  async function saveTagsEdit() {
+    if (!selectedFeature) return;
+    savingTags = true;
+    try {
+      // Parse tags from input: space-separated, lowercase, alphanumeric + hyphens/underscores
+      const tags = tagInput
+        .split(/\s+/)
+        .map(t => t.trim().toLowerCase().replace(/^#/, ''))
+        .filter(t => t.length > 0 && /^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/.test(t));
+
+      await setTagsApi(repoPath, selectedFeature.item.id, tags);
+      await loadData();
+
+      // Update selected feature after reload
+      if (spec) {
+        for (const area of spec.areas) {
+          const found = findInItems(area.items, selectedFeature.item.id);
+          if (found) {
+            selectedFeature = { item: found, area };
+            break;
+          }
+        }
+      }
+
+      editingTags = false;
+      tagInput = '';
+    } finally {
+      savingTags = false;
+    }
+  }
+
+  // Spec item attachments
+  let itemAttachments: Attachment[] = [];
+  let itemAttaching = false;
+
+  async function loadItemAttachments(itemId: string) {
+    const res = await getAttachments(repoPath, 'item', itemId);
+    if (res.success && res.data) {
+      itemAttachments = res.data;
+    } else {
+      itemAttachments = [];
+    }
+  }
+
+  async function handleItemFileSelect(event: Event) {
+    if (!selectedFeature) return;
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || itemAttaching) return;
+
+    itemAttaching = true;
+    try {
+      const res = await uploadAttachment(repoPath, 'item', selectedFeature.item.id, file);
+      if (res.success) {
+        await loadItemAttachments(selectedFeature.item.id);
+      }
+    } finally {
+      itemAttaching = false;
+      input.value = ''; // Reset input
+    }
+  }
+
+  async function handleDeleteItemAttachment(filename: string) {
+    if (!selectedFeature) return;
+    const res = await deleteAttachment(repoPath, filename);
+    if (res.success) {
+      await loadItemAttachments(selectedFeature.item.id);
+    }
+  }
+
+  // Load attachments when feature is selected
+  $: if (selectedFeature) {
+    loadItemAttachments(selectedFeature.item.id);
   }
 
   function getStatusIcon(status: ItemStatus): string {
@@ -1078,7 +1668,48 @@
     return '';
   }
 
-  $: filteredAreas = spec?.areas.filter(a => a.items.length > 0) || [];
+  // Collect all unique tags from spec
+  $: allTags = (() => {
+    if (!spec) return [];
+    const tags = new Set<string>();
+    const collectTags = (items: SpecItem[]) => {
+      for (const item of items) {
+        for (const tag of item.tags || []) {
+          tags.add(tag);
+        }
+        collectTags(item.children);
+      }
+    };
+    for (const area of spec.areas) {
+      collectTags(area.items);
+    }
+    return Array.from(tags).sort();
+  })();
+
+  // Filter areas by tag (if selected)
+  $: filteredAreas = (() => {
+    if (!spec) return [];
+    const areas = spec.areas.filter(a => a.items.length > 0);
+    if (!selectedTagFilter) return areas;
+
+    // Filter items within each area by tag
+    return areas.map(area => {
+      const filterItems = (items: SpecItem[]): SpecItem[] => {
+        return items.filter(item => {
+          const hasTag = item.tags?.includes(selectedTagFilter!) || false;
+          const childrenWithTag = filterItems(item.children);
+          return hasTag || childrenWithTag.length > 0;
+        }).map(item => ({
+          ...item,
+          children: filterItems(item.children)
+        }));
+      };
+      return {
+        ...area,
+        items: filterItems(area.items)
+      };
+    }).filter(area => area.items.length > 0);
+  })();
 
   // Get current task's checklist from spec (inline for reactivity)
   $: realChecklist = (() => {
@@ -1098,7 +1729,17 @@
     return [];
   })();
   // Explicitly depend on spec so Svelte tracks the reactivity
-  $: groupedTodos = spec ? getGroupedTodos() : [];
+  $: groupedTodos = (() => {
+    if (!spec) return [];
+    const todos = getGroupedTodos();
+    if (!selectedTagFilter) return todos;
+
+    // Filter items by tag
+    return todos.map(group => ({
+      ...group,
+      items: group.items.filter(({ item }) => item.tags?.includes(selectedTagFilter!) || false)
+    })).filter(group => group.items.length > 0);
+  })();
 
   // Keyboard handler for closing popups
   function handleKeydown(e: KeyboardEvent) {
@@ -1155,8 +1796,17 @@
 
   <!-- Repo Cards Strip -->
   <div class="repo-cards-strip">
-    <div class="repo-cards-scroll">
-      <button class="repo-card repo-card-add" on:click={() => showAddRepo = true} title="Add Repository">
+    <div
+      class="repo-cards-scroll"
+      bind:this={repoCardsScrollEl}
+      on:mousedown={handleDragStart}
+      on:mousemove={handleDragMove}
+      on:mouseup={handleDragEnd}
+      on:mouseleave={handleDragEnd}
+      role="region"
+      aria-label="Repository cards"
+    >
+      <button class="repo-card repo-card-add" on:click={(e) => handleCardClick(e, () => showAddRepo = true)} title="Add Repository">
         <span class="repo-card-plus">+</span>
         <span class="repo-card-add-label">Add Repo</span>
       </button>
@@ -1168,13 +1818,33 @@
           class:active={currentRepo?.id === repo.id}
           class:building={status?.status === 'building'}
           class:debugging={status?.status === 'debugging'}
-          on:click={() => selectRepo(repo)}
+          on:click={(e) => handleCardClick(e, () => selectRepo(repo))}
         >
           <div class="repo-card-header">
             <span class="repo-card-name">{repo.name}</span>
             <div class="repo-card-badges">
+              {#if status?.lastActivity && status.status !== 'idle'}
+                {@const timeAgo = formatTimeAgo(status.lastActivity)}
+                {#if timeAgo}
+                  <span class="repo-card-activity" title="Last activity">{timeAgo}</span>
+                {/if}
+              {/if}
               {#if status?.queueCount && status.queueCount > 0}
                 <span class="repo-card-queue-badge" title="Messages in queue">{status.queueCount}</span>
+              {/if}
+              {#if status?.workers && status.workers.length > 0}
+                {@const workingCount = status.workers.filter(w => w.status === 'working').length}
+                {@const conflictCount = status.workers.filter(w => w.status === 'paused').length}
+                {@const mergingCount = status.workers.filter(w => w.status === 'merging').length}
+                <span class="repo-card-workers-badge" title="{status.workers.length} worker{status.workers.length > 1 ? 's' : ''}" class:has-conflict={conflictCount > 0}>
+                  {#if conflictCount > 0}⚠️{:else if mergingCount > 0}🟡{:else}🟢{/if}
+                  {status.workers.length}
+                </span>
+              {/if}
+              {#if status?.signals && status.signals.length > 0}
+                <span class="repo-card-signals-badge" title="Signals needing attention">
+                  🔔 {status.signals.length}
+                </span>
               {/if}
               {#if status?.status === 'building'}
                 <span class="repo-card-status building">●</span>
@@ -1217,6 +1887,25 @@
               <span class="repo-card-pct">{status?.repoProgress || 0}%</span>
             {/if}
           </div>
+          <!-- Workers Strip -->
+          {#if status?.workers && status.workers.length > 0}
+            <div class="repo-card-workers">
+              {#each status.workers.slice(0, 3) as worker}
+                <div class="worker-chip" class:working={worker.status === 'working'} class:merging={worker.status === 'merging'} class:paused={worker.status === 'paused'} class:error={worker.status === 'error'} title="{worker.taskTitle || worker.taskId || 'Worker'}: {worker.message || worker.status}">
+                  <span class="worker-status">
+                    {#if worker.status === 'working'}🟢{:else if worker.status === 'merging'}🟡{:else if worker.status === 'paused'}⚠️{:else if worker.status === 'error'}🔴{:else}⏸️{/if}
+                  </span>
+                  <span class="worker-task">{worker.taskId || 'W'}</span>
+                  {#if worker.progress > 0}
+                    <span class="worker-progress">{worker.progress}%</span>
+                  {/if}
+                </div>
+              {/each}
+              {#if status.workers.length > 3}
+                <span class="workers-more">+{status.workers.length - 3}</span>
+              {/if}
+            </div>
+          {/if}
         </button>
         <!-- Quick message button (outside button to avoid nesting) -->
         {#if status?.status !== 'idle'}
@@ -1227,6 +1916,32 @@
           >
             💬
           </button>
+        {/if}
+        <!-- Spawn Worker button -->
+        <button
+          class="repo-card-spawn-btn"
+          on:click|stopPropagation={() => openSpawnWorker(repo)}
+          title="Spawn a worker"
+        >
+          👷
+        </button>
+        <!-- Signal preview (show first actionable signal) -->
+        {#if status?.signals && status.signals.length > 0}
+          {@const topSignal = status.signals[0]}
+          <div class="repo-card-signal" class:help={topSignal.type === 'help'} class:warning={topSignal.type === 'warning'} class:decision={topSignal.type === 'decision'}>
+            <span class="signal-icon">
+              {#if topSignal.type === 'help'}🆘{:else if topSignal.type === 'warning'}⚠️{:else if topSignal.type === 'decision'}❓{:else}ℹ️{/if}
+            </span>
+            <span class="signal-msg">{topSignal.message.length > 50 ? topSignal.message.slice(0, 47) + '...' : topSignal.message}</span>
+            {#if topSignal.actionRequired && topSignal.actionOptions}
+              <div class="signal-actions">
+                {#each topSignal.actionOptions.slice(0, 2) as action}
+                  <button class="signal-action-btn" on:click|stopPropagation={() => handleSignalAction(topSignal, action)}>{action}</button>
+                {/each}
+              </div>
+            {/if}
+            <button class="signal-dismiss" on:click|stopPropagation={() => handleDismissSignal(topSignal.id)} title="Dismiss">×</button>
+          </div>
         {/if}
         <!-- Quick queue input (shown below active card) -->
         {#if quickQueueRepoId === repo.id}
@@ -1295,38 +2010,65 @@
           {@const displayBugs = showAllBugs ? bugs : openBugsFiltered}
           <div class="bug-dropdown">
           <!-- Quick bug input -->
-          {#if bugPolishPending}
-            <div class="bug-polish-confirm">
-              <div class="bug-polish-header">AI suggests a cleaner title:</div>
-              <div class="bug-polish-compare">
-                <div class="bug-polish-original">
-                  <span class="polish-label">Original:</span>
-                  <span class="polish-text">{bugOriginalTitle}</span>
-                </div>
-                <div class="bug-polish-polished">
-                  <span class="polish-label">Polished:</span>
-                  <span class="polish-text">{bugPolishedTitle}</span>
-                </div>
+          <!-- Bug input area -->
+          <div class="bug-input-area">
+            <div class="bug-input-row">
+              <div class="bug-severity-picker">
+                <button type="button" class:selected={newBugSeverity === 'critical'} on:click={() => newBugSeverity = 'critical'} title="Critical">🔴</button>
+                <button type="button" class:selected={newBugSeverity === 'high'} on:click={() => newBugSeverity = 'high'} title="High">🟠</button>
+                <button type="button" class:selected={newBugSeverity === 'medium'} on:click={() => newBugSeverity = 'medium'} title="Medium">🟡</button>
+                <button type="button" class:selected={newBugSeverity === 'low'} on:click={() => newBugSeverity = 'low'} title="Low">🟢</button>
               </div>
-              <div class="bug-polish-actions">
-                <button class="polish-accept" on:click={acceptBugPolish}>Use polished</button>
-                <button class="polish-keep" on:click={keepOriginalBug}>Keep original</button>
-                <button class="polish-cancel" on:click={cancelBugPolish}>×</button>
-              </div>
-            </div>
-          {:else}
-            <form class="bug-input-form" on:submit|preventDefault={handleAddBug}>
-              <input
-                type="text"
-                class="bug-input"
-                placeholder="Quick add bug..."
+              <textarea
+                class="bug-textarea"
+                placeholder="Describe the bug..."
                 bind:value={bugInput}
                 disabled={addingBug}
+                rows="2"
+                on:input={(e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+                on:keydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddBug(); }}}
+              ></textarea>
+            </div>
+            <div class="bug-input-actions">
+              <input
+                type="file"
+                bind:this={bugCreationFileInputRef}
+                on:change={handleBugCreationFileSelect}
+                style="display: none;"
               />
-              <button type="submit" class="bug-add-btn" disabled={!bugInput.trim() || addingBug}>
-                {addingBug ? '...' : '+'}
+              <button
+                class="bug-attach-btn"
+                class:has-file={bugCreationFile}
+                type="button"
+                title={bugCreationFile ? `Attached: ${bugCreationFile.name} (click to remove)` : 'Attach file'}
+                on:click={() => {
+                  if (bugCreationFile) {
+                    clearBugCreationFile();
+                  } else {
+                    bugCreationFileInputRef?.click();
+                  }
+                }}
+              >
+                {bugCreationFile ? '📎✓' : '📎'}
               </button>
-            </form>
+              <button class="bug-submit-btn" on:click={handleAddBug} disabled={!bugInput.trim() || addingBug}>
+                {addingBug ? 'Adding...' : 'Add Bug'}
+              </button>
+            </div>
+          </div>
+
+          <!-- AI polish suggestion (inline, non-blocking) -->
+          {#if bugPolishPending}
+            <div class="bug-polish-inline">
+              <div class="polish-suggestion">
+                <span class="polish-icon">✨</span>
+                <span class="polish-text">{bugPolishedTitle}</span>
+              </div>
+              <div class="polish-actions">
+                <button class="polish-use" on:click={acceptBugPolish}>Use</button>
+                <button class="polish-dismiss" on:click={cancelBugPolish}>×</button>
+              </div>
+            </div>
           {/if}
 
           {#if displayBugs.length === 0}
@@ -1340,9 +2082,9 @@
                   class:fixed={bug.status === 'fixed' || bug.status === 'wont_fix'}
                   class:expanded={isExpanded}
                 >
-                  <button class="bug-item-header" on:click={() => expandedBugId = isExpanded ? null : bug.id}>
+                  <button class="bug-item-header" on:click={() => { expandedBugId = isExpanded ? null : bug.id; if (!isExpanded) loadBugAttachments(bug.id); }}>
                     <code class="bug-id-code" title="Click to copy" on:click|stopPropagation={() => navigator.clipboard.writeText(bug.id.slice(0, 6))}>{bug.id.slice(0, 6)}</code>
-                    <span class="bug-severity {bug.severity}" title={bug.severity}>
+                    <span class="bug-severity-btn {bug.severity}" role="button" tabindex="0" title="Click to cycle severity" on:click|stopPropagation={() => cycleBugSeverity(bug)} on:keydown|stopPropagation={(e) => e.key === 'Enter' && cycleBugSeverity(bug)}>
                       {bug.severity === 'critical' ? '🔴' : bug.severity === 'high' ? '🟠' : bug.severity === 'medium' ? '🟡' : '🟢'}
                     </span>
                     <span class="bug-item-title">{@html markedInline(bug.title)}</span>
@@ -1399,6 +2141,37 @@
                           </span>
                           <button class="bug-edit-btn" on:click|stopPropagation={() => startEditBug(bug)}>Edit</button>
                         </div>
+
+                        <!-- Attachments -->
+                        {@const attachments = bugAttachments.get(bug.id) || []}
+                        <div class="bug-attachments" on:click|stopPropagation>
+                          {#if attachments.length > 0}
+                            <div class="attachment-list">
+                              {#each attachments as att}
+                                <div class="attachment-item">
+                                  <span class="attachment-icon">📎</span>
+                                  <span class="attachment-name" title={att.path}>{att.originalName}</span>
+                                  <button class="attachment-delete" on:click={() => handleDeleteAttachment(att.filename, bug.id)} title="Remove">×</button>
+                                </div>
+                              {/each}
+                            </div>
+                          {/if}
+                          <div class="attachment-upload">
+                            <input
+                              type="file"
+                              class="attachment-file-input"
+                              on:change={(e) => handleBugFileSelect(bug.id, e)}
+                              disabled={attachingFile}
+                            />
+                            <button
+                              class="attachment-pick-btn"
+                              on:click={(e) => e.currentTarget.previousElementSibling?.click()}
+                              disabled={attachingFile}
+                            >
+                              {attachingFile ? 'Uploading...' : '📎 Attach File'}
+                            </button>
+                          </div>
+                        </div>
                       {/if}
                     </div>
                   {/if}
@@ -1452,26 +2225,30 @@
         <div class="quick-win-backdrop" on:click={() => quickWinsExpanded = false}></div>
         {@const displayWins = showAllQuickWins ? quickWins : openQuickWins}
         <div class="quick-win-dropdown">
-          <!-- Quick add input -->
-          <form class="quick-win-input-form" on:submit|preventDefault={handleAddQuickWin}>
-            <input
-              type="text"
-              class="quick-win-input"
+          <!-- Quick add input - redesigned -->
+          <div class="qw-input-area">
+            <textarea
+              class="qw-textarea"
               placeholder="Add a quick win..."
               bind:value={quickWinInput}
               disabled={addingQuickWin}
-            />
-            <button type="submit" class="quick-win-add-btn" disabled={!quickWinInput.trim() || addingQuickWin}>
-              {addingQuickWin ? '...' : '+'}
+              rows="2"
+              on:input={(e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'; }}
+              on:keydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddQuickWin(); }}}
+            ></textarea>
+            <button class="qw-submit-btn" on:click={handleAddQuickWin} disabled={!quickWinInput.trim() || addingQuickWin}>
+              {addingQuickWin ? '...' : 'Add'}
             </button>
-          </form>
+          </div>
 
           {#if displayWins.length === 0}
             <p class="quick-win-empty">{quickWins.length === 0 ? 'No quick wins yet' : 'All done!'}</p>
           {:else}
             <ul class="quick-win-list">
               {#each displayWins as win}
-                <li class="quick-win-item" class:done={win.status === 'done'} class:editing={editingQuickWinId === win.id}>
+                {@const isExpanded = expandedQuickWinId === win.id}
+                {@const attachments = qwAttachments.get(win.id) || []}
+                <li class="quick-win-item" class:done={win.status === 'done'} class:editing={editingQuickWinId === win.id} class:expanded={isExpanded}>
                   {#if editingQuickWinId === win.id}
                     <input
                       type="text"
@@ -1486,20 +2263,65 @@
                     </button>
                     <button class="quick-win-cancel" on:click|stopPropagation={cancelQuickWinEdit}>×</button>
                   {:else}
-                    <button
-                      class="quick-win-check"
-                      on:click={() => handleCompleteQuickWin(win)}
-                      disabled={win.status === 'done'}
-                      title={win.status === 'done' ? 'Done' : 'Mark done'}
-                    >
-                      {win.status === 'done' ? '✓' : '○'}
-                    </button>
-                    <span class="quick-win-title" on:click|stopPropagation={() => startEditQuickWin(win)} title="Click to edit">{win.title}</span>
-                    <button
-                      class="quick-win-delete"
-                      on:click|stopPropagation={() => handleDeleteQuickWin(win)}
-                      title="Delete"
-                    >×</button>
+                    <div class="quick-win-header">
+                      <button
+                        class="quick-win-check"
+                        on:click={() => handleCompleteQuickWin(win)}
+                        disabled={win.status === 'done'}
+                        title={win.status === 'done' ? 'Done' : 'Mark done'}
+                      >
+                        {win.status === 'done' ? '✓' : '○'}
+                      </button>
+                      <span class="quick-win-title" on:click={() => startEditQuickWin(win)} title="Click to edit">{win.title}</span>
+                      {#if attachments.length > 0}
+                        <span class="quick-win-attachment-count" title="{attachments.length} attachment{attachments.length > 1 ? 's' : ''}">📎{attachments.length}</span>
+                      {/if}
+                      <button
+                        class="quick-win-expand"
+                        on:click={() => toggleQuickWinExpand(win)}
+                        title={isExpanded ? 'Collapse' : 'Attach files'}
+                      >
+                        {isExpanded ? '▾' : '📎'}
+                      </button>
+                      <button
+                        class="quick-win-delete"
+                        on:click={() => handleDeleteQuickWin(win)}
+                        title="Delete"
+                      >×</button>
+                    </div>
+                    {#if isExpanded}
+                      <div class="quick-win-details" on:click|stopPropagation>
+                        <!-- Attachments -->
+                        <div class="qw-attachments">
+                          {#if attachments.length > 0}
+                            <div class="attachment-list">
+                              {#each attachments as att}
+                                <div class="attachment-item">
+                                  <span class="attachment-icon">📎</span>
+                                  <span class="attachment-name" title={att.path}>{att.originalName}</span>
+                                  <button class="attachment-delete" on:click={() => handleDeleteQWAttachment(att.filename, win.id)} title="Remove">×</button>
+                                </div>
+                              {/each}
+                            </div>
+                          {/if}
+                          <div class="attachment-upload">
+                            <input
+                              type="file"
+                              class="attachment-file-input"
+                              on:change={(e) => handleQWFileSelect(win.id, e)}
+                              disabled={qwAttachingFile}
+                            />
+                            <button
+                              class="attachment-pick-btn"
+                              on:click={(e) => e.currentTarget.previousElementSibling?.click()}
+                              disabled={qwAttachingFile}
+                            >
+                              {qwAttachingFile ? 'Uploading...' : '📎 Attach File'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    {/if}
                   {/if}
                 </li>
               {/each}
@@ -1565,6 +2387,72 @@
       {/if}
     </div>
     {/if}
+
+    <!-- Recent Activity Card -->
+    {#if recentAdded.length > 0 || recentCompleted.length > 0}
+    <div class="recent-card-wrapper">
+      <button
+        class="recent-card"
+        class:expanded={recentExpanded}
+        on:click={() => recentExpanded = !recentExpanded}
+      >
+        <div class="recent-card-header">
+          <span class="recent-card-icon">📊</span>
+          <div class="recent-card-titles">
+            <span class="recent-card-title">Recent</span>
+            <span class="recent-card-repo">{currentRepo?.name || 'No repo'}</span>
+          </div>
+          <span class="recent-card-count">{recentAdded.length + recentCompleted.length}</span>
+        </div>
+        {#if recentCompleted.length > 0}
+          <div class="recent-card-preview">
+            <span class="recent-preview-icon">✓</span>
+            <span class="recent-preview-title">{recentCompleted[0].title}</span>
+          </div>
+        {:else if recentAdded.length > 0}
+          <div class="recent-card-preview">
+            <span class="recent-preview-icon">+</span>
+            <span class="recent-preview-title">{recentAdded[0].title}</span>
+          </div>
+        {/if}
+      </button>
+
+      <!-- Recent dropdown panel -->
+      {#if recentExpanded}
+        <div class="recent-backdrop" on:click={() => recentExpanded = false}></div>
+        <div class="recent-dropdown">
+          {#if recentCompleted.length > 0}
+            <div class="recent-section">
+              <h4 class="recent-section-title">Recently Completed</h4>
+              <ul class="recent-list">
+                {#each recentCompleted as item}
+                  <li class="recent-item completed">
+                    <span class="recent-item-icon">✓</span>
+                    <span class="recent-item-id">{item.id}</span>
+                    <span class="recent-item-title">{item.title}</span>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+          {#if recentAdded.length > 0}
+            <div class="recent-section">
+              <h4 class="recent-section-title">Recently Added</h4>
+              <ul class="recent-list">
+                {#each recentAdded as item}
+                  <li class="recent-item added">
+                    <span class="recent-item-icon">+</span>
+                    <span class="recent-item-id">{item.id}</span>
+                    <span class="recent-item-title">{item.title}</span>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+    {/if}
     </div>
   </div>
 
@@ -1610,6 +2498,56 @@
     </div>
   {/if}
 
+  <!-- Spawn Worker Modal -->
+  {#if showSpawnWorker}
+    <div class="modal-overlay" on:click={() => showSpawnWorker = false}>
+      <div class="modal" on:click|stopPropagation>
+        <h2>Spawn Worker</h2>
+        <p class="modal-desc">Spawn a new worker Claude to work on a task in parallel.</p>
+        <form on:submit|preventDefault={handleSpawnWorker}>
+          <div class="form-group">
+            <label for="spawn-task-id">Task ID</label>
+            <input
+              id="spawn-task-id"
+              type="text"
+              bind:value={spawnTaskId}
+              placeholder="e.g., SD.1, FE.2"
+              class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label for="spawn-task-title">Task Title</label>
+            <input
+              id="spawn-task-title"
+              type="text"
+              bind:value={spawnTaskTitle}
+              placeholder="e.g., Implement user authentication"
+              class="form-input"
+            />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" on:click={() => showSpawnWorker = false}>
+              Cancel
+            </button>
+            <button type="submit" class="btn-primary" disabled={spawningWorker || !spawnTaskId.trim() || !spawnTaskTitle.trim()}>
+              {spawningWorker ? 'Spawning...' : 'Spawn Worker'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Conflict Resolution Modal -->
+  {#if showConflictResolution && conflictWorker && conflictSignal}
+    <ConflictResolution
+      worker={conflictWorker}
+      signal={conflictSignal}
+      on:resolve={handleResolveConflict}
+      on:cancel={() => { showConflictResolution = false; conflictWorker = null; conflictSignal = null; }}
+    />
+  {/if}
+
   <!-- Feature Capture Modal -->
   {#if showFeatureCapture}
     <FeatureCapture
@@ -1651,23 +2589,38 @@
     {:else if error}
       <div class="error">{error}</div>
     {:else if spec}
-      <!-- Simple How-To Guide (show when no active task) -->
-      {#if !session || session.status === 'idle' || !session.currentTask}
+      <!-- Pending Anchor Card (show when anchor set but idle) -->
+      {#if (!session || session.status === 'idle' || !session.currentTask) && anchor}
+        <div class="pending-anchor-card">
+          <div class="pending-header">
+            <span class="pending-badge">🎯 PENDING</span>
+            <span class="pending-label">Waiting for Claude</span>
+          </div>
+          <div class="pending-task">{anchor.title}</div>
+          <p class="pending-hint">Claude will see this and start working on it. Or run <code>/chkd {anchor.id}</code></p>
+          <button class="btn btn-ghost btn-sm" on:click={handleClearAnchor} disabled={settingAnchor}>
+            Clear anchor
+          </button>
+        </div>
+      {/if}
+
+      <!-- Simple How-To Guide (show when no active task AND no anchor) -->
+      {#if (!session || session.status === 'idle' || !session.currentTask) && !anchor}
         <div class="how-to-guide">
           <h2>Quick Start</h2>
           <div class="steps">
             <div class="step">
               <span class="step-num">1</span>
               <div class="step-content">
-                <strong>Check status</strong>
-                <p>Run <code>chkd status</code> to see progress and what's next</p>
+                <strong>Set a task</strong>
+                <p>Click a spec item and press "🎯 Set as Active Task" to tell Claude what to work on</p>
               </div>
             </div>
             <div class="step">
               <span class="step-num">2</span>
               <div class="step-content">
-                <strong>Start building</strong>
-                <p>Run <code>/chkd SD.1</code> in Claude Code (use task ID from spec)</p>
+                <strong>Claude starts</strong>
+                <p>Claude sees the pending task and kicks it off automatically</p>
               </div>
             </div>
             <div class="step">
@@ -1678,7 +2631,7 @@
               </div>
             </div>
           </div>
-          <p class="guide-note">That's it. Claude reads the spec, builds the feature, you review.</p>
+          <p class="guide-note">Or use CLI: <code>/chkd SD.1</code> in Claude Code</p>
         </div>
       {/if}
 
@@ -1694,10 +2647,30 @@
                              activeSession?.mode === 'quickwin' ? 'quickwin' : ''}
         <div class="session-card" class:demo={demoMode} class:debug={activeSession?.mode === 'debugging'} class:impromptu={activeSession?.mode === 'impromptu'} class:quickwin={activeSession?.mode === 'quickwin'}>
           <div class="session-header">
-            <span class="session-badge {badgeClass}">{sessionBadge}</span>
+            {#if demoMode}
+              <span class="session-badge {badgeClass}">{sessionBadge}</span>
+            {:else}
+              <select
+                class="session-state-select {badgeClass}"
+                value={activeSession?.mode || 'building'}
+                on:change={(e) => handleSetSessionState('building', e.currentTarget.value)}
+              >
+                <option value="building">BUILDING</option>
+                <option value="debugging">DEBUG</option>
+                <option value="impromptu">IMPROMPTU</option>
+                <option value="quickwin">QUICKWIN</option>
+                <option value="idle">IDLE</option>
+              </select>
+            {/if}
             <span class="session-time">{formatElapsed(activeSession?.elapsedMs || 0)}</span>
-            {#if activeSession?.iteration > 1}
+            {#if activeSession?.iteration}
               <span class="session-iteration">#{activeSession.iteration}</span>
+            {/if}
+            {#if activeSession?.lastActivity}
+              {@const timeAgo = formatTimeAgo(activeSession.lastActivity)}
+              {#if timeAgo && timeAgo !== 'now'}
+                <span class="session-activity" title="Last activity from Claude">⚡ {timeAgo}</span>
+              {/if}
             {/if}
             {#if demoMode}
               <button class="demo-state-btn" on:click={cycleDemoState}>{currentDemoState.toUpperCase()}</button>
@@ -1705,6 +2678,14 @@
             {/if}
           </div>
           <div class="session-task-title">{@html markedInline(activeSession?.currentTask?.title || '')}</div>
+
+          <!-- Off-track warning (anchor set but working on different task) -->
+          {#if !demoMode && anchor && !anchorOnTrack}
+            <div class="off-track-warning">
+              <span class="warning-icon">⚠️</span>
+              <span>Anchor: <strong>{anchor.title}</strong></span>
+            </div>
+          {/if}
 
           <!-- Current Item (only show if task has incomplete items) -->
           {#if activeSession?.currentItem && realChecklist.some(i => !i.done)}
@@ -1800,17 +2781,26 @@
           {:else if realChecklist.length > 0}
             <div class="session-checklist">
               {#each realChecklist as item}
-                <div class="checklist-item" class:done={item.done} class:current={item.current}>
+                <button
+                  class="checklist-item clickable"
+                  class:done={item.done}
+                  class:current={item.current}
+                  on:click={() => handleTickItem(item.id)}
+                  title={item.done ? 'Already complete' : 'Click to mark complete'}
+                >
                   <span class="check-icon">
                     {#if item.done}✓{:else if item.current}◐{:else}○{/if}
                   </span>
                   <span class="check-title">{@html markedInline(item.title)}</span>
-                </div>
+                </button>
               {/each}
             </div>
             <!-- Progress summary -->
             <div class="session-progress-summary">
               <span class="progress-label">{realChecklist.filter(i => i.done).length} / {realChecklist.length} complete</span>
+              {#if activeSession?.iteration}
+                <span class="progress-iteration">Iteration #{activeSession.iteration}</span>
+              {/if}
             </div>
           {:else}
             <!-- No sub-items, show simple status -->
@@ -1819,6 +2809,23 @@
             </div>
           {/if}
         </div>
+      {/if}
+
+      <!-- Split Brain View (Multi-Worker) -->
+      {@const currentStatus = currentRepo ? repoStatuses.get(currentRepo.id) : null}
+      {#if currentStatus?.workers && currentStatus.workers.length > 0}
+        <SplitBrainView
+          workers={currentStatus.workers}
+          signals={currentStatus.signals || []}
+          repoName={currentRepo?.name || ''}
+          on:dismisssignal={(e) => handleDismissSignal(e.detail.signalId)}
+          on:signalaction={(e) => handleSignalAction(e.detail.signal, e.detail.action)}
+          on:pauseworker={(e) => handleWorkerAction(e.detail.workerId, 'pause')}
+          on:resumeworker={(e) => handleWorkerAction(e.detail.workerId, 'resume')}
+          on:stopworker={(e) => handleWorkerAction(e.detail.workerId, 'stop')}
+          on:viewcode={(e) => handleViewWorkerCode(e.detail.worktreePath)}
+          on:spawnworker={() => currentRepo && openSpawnWorker(currentRepo)}
+        />
       {/if}
 
       <!-- Progress Summary + View Toggle -->
@@ -1867,6 +2874,25 @@
 
       <!-- Todo List View -->
       {#if viewMode === 'todo'}
+        <!-- Tag Filter Bar -->
+        {#if allTags.length > 0}
+          <div class="tag-filter-bar">
+            <span class="tag-filter-label">Filter:</span>
+            <button
+              class="tag-filter-btn"
+              class:active={!selectedTagFilter}
+              on:click={() => selectedTagFilter = null}
+            >All</button>
+            {#each allTags as tag}
+              <button
+                class="tag-filter-btn"
+                class:active={selectedTagFilter === tag}
+                on:click={() => selectedTagFilter = selectedTagFilter === tag ? null : tag}
+              >#{tag}</button>
+            {/each}
+          </div>
+        {/if}
+
         <div class="todo-list">
           {#if groupedTodos.length === 0}
             <div class="empty-state">
@@ -1922,6 +2948,25 @@
 
       <!-- Areas View -->
       {#if viewMode === 'areas'}
+        <!-- Tag Filter Bar -->
+        {#if allTags.length > 0}
+          <div class="tag-filter-bar">
+            <span class="tag-filter-label">Filter:</span>
+            <button
+              class="tag-filter-btn"
+              class:active={!selectedTagFilter}
+              on:click={() => selectedTagFilter = null}
+            >All</button>
+            {#each allTags as tag}
+              <button
+                class="tag-filter-btn"
+                class:active={selectedTagFilter === tag}
+                on:click={() => selectedTagFilter = selectedTagFilter === tag ? null : tag}
+              >#{tag}</button>
+            {/each}
+          </div>
+        {/if}
+
         <div class="areas">
           {#each filteredAreas as area}
             {@const counts = countItems(area.items)}
@@ -1952,6 +2997,13 @@
                           <button class="item-row" on:click={() => selectFeature(item, area)}>
                             <span class="item-status">{getStatusIcon(item.status)}</span>
                             <span class="item-title">{@html markedInline(item.title)}</span>
+                            {#if item.tags && item.tags.length > 0}
+                              <span class="item-tags">
+                                {#each item.tags as tag}
+                                  <span class="item-tag">{tag}</span>
+                                {/each}
+                              </span>
+                            {/if}
                             {#if itemHandover}
                               <span class="item-handover" title="Has handover note">📝</span>
                             {/if}
@@ -2005,7 +3057,13 @@
           bind:value={editDescription}
           class="edit-desc"
           placeholder="Description (optional)"
-          rows="3"
+          rows="2"
+        ></textarea>
+        <textarea
+          bind:value={editStory}
+          class="edit-story"
+          placeholder="User story (e.g., As a user, I want...)"
+          rows="2"
         ></textarea>
         <div class="edit-actions">
           <button class="btn btn-primary" on:click={saveEdit}>Save</button>
@@ -2026,28 +3084,83 @@
         {/if}
 
         {#if selectedFeature.item.description}
-          <div class="detail-desc">{@html markedInline(selectedFeature.item.description)}</div>
-        {/if}
-
-        <!-- User story if area has one -->
-        {#if selectedFeature.area.story}
-          <div class="detail-story">
-            <h3>User Story</h3>
-            <blockquote>{@html markedInline(selectedFeature.area.story)}</blockquote>
+          <div class="detail-desc editable" on:click={startEdit} title="Click to edit">
+            {@html markedInline(selectedFeature.item.description)}
+          </div>
+        {:else}
+          <div class="detail-desc empty editable" on:click={startEdit} title="Click to add description">
+            Add description...
           </div>
         {/if}
 
+        <!-- User story (item-level, or fall back to area-level) -->
+        {#if selectedFeature.item.story || selectedFeature.area.story}
+          <div class="detail-story editable" on:click={startEdit} title="Click to edit">
+            <h3>User Story</h3>
+            <blockquote>{@html markedInline(selectedFeature.item.story || selectedFeature.area.story || '')}</blockquote>
+          </div>
+        {:else}
+          <div class="detail-story empty editable" on:click={startEdit} title="Click to add story">
+            <h3>User Story</h3>
+            <blockquote>Add user story...</blockquote>
+          </div>
+        {/if}
+
+        <h3>Checklist</h3>
         {#if selectedFeature.item.children.length > 0}
-          <h3>Checklist</h3>
           <ul class="detail-checklist">
             {#each selectedFeature.item.children as child}
               <li class="{getStatusClass(child.status)}">
-                <span class="item-status">{getStatusIcon(child.status)}</span>
-                <span>{@html markedInline(child.title)}</span>
+                {#if editingChildId === child.id}
+                  <form class="edit-child-form" on:submit|preventDefault={saveEditChild}>
+                    <input
+                      type="text"
+                      bind:value={editingChildTitle}
+                      on:keydown={(e) => e.key === 'Escape' && cancelEditChild()}
+                      autofocus
+                    />
+                    <button type="submit" title="Save">✓</button>
+                    <button type="button" on:click={cancelEditChild} title="Cancel">×</button>
+                  </form>
+                {:else}
+                  <button
+                    class="detail-checklist-tick"
+                    on:click={() => handleTickItem(child.id)}
+                    title={child.status === 'done' ? 'Already complete' : 'Click to mark complete'}
+                  >
+                    <span class="item-status">{getStatusIcon(child.status)}</span>
+                  </button>
+                  <span
+                    class="detail-checklist-title"
+                    on:dblclick={() => startEditChild(child.id, child.title)}
+                    title="Double-click to edit"
+                  >{@html markedInline(child.title)}</span>
+                  <button
+                    class="detail-checklist-edit"
+                    on:click|stopPropagation={() => startEditChild(child.id, child.title)}
+                    title="Edit subtask"
+                  >✎</button>
+                  <button
+                    class="detail-checklist-remove"
+                    on:click|stopPropagation={() => handleDeleteChild(child.id)}
+                    title="Remove subtask"
+                  >×</button>
+                {/if}
               </li>
             {/each}
           </ul>
+        {:else}
+          <p class="no-subtasks">No subtasks yet</p>
         {/if}
+        <form class="add-subtask-form" on:submit|preventDefault={() => handleAddSubtask(selectedFeature.item.id)}>
+          <input
+            type="text"
+            bind:value={newSubtaskInput}
+            placeholder="Add subtask..."
+            disabled={addingSubtask}
+          />
+          <button type="submit" disabled={addingSubtask || !newSubtaskInput.trim()}>+</button>
+        </form>
 
         <div class="detail-meta">
           <span class="meta-area">{selectedFeature.area.name}</span>
@@ -2055,6 +3168,29 @@
             {selectedFeature.item.status}
           </span>
         </div>
+
+        <!-- Anchor control - set task for Claude to work on -->
+        {#if anchor?.id === selectedFeature.item.id}
+          <div class="anchor-active">
+            <span class="anchor-badge">🎯 Active Task</span>
+            <button
+              class="btn btn-ghost btn-sm"
+              on:click={handleClearAnchor}
+              disabled={settingAnchor}
+            >
+              Clear
+            </button>
+          </div>
+        {:else}
+          <button
+            class="btn btn-primary anchor-btn"
+            on:click={() => handleSetAnchor(selectedFeature!.item)}
+            disabled={settingAnchor || selectedFeature.item.status === 'done'}
+            title={selectedFeature.item.status === 'done' ? 'Item already complete' : 'Set as active task for Claude'}
+          >
+            {settingAnchor ? '...' : '🎯 Set as Active Task'}
+          </button>
+        {/if}
 
         <!-- Action buttons -->
         <div class="detail-actions">
@@ -2103,6 +3239,78 @@
               Backlog
             </button>
           </div>
+        </div>
+
+        <!-- Tags -->
+        <div class="tags-section">
+          <div class="tags-header">
+            <h3>Tags</h3>
+            {#if !editingTags}
+              <button class="btn-edit-tags" on:click={startEditTags}>Edit</button>
+            {/if}
+          </div>
+          {#if editingTags}
+            <div class="tags-editor">
+              <input
+                type="text"
+                class="tags-input"
+                placeholder="backend api frontend (space-separated)"
+                bind:value={tagInput}
+                on:keydown={(e) => e.key === 'Enter' && saveTagsEdit()}
+                on:keydown={(e) => e.key === 'Escape' && cancelEditTags()}
+                autofocus
+              />
+              <div class="tags-editor-actions">
+                <button class="btn btn-primary" on:click={saveTagsEdit} disabled={savingTags}>
+                  {savingTags ? 'Saving...' : 'Save'}
+                </button>
+                <button class="btn btn-ghost" on:click={cancelEditTags}>Cancel</button>
+              </div>
+              <p class="tags-hint">Use lowercase letters, numbers, hyphens, and underscores</p>
+            </div>
+          {:else}
+            <div class="tags-display">
+              {#if selectedFeature.item.tags.length > 0}
+                {#each selectedFeature.item.tags as tag}
+                  <span class="tag-badge">{tag}</span>
+                {/each}
+              {:else}
+                <span class="tags-empty">No tags</span>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Attachments -->
+        <div class="attachments-section">
+          <h3>Attachments</h3>
+          {#if itemAttachments.length > 0}
+            <div class="item-attachment-list">
+              {#each itemAttachments as att}
+                <div class="item-attachment">
+                  <span class="item-att-icon">📎</span>
+                  <span class="item-att-name" title={att.path}>{att.originalName}</span>
+                  <button class="item-att-delete" on:click={() => handleDeleteItemAttachment(att.filename)}>×</button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+          <div class="item-attach-upload">
+            <input
+              type="file"
+              class="item-attach-file-input"
+              on:change={handleItemFileSelect}
+              disabled={itemAttaching}
+            />
+            <button
+              class="item-attach-btn"
+              on:click={(e) => e.currentTarget.previousElementSibling?.click()}
+              disabled={itemAttaching}
+            >
+              {itemAttaching ? 'Uploading...' : '📎 Attach File'}
+            </button>
+          </div>
+          <p class="attachments-hint">MCP: chkd_attach(path, "item", "{selectedFeature.item.id}")</p>
         </div>
 
         <!-- Move to area -->
@@ -2227,14 +3435,20 @@
   }
 
   .repo-cards-scroll {
-    flex: 1;
+    flex: 1 1 0;
     display: flex;
     align-items: stretch;
     gap: var(--space-sm);
+    min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    min-width: 0;
+    -webkit-overflow-scrolling: touch;
+    cursor: grab;
+  }
+
+  .repo-cards-scroll:active {
+    cursor: grabbing;
   }
 
   .repo-cards-scroll::-webkit-scrollbar {
@@ -2476,6 +3690,206 @@
     text-align: center;
   }
 
+  .repo-card-activity {
+    font-size: 9px;
+    color: var(--text-muted);
+    opacity: 0.8;
+  }
+
+  /* Worker and Signal Badges */
+  .repo-card-workers-badge,
+  .repo-card-signals-badge {
+    font-size: 9px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .repo-card-workers-badge {
+    background: var(--success-bg);
+    color: var(--success);
+  }
+
+  .repo-card-workers-badge.has-conflict {
+    background: var(--warning-bg);
+    color: var(--warning);
+  }
+
+  .repo-card-signals-badge {
+    background: var(--primary-bg);
+    color: var(--primary);
+  }
+
+  /* Workers Strip (inside card) */
+  .repo-card-workers {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .worker-chip {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--surface-hover);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 9px;
+  }
+
+  .worker-chip.working {
+    background: var(--success-bg);
+  }
+
+  .worker-chip.merging {
+    background: var(--warning-bg);
+  }
+
+  .worker-chip.paused {
+    background: var(--warning-bg);
+  }
+
+  .worker-chip.error {
+    background: var(--error-bg);
+  }
+
+  .worker-status {
+    font-size: 8px;
+  }
+
+  .worker-task {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .worker-progress {
+    color: var(--text-muted);
+    font-size: 8px;
+  }
+
+  .workers-more {
+    font-size: 9px;
+    color: var(--text-muted);
+    padding: 2px 4px;
+  }
+
+  /* Signal Preview (below card) */
+  .repo-card-signal {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 2;
+    box-shadow: var(--shadow-md);
+  }
+
+  .repo-card-signal.help {
+    border-color: var(--error);
+    background: var(--error-bg);
+  }
+
+  .repo-card-signal.warning {
+    border-color: var(--warning);
+    background: var(--warning-bg);
+  }
+
+  .repo-card-signal.decision {
+    border-color: var(--primary);
+    background: var(--primary-bg);
+  }
+
+  .signal-icon {
+    font-size: 12px;
+  }
+
+  .signal-msg {
+    flex: 1;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  .signal-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .signal-action-btn {
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 2px 6px;
+    font-size: 9px;
+    cursor: pointer;
+  }
+
+  .signal-action-btn:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+
+  .signal-dismiss {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .signal-dismiss:hover {
+    color: var(--error);
+  }
+
+  /* Spawn Worker Button */
+  .repo-card-spawn-btn {
+    position: absolute;
+    top: 6px;
+    right: 32px;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    font-size: 10px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 1;
+  }
+
+  .repo-card-wrapper:hover .repo-card-spawn-btn,
+  .repo-card-wrapper.active .repo-card-spawn-btn {
+    opacity: 1;
+  }
+
+  .repo-card-spawn-btn:hover {
+    background: var(--success);
+    border-color: var(--success);
+  }
+
+  /* Modal description */
+  .modal-desc {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
   /* Quick Message Button */
   .repo-card-msg-btn {
     position: absolute;
@@ -2659,18 +4073,188 @@
     right: calc(400px + var(--space-lg) + var(--space-md));
   }
 
-  .bug-dropdown .bug-input-form {
-    display: flex;
-    gap: var(--space-xs);
-    margin-bottom: var(--space-sm);
+  /* Bug input area - redesigned */
+  .bug-input-area {
+    margin-bottom: var(--space-md);
   }
 
-  /* Bug polish confirmation */
-  .bug-polish-confirm {
+  .bug-input-row {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+  }
+
+  .bug-severity-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .bug-severity-picker button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .bug-severity-picker button:hover {
     background: var(--bg-tertiary);
-    border-radius: var(--radius-md);
+  }
+
+  .bug-severity-picker button.selected {
+    border-color: var(--text-muted);
+    background: var(--bg);
+  }
+
+  .bug-textarea {
+    flex: 1;
     padding: var(--space-sm);
-    margin-bottom: var(--space-sm);
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    resize: none;
+    min-height: 60px;
+    line-height: 1.4;
+  }
+
+  .bug-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+
+  .bug-textarea::placeholder {
+    color: var(--text-muted);
+  }
+
+  .bug-input-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-xs);
+  }
+
+  .bug-attach-btn {
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.7;
+  }
+
+  .bug-attach-btn:hover {
+    opacity: 1;
+    background: var(--bg-tertiary);
+  }
+
+  .bug-attach-btn.has-file {
+    opacity: 1;
+    background: var(--success-bg);
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .bug-submit-btn {
+    padding: var(--space-xs) var(--space-md);
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .bug-submit-btn:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
+
+  .bug-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Inline AI polish suggestion */
+  .bug-polish-inline {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-md);
+  }
+
+  .polish-suggestion {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    font-size: 13px;
+  }
+
+  .polish-icon {
+    flex-shrink: 0;
+  }
+
+  .polish-suggestion .polish-text {
+    color: var(--text);
+    line-height: 1.3;
+  }
+
+  .polish-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .polish-use {
+    padding: 4px 12px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .polish-use:hover {
+    background: var(--primary-hover);
+  }
+
+  .polish-dismiss {
+    padding: 4px 8px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .polish-dismiss:hover {
+    color: var(--text);
+  }
+
+  /* Legacy - keep for backwards compat but hide */
+  .bug-dropdown .bug-input-form {
+    display: none;
+  }
+
+  .bug-polish-confirm {
+    display: none;
   }
 
   .bug-polish-header {
@@ -2827,16 +4411,18 @@
 
   .bug-dropdown .bug-item-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
     gap: var(--space-xs);
-    padding: var(--space-xs) var(--space-sm);
+    padding: var(--space-sm);
     width: 100%;
     background: none;
     border: none;
     cursor: pointer;
     text-align: left;
     color: var(--text);
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 1.4;
   }
 
   .bug-dropdown .bug-item-header:hover {
@@ -2861,14 +4447,12 @@
 
   .bug-dropdown .bug-item-title {
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.3;
+    /* Allow text to wrap - no more truncation */
   }
 
   .bug-dropdown .bug-item.expanded .bug-item-title {
-    white-space: normal;
-    overflow: visible;
+    /* Same as collapsed now */
   }
 
   .bug-dropdown .bug-expand-icon {
@@ -2928,6 +4512,90 @@
 
   .bug-dropdown .bug-status-badge.wontfix {
     color: var(--text-muted);
+  }
+
+  /* Bug attachments */
+  .bug-attachments {
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--border);
+  }
+
+  .attachment-list {
+    margin-bottom: var(--space-xs);
+  }
+
+  .attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+    font-size: 11px;
+  }
+
+  .attachment-icon {
+    opacity: 0.7;
+  }
+
+  .attachment-name {
+    flex: 1;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .attachment-item:hover .attachment-delete {
+    opacity: 1;
+  }
+
+  .attachment-delete:hover {
+    color: var(--error);
+  }
+
+  .attachment-upload {
+    position: relative;
+  }
+
+  .attachment-file-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .attachment-pick-btn {
+    width: 100%;
+    padding: 6px 12px;
+    font-size: 12px;
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+
+  .attachment-pick-btn:hover:not(:disabled) {
+    background: var(--bg-tertiary);
+    border-color: var(--primary);
+    color: var(--text);
+  }
+
+  .attachment-pick-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .bug-dropdown .bug-actions {
@@ -3200,13 +4868,12 @@
     position: fixed;
     top: 70px;
     right: var(--space-lg);
-    min-width: 280px;
-    max-width: 340px;
+    width: 380px;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
-    padding: var(--space-sm);
+    padding: var(--space-md);
     z-index: 1000;
     max-height: calc(100vh - 100px);
     overflow-y: auto;
@@ -3216,10 +4883,61 @@
     right: calc(400px + var(--space-lg) + var(--space-md));
   }
 
-  .quick-win-input-form {
+  /* New quick win input area */
+  .qw-input-area {
     display: flex;
+    flex-direction: column;
     gap: var(--space-xs);
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-md);
+  }
+
+  .qw-textarea {
+    width: 100%;
+    padding: var(--space-sm);
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    resize: none;
+    min-height: 50px;
+    line-height: 1.4;
+  }
+
+  .qw-textarea:focus {
+    outline: none;
+    border-color: var(--info);
+  }
+
+  .qw-textarea::placeholder {
+    color: var(--text-muted);
+  }
+
+  .qw-submit-btn {
+    align-self: flex-end;
+    padding: var(--space-xs) var(--space-md);
+    background: var(--info);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .qw-submit-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  .qw-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Legacy - hide old form */
+  .quick-win-input-form {
+    display: none;
   }
 
   .quick-win-input {
@@ -3271,11 +4989,11 @@
 
   .quick-win-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-sm);
     padding: var(--space-sm);
-    background: var(--surface);
-    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
     transition: background 0.15s ease;
   }
 
@@ -3313,12 +5031,11 @@
 
   .quick-win-title {
     flex: 1;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     cursor: pointer;
+    line-height: 1.4;
+    /* Allow wrapping - no truncation */
   }
 
   .quick-win-title:hover {
@@ -3374,6 +5091,128 @@
 
   .quick-win-delete:hover {
     color: var(--error);
+  }
+
+  .quick-win-item.expanded {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .quick-win-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    width: 100%;
+    cursor: pointer;
+  }
+
+  .quick-win-attachment-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .quick-win-details {
+    padding-left: 28px;
+    width: 100%;
+  }
+
+  .qw-attachments {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm);
+  }
+
+  .qw-attachments .attachment-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+  }
+
+  .qw-attachments .attachment-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 12px;
+  }
+
+  .qw-attachments .attachment-icon {
+    flex-shrink: 0;
+  }
+
+  .qw-attachments .attachment-name {
+    flex: 1;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .qw-attachments .attachment-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+    opacity: 0.5;
+  }
+
+  .qw-attachments .attachment-delete:hover {
+    color: var(--error);
+    opacity: 1;
+  }
+
+  .qw-attachments .attachment-upload {
+    position: relative;
+  }
+
+  .qw-attachments .attachment-file-input {
+    position: absolute;
+    left: -9999px;
+  }
+
+  .qw-attachments .attachment-pick-btn {
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 6px 10px;
+    width: 100%;
+    transition: all 0.15s ease;
+  }
+
+  .qw-attachments .attachment-pick-btn:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .qw-attachments .attachment-pick-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .quick-win-expand {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 0 4px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+  }
+
+  .quick-win-expand:hover {
+    opacity: 1;
+    color: var(--primary);
+  }
+
+  .quick-win-item:hover .quick-win-expand {
+    opacity: 1;
   }
 
   .quick-win-actions {
@@ -3591,6 +5430,215 @@
   .todo-item.status-blocked {
     border-left-color: var(--warning);
     background: rgba(245, 158, 11, 0.05);
+  }
+
+  /* Recent Activity Card */
+  .recent-card-wrapper {
+    flex-shrink: 0;
+    align-self: stretch;
+    display: flex;
+    position: relative;
+  }
+
+  .recent-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: var(--space-sm) var(--space-md);
+    min-width: 160px;
+    max-width: 200px;
+    height: 88px;
+    box-sizing: border-box;
+    background: var(--bg);
+    border: 2px solid var(--info);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    overflow: hidden;
+  }
+
+  .recent-card:hover {
+    border-color: var(--info);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  }
+
+  .recent-card.expanded {
+    border-color: var(--info);
+    background: linear-gradient(135deg, var(--bg), rgba(59, 130, 246, 0.05));
+  }
+
+  .recent-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+  }
+
+  .recent-card-icon {
+    font-size: 14px;
+  }
+
+  .recent-card-titles {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .recent-card-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .recent-card-repo {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .recent-card-count {
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--info);
+    color: white;
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .recent-card-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding-top: var(--space-xs);
+    overflow: hidden;
+  }
+
+  .recent-preview-icon {
+    font-size: 11px;
+    color: var(--success);
+    font-weight: bold;
+  }
+
+  .recent-preview-title {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .recent-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+  }
+
+  .recent-dropdown {
+    position: fixed;
+    top: 70px;
+    right: var(--space-lg);
+    min-width: 320px;
+    max-width: 400px;
+    background: var(--bg);
+    border: 1px solid var(--info);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-sm);
+    z-index: 1000;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+
+  .app.has-detail .recent-dropdown {
+    right: calc(400px + var(--space-lg) + var(--space-md));
+  }
+
+  .recent-section {
+    margin-bottom: var(--space-md);
+  }
+
+  .recent-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .recent-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: var(--space-xs) var(--space-sm);
+    margin-bottom: var(--space-xs);
+  }
+
+  .recent-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .recent-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--border);
+  }
+
+  .recent-item.completed {
+    border-left-color: var(--success);
+  }
+
+  .recent-item.added {
+    border-left-color: var(--info);
+  }
+
+  .recent-item-icon {
+    font-size: 12px;
+    font-weight: bold;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .recent-item.completed .recent-item-icon {
+    color: var(--success);
+  }
+
+  .recent-item.added .recent-item-icon {
+    color: var(--info);
+  }
+
+  .recent-item-id {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .recent-item-title {
+    font-size: 12px;
+    color: var(--text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .meta-status.status-blocked {
@@ -3993,6 +6041,41 @@
     color: #1a1a1a;
   }
 
+  .session-state-select {
+    background: var(--info);
+    color: white;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    border: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .session-state-select.debug,
+  .session-state-select[value="debugging"] {
+    background: var(--error);
+  }
+
+  .session-state-select.impromptu,
+  .session-state-select[value="impromptu"] {
+    background: var(--warning);
+    color: var(--text);
+  }
+
+  .session-state-select.quickwin,
+  .session-state-select[value="quickwin"] {
+    background: #f59e0b;
+    color: #1a1a1a;
+  }
+
+  .session-state-select:hover {
+    opacity: 0.9;
+  }
+
   .session-card.quickwin {
     border-left: 3px solid #f59e0b;
   }
@@ -4019,7 +6102,35 @@
     color: var(--accent);
     background: var(--accent-bg);
     padding: 2px 6px;
+  }
+
+  .session-activity {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 2px 6px;
     border-radius: var(--radius-sm);
+  }
+
+  /* Off-track warning */
+  .off-track-warning {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--warning-bg);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-md);
+    font-size: 13px;
+    color: var(--warning);
+  }
+
+  .off-track-warning .warning-icon {
+    font-size: 14px;
+  }
+
+  .off-track-warning strong {
+    color: var(--text);
   }
 
   .session-current {
@@ -4114,6 +6225,23 @@
     padding: var(--space-xs) 0;
     font-size: 13px;
     color: var(--text-muted);
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: default;
+  }
+
+  .checklist-item.clickable {
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: var(--space-xs) var(--space-sm);
+    margin: 0 calc(-1 * var(--space-sm));
+    width: calc(100% + var(--space-md));
+  }
+
+  .checklist-item.clickable:hover:not(.done) {
+    background: var(--bg-hover);
   }
 
   .checklist-item.done {
@@ -4533,6 +6661,45 @@
   }
 
   /* Areas */
+  .tag-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .tag-filter-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-right: var(--space-xs);
+  }
+
+  .tag-filter-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .tag-filter-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .tag-filter-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+
   .areas {
     display: flex;
     flex-direction: column;
@@ -4650,6 +6817,22 @@
 
   .item-title {
     flex: 1;
+  }
+
+  .item-tags {
+    display: flex;
+    gap: 4px;
+    margin-left: var(--space-xs);
+  }
+
+  .item-tag {
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 500;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    border-radius: 3px;
+    text-transform: lowercase;
   }
 
   .item-progress {
@@ -4882,10 +7065,143 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    padding: var(--space-sm);
+    padding: 0;
     background: var(--bg-secondary);
     border-radius: var(--radius-sm);
     font-size: 14px;
+  }
+
+  .detail-checklist-tick {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--space-sm);
+    padding-right: 0;
+  }
+
+  .detail-checklist-tick:hover {
+    opacity: 0.7;
+  }
+
+  .detail-checklist-title {
+    flex: 1;
+    padding: var(--space-sm);
+    cursor: text;
+  }
+
+  .detail-checklist li.done .detail-checklist-title {
+    opacity: 0.7;
+  }
+
+  .detail-checklist-edit,
+  .detail-checklist-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: var(--space-xs);
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .detail-checklist li:hover .detail-checklist-edit,
+  .detail-checklist li:hover .detail-checklist-remove {
+    opacity: 1;
+  }
+
+  .detail-checklist-edit:hover {
+    color: var(--accent);
+  }
+
+  .detail-checklist-remove:hover {
+    color: var(--error);
+  }
+
+  .edit-child-form {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex: 1;
+    padding: var(--space-xs);
+  }
+
+  .edit-child-form input {
+    flex: 1;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  .edit-child-form button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--space-xs);
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .edit-child-form button[type="submit"] {
+    color: var(--success);
+  }
+
+  .edit-child-form button[type="submit"]:hover {
+    color: var(--success);
+    opacity: 0.8;
+  }
+
+  .edit-child-form button[type="button"]:hover {
+    color: var(--error);
+  }
+
+  .no-subtasks {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: var(--space-md);
+  }
+
+  .add-subtask-form {
+    display: flex;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-lg);
+  }
+
+  .add-subtask-form input {
+    flex: 1;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .add-subtask-form input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .add-subtask-form button {
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .add-subtask-form button:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  .add-subtask-form button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .detail-meta {
@@ -4943,7 +7259,8 @@
     background: var(--bg);
   }
 
-  .edit-desc {
+  .edit-desc,
+  .edit-story {
     width: 100%;
     padding: var(--space-sm);
     border: 1px solid var(--border);
@@ -4952,6 +7269,27 @@
     resize: vertical;
     margin-bottom: var(--space-md);
     background: var(--bg);
+    color: var(--text);
+  }
+
+  .edit-story {
+    font-style: italic;
+  }
+
+  .editable {
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+
+  .editable:hover {
+    background: var(--bg-hover);
+  }
+
+  .detail-desc.empty,
+  .detail-story.empty blockquote {
+    color: var(--text-muted);
+    font-style: italic;
   }
 
   .edit-actions {
@@ -5016,6 +7354,36 @@
 
   .btn-danger-ghost:hover {
     background: var(--error-bg);
+  }
+
+  /* Anchor controls */
+  .anchor-active {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--success-bg);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-md);
+  }
+
+  .anchor-badge {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--success);
+  }
+
+  .anchor-btn {
+    width: 100%;
+    margin-bottom: var(--space-md);
+    font-size: 14px;
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .anchor-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .detail-actions {
@@ -5094,6 +7462,194 @@
     border-color: var(--text-muted);
   }
 
+  /* Tags section */
+  .tags-section {
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-lg);
+    margin-bottom: var(--space-lg);
+  }
+
+  .tags-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-sm);
+  }
+
+  .tags-header h3 {
+    margin: 0;
+  }
+
+  .btn-edit-tags {
+    padding: 2px 8px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .btn-edit-tags:hover {
+    background: var(--bg-secondary);
+    color: var(--text);
+  }
+
+  .tags-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tag-badge {
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .tags-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .tags-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .tags-input {
+    width: 100%;
+    padding: var(--space-sm);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .tags-input:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+
+  .tags-editor-actions {
+    display: flex;
+    gap: var(--space-xs);
+  }
+
+  .tags-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  /* Attachments section */
+  .attachments-section {
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-lg);
+    margin-bottom: var(--space-lg);
+  }
+
+  .attachments-section h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 14px;
+  }
+
+  .item-attachment-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+  }
+
+  .item-attachment {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+  }
+
+  .item-att-icon {
+    opacity: 0.7;
+  }
+
+  .item-att-name {
+    flex: 1;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .item-att-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .item-attachment:hover .item-att-delete {
+    opacity: 1;
+  }
+
+  .item-att-delete:hover {
+    color: var(--error);
+  }
+
+  .item-attach-upload {
+    position: relative;
+    margin-bottom: var(--space-xs);
+  }
+
+  .item-attach-file-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .item-attach-btn {
+    width: 100%;
+    padding: var(--space-sm);
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+
+  .item-attach-btn:hover:not(:disabled) {
+    background: var(--bg-tertiary);
+    border-color: var(--primary);
+    color: var(--text);
+  }
+
+  .item-attach-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .attachments-hint {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin: 0;
+    font-family: var(--font-mono);
+  }
+
   /* Move section */
   .move-section {
     border-top: 1px solid var(--border);
@@ -5120,6 +7676,58 @@
     background: var(--primary-bg);
     border-color: var(--primary);
     color: var(--primary);
+  }
+
+  /* Pending Anchor Card */
+  .pending-anchor-card {
+    background: linear-gradient(135deg, var(--warning-bg) 0%, var(--bg-secondary) 100%);
+    border: 2px solid var(--warning);
+    border-radius: var(--radius-xl);
+    padding: var(--space-xl);
+    margin-bottom: var(--space-xl);
+    text-align: center;
+  }
+
+  .pending-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+  }
+
+  .pending-badge {
+    background: var(--warning);
+    color: var(--bg);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .pending-label {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .pending-task {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: var(--space-md);
+    color: var(--text);
+  }
+
+  .pending-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 var(--space-md);
+  }
+
+  .pending-hint code {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
   }
 
   /* How-To Guide */
@@ -5340,6 +7948,15 @@
     color: var(--text-muted);
   }
 
+  .session-progress-summary .progress-iteration {
+    font-size: 12px;
+    color: var(--accent);
+    background: var(--accent-muted);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    margin-left: var(--space-sm);
+  }
+
   /* Bug Panel */
   .bug-panel {
     background: var(--bg-secondary);
@@ -5461,6 +8078,21 @@
     flex-shrink: 0;
   }
 
+  .bug-severity-btn {
+    font-size: 12px;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+
+  .bug-severity-btn:hover {
+    background: var(--bg-tertiary);
+  }
+
   .bug-item-title {
     flex: 1;
   }
@@ -5509,6 +8141,31 @@
     display: flex;
     gap: var(--space-sm);
     margin-bottom: var(--space-md);
+  }
+
+  .bug-severity-quick {
+    display: flex;
+    gap: 2px;
+  }
+
+  .bug-severity-quick button {
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0.5;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+
+  .bug-severity-quick button:hover {
+    opacity: 0.8;
+  }
+
+  .bug-severity-quick button.selected {
+    opacity: 1;
+    border-color: var(--accent);
   }
 
   .bug-input {

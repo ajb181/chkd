@@ -1,8 +1,24 @@
 import { writable, derived } from 'svelte/store';
-import type { Repository, Session, Bug, HandoverNote } from '$lib/api';
+import type { Repository, Session, Bug, HandoverNote, ParsedSpec } from '$lib/api';
 
 // Repository state
 export const repos = writable<Repository[]>([]);
+
+// Spec data
+export const spec = writable<ParsedSpec | null>(null);
+
+// UI preferences
+export interface UIPreferences {
+  theme: 'system' | 'light' | 'dark';
+  expandedAreas: Set<string>;
+  sidebarCollapsed: boolean;
+}
+
+export const uiPreferences = writable<UIPreferences>({
+  theme: 'system',
+  expandedAreas: new Set(),
+  sidebarCollapsed: false
+});
 export const currentRepoId = writable<string | null>(null);
 
 export const currentRepo = derived(

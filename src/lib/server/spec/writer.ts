@@ -10,10 +10,8 @@ export async function markItemComplete(specPath: string, itemId: string): Promis
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -41,10 +39,8 @@ export async function markItemIncomplete(specPath: string, itemId: string): Prom
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -71,7 +67,7 @@ export async function addItemToArea(
   title: string,
   description?: string,
   subItems?: string[]
-): Promise<{ itemId: string; line: number }> {
+): Promise<{ itemId: string; sectionId: string; line: number }> {
   const content = await fs.readFile(specPath, 'utf-8');
   const lines = content.split('\n');
   const parser = new SpecParser();
@@ -98,7 +94,7 @@ export async function addItemToArea(
 
   const itemId = generateId(areaCode, title);
 
-  return { itemId, line: insertLine + 1 };
+  return { itemId, sectionId: sectionNumber, line: insertLine + 1 };
 }
 
 /**
@@ -165,7 +161,7 @@ export async function addFeatureWithWorkflow(
   title: string,
   description?: string,
   customTasks?: string[]
-): Promise<{ itemId: string; line: number }> {
+): Promise<{ itemId: string; sectionId?: string; line: number }> {
   const workflowSteps = customTasks && customTasks.length > 0
     ? customTasks
     : DEFAULT_WORKFLOW_STEPS;
@@ -198,6 +194,67 @@ function searchItems(items: SpecItem[], itemId: string): SpecItem | null {
     if (found) return found;
   }
   return null;
+}
+
+/**
+ * Find item by fuzzy matching on title, description, or ID
+ * Returns single match or throws helpful error with suggestions
+ */
+function findItemByQuery(spec: ParsedSpec, query: string): { item: SpecItem; area: SpecArea } {
+  const parser = new SpecParser();
+  const matches = parser.findItems(spec, query);
+
+  // No matches - helpful error
+  if (matches.length === 0) {
+    throw new Error(
+      `❌ No items found for "${query}"\n\n` +
+      `💡 Try:\n` +
+      `  • chkd_status - See all items\n` +
+      `  • Use item ID or part of title\n` +
+      `  • Check spelling`
+    );
+  }
+
+  // Single match - perfect!
+  if (matches.length === 1) {
+    const item = matches[0];
+    // Find which area this item belongs to
+    for (const area of spec.areas) {
+      const found = searchItems(area.items, item.id);
+      if (found) {
+        return { item, area };
+      }
+    }
+    // Shouldn't happen but handle it
+    throw new Error(`Item found but area lookup failed for "${query}"`);
+  }
+
+  // Multiple matches - try exact match first
+  const exactMatch = matches.find(m =>
+    m.id.toLowerCase() === query.toLowerCase() ||
+    m.title.toLowerCase() === query.toLowerCase()
+  );
+
+  if (exactMatch) {
+    for (const area of spec.areas) {
+      const found = searchItems(area.items, exactMatch.id);
+      if (found) {
+        return { item: exactMatch, area };
+      }
+    }
+  }
+
+  // Ambiguous - show options
+  const suggestions = matches.slice(0, 5).map(m =>
+    `  • ${m.id.slice(0, 40)}... → ${m.title.slice(0, 50)}`
+  ).join('\n');
+
+  const more = matches.length > 5 ? `\n  ... and ${matches.length - 5} more` : '';
+
+  throw new Error(
+    `❌ Multiple matches for "${query}":\n\n${suggestions}${more}\n\n` +
+    `💡 Be more specific or use full ID`
+  );
 }
 
 function findInsertionPointForArea(lines: string[], area: SpecArea, spec: ParsedSpec): number {
@@ -345,10 +402,8 @@ export async function markItemInProgress(specPath: string, itemId: string): Prom
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -374,10 +429,8 @@ export async function skipItem(specPath: string, itemId: string): Promise<void> 
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -402,10 +455,8 @@ export async function unskipItem(specPath: string, itemId: string): Promise<void
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -430,10 +481,8 @@ export async function markItemBlocked(specPath: string, itemId: string): Promise
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -458,10 +507,8 @@ export async function unblockItem(specPath: string, itemId: string): Promise<voi
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -527,17 +574,16 @@ export async function editItem(
   specPath: string,
   itemId: string,
   newTitle?: string,
-  newDescription?: string
+  newDescription?: string,
+  newStory?: string
 ): Promise<void> {
   const content = await fs.readFile(specPath, 'utf-8');
   const lines = content.split('\n');
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];
@@ -560,6 +606,42 @@ export async function editItem(
   }
 
   lines[lineIndex] = newLine;
+
+  // Handle story update - story is a blockquote line after the item
+  if (newStory !== undefined) {
+    const indent = currentLine.match(/^(\s*)/)?.[1] || '';
+    const storyIndent = indent + '  '; // 2 more spaces for story
+
+    // Check if there's already a story line (blockquote right after item)
+    let storyLineIndex = -1;
+    for (let i = lineIndex + 1; i < lines.length; i++) {
+      const line = lines[i];
+      // Check if this line is a story (blockquote with same or greater indent)
+      if (line.match(/^\s*>/)) {
+        storyLineIndex = i;
+        break;
+      }
+      // Stop if we hit another checklist item or header
+      if (line.match(/^\s*-\s+\[/) || line.match(/^##/)) {
+        break;
+      }
+    }
+
+    if (newStory.trim()) {
+      const storyLine = `${storyIndent}> ${newStory.trim()}`;
+      if (storyLineIndex >= 0) {
+        // Update existing story
+        lines[storyLineIndex] = storyLine;
+      } else {
+        // Insert new story after item
+        lines.splice(lineIndex + 1, 0, storyLine);
+      }
+    } else if (storyLineIndex >= 0) {
+      // Remove story if empty
+      lines.splice(storyLineIndex, 1);
+    }
+  }
+
   await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
 }
 
@@ -572,10 +654,8 @@ export async function deleteItem(specPath: string, itemId: string): Promise<void
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   // Find the range of lines to delete (item + all nested children)
   const startLine = itemInfo.item.line - 1;
@@ -611,6 +691,57 @@ export async function deleteItem(specPath: string, itemId: string): Promise<void
 }
 
 /**
+ * Add a child item to an existing item
+ */
+export async function addChildItem(
+  specPath: string,
+  parentId: string,
+  title: string
+): Promise<{ childId: string; line: number }> {
+  const content = await fs.readFile(specPath, 'utf-8');
+  const lines = content.split('\n');
+  const parser = new SpecParser();
+  const spec = parser.parse(content);
+
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const parentInfo = findItemByQuery(spec, parentId);
+
+  // Get the indent of the parent item
+  const parentLine = parentInfo.item.line - 1;
+  const parentIndent = lines[parentLine].match(/^(\s*)/)?.[1].length || 0;
+  const childIndent = ' '.repeat(parentIndent + 2);
+
+  // Find where to insert the new child (after parent and its existing children)
+  let insertLine = parentLine + 1;
+  for (let i = parentLine + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const lineMatch = line.match(/^(\s*)-\s+\[/);
+    if (lineMatch) {
+      const lineIndent = lineMatch[1].length;
+      if (lineIndent > parentIndent) {
+        // This is a child, keep scanning
+        insertLine = i + 1;
+      } else {
+        // Same or less indent, stop here
+        break;
+      }
+    } else if (line.match(/^##/) || (line.trim() && !line.match(/^\s*-/))) {
+      // Hit a header or non-list content, stop
+      break;
+    }
+  }
+
+  // Create the new child line
+  const newLine = `${childIndent}- [ ] ${title}`;
+  lines.splice(insertLine, 0, newLine);
+
+  await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
+
+  const childId = generateId(parentId.split('-')[0] || 'ITEM', title);
+  return { childId, line: insertLine + 1 };
+}
+
+/**
  * Set priority on an item (P1=High, P2=Medium, P3=Low, null=Backlog)
  * Adds or removes [P1], [P2], [P3] tag from the title
  */
@@ -624,10 +755,8 @@ export async function setPriority(
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const lineIndex = itemInfo.item.line - 1;
   let currentLine = lines[lineIndex];
@@ -649,6 +778,48 @@ export async function setPriority(
 }
 
 /**
+ * Set tags on an item
+ */
+export async function setTags(
+  specPath: string,
+  itemId: string,
+  tags: string[]
+): Promise<void> {
+  const content = await fs.readFile(specPath, 'utf-8');
+  const lines = content.split('\n');
+  const parser = new SpecParser();
+  const spec = parser.parse(content);
+
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
+
+  const lineIndex = itemInfo.item.line - 1;
+  let currentLine = lines[lineIndex];
+
+  // Remove all existing tags (anything matching #tagname pattern)
+  currentLine = currentLine.replace(/#\w+(?:[-_]\w+)*/g, '').replace(/\s+/g, ' ').trim();
+
+  // Add new tags if any
+  if (tags.length > 0) {
+    // Tags go after the title/priority but before the description dash
+    // Find where to insert: after ** closing or after ] if no bold
+    const tagString = tags.map(t => `#${t.toLowerCase()}`).join(' ');
+
+    // Pattern: find the title end (either **title** or just title) and insert tags before " - "
+    if (currentLine.includes(' - ')) {
+      // Has description - insert tags before the dash
+      currentLine = currentLine.replace(/ - /, ` ${tagString} - `);
+    } else {
+      // No description - append tags at end
+      currentLine = `${currentLine} ${tagString}`;
+    }
+  }
+
+  lines[lineIndex] = currentLine;
+  await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
+}
+
+/**
  * Move an item to a different area
  */
 export async function moveItem(
@@ -661,10 +832,8 @@ export async function moveItem(
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
-  const itemInfo = findItemById(spec, itemId);
-  if (!itemInfo) {
-    throw new Error(`Item ${itemId} not found`);
-  }
+  // Use fuzzy search - throws helpful error if not found or ambiguous
+  const itemInfo = findItemByQuery(spec, itemId);
 
   const targetArea = spec.areas.find(a => a.code === targetAreaCode);
   if (!targetArea) {
@@ -711,4 +880,83 @@ export async function moveItem(
   lines.splice(insertLine, 0, ...itemLines);
 
   await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
+}
+
+/**
+ * Transfer an item from one spec to another (across repos)
+ * The item will be assigned a new section number in the target area
+ */
+export async function transferItem(
+  sourceSpecPath: string,
+  targetSpecPath: string,
+  itemId: string,
+  targetAreaCode: string
+): Promise<{ newItemId: string; line: number }> {
+  // Read source spec
+  const sourceContent = await fs.readFile(sourceSpecPath, 'utf-8');
+  const sourceLines = sourceContent.split('\n');
+  const parser = new SpecParser();
+  const sourceSpec = parser.parse(sourceContent);
+
+  // Find the item in source spec
+  const itemInfo = findItemByQuery(sourceSpec, itemId);
+
+  // Get the lines for this item and children
+  const startLine = itemInfo.item.line - 1;
+  let endLine = startLine;
+  const itemIndent = sourceLines[startLine].match(/^(\s*)/)?.[1].length || 0;
+
+  for (let i = startLine + 1; i < sourceLines.length; i++) {
+    const line = sourceLines[i];
+    const lineMatch = line.match(/^(\s*)-\s+\[/);
+    if (lineMatch) {
+      const lineIndent = lineMatch[1].length;
+      if (lineIndent > itemIndent) {
+        endLine = i;
+      } else {
+        break;
+      }
+    } else if (line.match(/^##/)) {
+      break;
+    }
+  }
+
+  // Extract the item lines
+  const itemLines = sourceLines.slice(startLine, endLine + 1);
+
+  // Read target spec
+  const targetContent = await fs.readFile(targetSpecPath, 'utf-8');
+  const targetLines = targetContent.split('\n');
+  const targetSpec = parser.parse(targetContent);
+
+  // Find target area
+  const targetArea = targetSpec.areas.find(a => a.code === targetAreaCode);
+  if (!targetArea) {
+    throw new Error(`Target area ${targetAreaCode} not found in target spec`);
+  }
+
+  // Get next section number for target area
+  const sectionNumber = getNextSectionNumber(targetArea);
+
+  // Replace the section number in the first line
+  let firstLine = itemLines[0];
+  // Match patterns like "- [ ] **SD.1 Title**" or "- [ ] [P1] **SD.1 Title**"
+  firstLine = firstLine.replace(
+    /(\*\*)[A-Z]+\.\d+\s+/,
+    `$1${sectionNumber} `
+  );
+  itemLines[0] = firstLine;
+
+  // Find insertion point in target area
+  const insertLine = findInsertionPointForArea(targetLines, targetArea, targetSpec);
+
+  // Insert into target
+  targetLines.splice(insertLine, 0, ...itemLines);
+  await fs.writeFile(targetSpecPath, targetLines.join('\n'), 'utf-8');
+
+  // Remove from source (only after successful target insert)
+  sourceLines.splice(startLine, endLine - startLine + 1);
+  await fs.writeFile(sourceSpecPath, sourceLines.join('\n'), 'utf-8');
+
+  return { newItemId: sectionNumber, line: insertLine + 1 };
 }

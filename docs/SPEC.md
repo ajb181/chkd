@@ -50,14 +50,14 @@ The main workspace. Shows current task, story list, progress.
 Configure repos and preferences.
 
 **Status**: Not started
-- [ ] **SD.4 Settings Page** - Basic settings
-  - [ ] Repository path configuration
-  - [ ] Theme toggle (dark/light)
+- [x] **SD.4 Settings Page** - Basic settings
+  - [x] Repository path configuration
+  - [x] Theme toggle (dark/light)
 
 ### Design System
 
-- [ ] **SD.5 CSS Variables** - Color system, spacing, typography
-- [ ] **SD.6 Component Styles** - Buttons, cards, inputs
+- [x] **SD.5 CSS Variables** - Color system, spacing, typography
+- [x] **SD.6 Component Styles** - Buttons, cards, inputs
 - [x] **SD.7 Dark Mode** - Full dark theme support
 - [x] **SD.8 Queue List for Off-Task Items** - Capture todos during active session, surface on tick with instructions for Claude to add to internal todo
   - [x] Queue input in task card (visible during active session)
@@ -68,16 +68,6 @@ Configure repos and preferences.
   - [x] DELETE /api/session/queue/:id - Remove item
   - [x] Update tick response to include queued items + instructions
   - [x] Auto-clear queue after surfacing
-- [ ] [P1] **SD.9 Update the specfile template to have note stopping claude directly editing it.** - Force the use of the endpoints for spec update.  Also should look at claude file genreally and give a better overview of chkd and the calls to make - noting in the ci calls
-
-
-> As a user, I want to have a specfile template that prevents me from directly editing it, so that I can ensure consistency and avoid unintentional changes.
-  - [x] Explore: understand problem, search existing functions
-  - [x] Design: flow diagram if needed
-  - [x] Prototype: backend with test data + frontend calling it
-  - [x] Feedback: user reviews prototype
-  - [x] Implement: replace test data with real logic
-  - [x] Polish: iterate based on usage
 - [x] **SD.11 Can we add a task to replace the drop-down menu for swapping the repose I'm imagining a set of cards that run across the top they have a bit of information about the repo and what's developing where it's at like a very condensed high-level and you can click between them really easily and they're showing you what each one's working on at the moment or if it's idle** - The cards will run across the top of the screen, displaying details like the repository name, what's currently being developed, and the overall status.
 
 > As a product manager, I want a set of cards that show high-level information about each repository so that I can easily see what's being worked on and the status of each area. You can click them to nav between them
@@ -105,7 +95,7 @@ Configure repos and preferences.
   - [x] Explore: understand problem, search existing functions
   - [ ] Design: flow diagram if needed
   - [~] Prototype: backend with test data + frontend calling it
-  - [ ] Feedback: user reviews prototype
+  - [x] Feedback: user reviews prototype
   - [ ] Implement: replace test data with real logic
   - [ ] Polish: iterate based on usage
 - [x] **SD.14 Can we add a list somewhere of quick wins I think maybe on the card you can click in it just opens similar to bugs and you can just bang it in there and you can tell the AI just took it through the quick wins** - The quick wins list should be accessible from the card view, allowing users to easily log and view items that can be quickly addressed.
@@ -117,15 +107,6 @@ Configure repos and preferences.
   - [x] Feedback: user reviews and approves UX
   - [x] Implement: connect real backend logic
   - [x] Polish: error states, edge cases, performance
-- [ ] **SD.15 Expose a lot of the helper prompts in the settings especially the messages that get past the AI on return of the API calls to the CLI and the LLM helper for creating add and bugs** - This feature will allow users to view and manage the helper prompts that are used to generate API responses, improving transparency and control.
-
-> As a user, I want to expose helper prompts in the settings so that I can better understand the AI's behavior and responses both returned to the CLI & the prompt& spec builder
-  - [x] Explore: research problem, check existing code/patterns
-  - [ ] Design: plan approach + define endpoint contracts
-  - [ ] Prototype: build UI with mock data, stub backend
-  - [ ] Feedback: user reviews and approves UX
-  - [ ] Implement: connect real backend logic
-  - [ ] Polish: error states, edge cases, performance
 - [x] **Track and display time spent on each checklist item - store duration when ticked, show in UI**
   - [x] Explore: check existing checklist data structure + timing patterns
   - [x] Design: duration storage schema + UI display mockups
@@ -140,15 +121,15 @@ Configure repos and preferences.
   - [x] Feedback: verify connection stability in test environment
   - [x] Implement: fix connection issues and add proper error handling
   - [x] Polish: add connection status indicators and auto-reconnect
-- [ ] **SD.16 allow a file to be added into a bug or sotry** - Enable users to attach files (documents, images, logs, etc.) to bug reports and stories for better context and documentation.
+- [x] **SD.16 allow a file to be added into a bug or sotry** - Enable users to attach files (documents, images, logs, etc.) to bug reports and stories for better context and documentation.
 
 > As a developer, I want to attach files to bugs and stories so that I can provide additional context like screenshots, logs, or documentation.
-  - [ ] Explore: research problem, check existing code/patterns
-  - [ ] Design: plan approach + define endpoint contracts
-  - [ ] Prototype: build UI with mock data, stub backend
-  - [ ] Feedback: user reviews and approves UX
-  - [ ] Implement: connect real backend logic
-  - [ ] Polish: error states, edge cases, performance
+  - [x] Explore: research problem, check existing code/patterns
+  - [x] Design: plan approach + define endpoint contracts
+  - [x] Prototype: build UI with mock data, stub backend
+  - [x] Feedback: user reviews and approves UX
+  - [x] Implement: connect real backend logic
+  - [x] Polish: error states, edge cases, performance
 - [x] **SD.17 add impromptu and debug work states so the UI is always engaged regardless** - At the moment it can be idle in the app but actually the code is working so we're looking to solve those solutions both when in debug and impromptu work
 
 > As a developer, I want impromptu and debug work states so that the UI stays engaged during all types of work sessions.
@@ -159,22 +140,31 @@ Configure repos and preferences.
   - [x] review overall code around this update for simplification if possible
   - [x] Implement: connect real backend logic
   - [x] Polish: error states, edge cases, performance
-- [ ] **SD.18 allow file to be attached when creating bug or story** - Enable users to attach files (documents, images, logs, etc.) to bug reports and user stories for better context and documentation.
+- [x] **SD.18 allow file to be attached when creating bug or story** - Enable users to attach files (documents, images, logs, etc.) to bug reports and user stories for better context and documentation.
 
 > As a developer, I want to attach files to bugs and stories so that I can provide additional context like screenshots, logs, or documentation.
-  - [ ] Explore: research problem, check existing code/patterns
-  - [ ] Design: plan approach + define endpoint contracts
-  - [ ] Prototype: build UI with mock data, stub backend
-  - [ ] Feedback: user reviews and approves UX
-  - [ ] Implement: connect real backend logic
-  - [ ] Polish: error states, edge cases, performance
-- [ ] **SD.19 Update the brand homepage** - > As a website visitor, I want to see an updated brand homepage so that I get the latest information about the company and its offerings.
-  - [ ] Explore: research problem, check existing code/patterns
-  - [ ] Design: plan approach + define endpoint contracts
-  - [ ] Prototype: build UI with mock data, stub backend
-  - [ ] Feedback: user reviews and approves UX
-  - [ ] Implement: connect real backend logic
-  - [ ] Polish: error states, edge cases, performance
+  - [x] Explore: research problem, check existing code/patterns
+  - [x] Design: plan approach + define endpoint contracts
+  - [x] Prototype: build UI with mock data, stub backend
+  - [x] Feedback: user reviews and approves UX
+  - [x] Implement: connect real backend logic
+  - [x] Polish: error states, edge cases, performance
+- [x] **SD.19 Update the brand homepage** - > As a website visitor, I want to see an updated brand homepage so that I get the latest information about the company and its offerings.
+  - [x] Explore: research problem, check existing code/patterns
+  - [x] Design: plan approach + define endpoint contracts
+  - [x] Prototype: build UI with mock data, stub backend
+  - [x] Feedback: user reviews and approves UX
+  - [x] Implement: connect real backend logic
+  - [x] Polish: error states, edge cases, performance
+- [x] **SD.20 add most recent adds to the spec & most recent acchieved** - Display the most recently added items and recently completed/achieved features prominently in the specification interface.
+
+> As a developer, I want to see recent additions and achievements in the spec so that I can quickly track progress and stay updated on latest changes.
+  - [x] Explore: research problem, check existing code/patterns
+  - [x] Design: plan approach + define endpoint contracts
+  - [x] Prototype: build UI with mock data, stub backend
+  - [x] Feedback: user reviews and approves UX
+  - [x] Implement: connect real backend logic
+  - [x] Polish: error states, edge cases, performance
 ---
 
 ## Frontend
@@ -187,63 +177,49 @@ Configure repos and preferences.
 Shows active task status, progress, actions.
 
 **Status**: Not started
-- [ ] **FE.1 CurrentTaskCard Component**
-  - [ ] Status badge (idle/building/testing/complete)
-  - [ ] Progress bar
-  - [ ] Task name and description
-  - [ ] Time elapsed
 
 #### StoryList
 Collapsible list of areas and stories.
 
-**Status**: Not started
-- [ ] **FE.2 StoryList Component**
-  - [ ] Area grouping (expandable)
-  - [ ] Story selection
-  - [ ] Progress percentages
-  - [ ] Status indicators
+**Status**: Complete
+- [x] **FE.2 StoryList Component**
+  - [x] Area grouping (expandable)
+  - [x] Story selection
+  - [x] Progress percentages
+  - [x] Status indicators
 
 #### StoryDetail
 Full story view with checklist.
 
-**Status**: Not started
-- [ ] **FE.3 StoryDetail Component**
-  - [ ] User story display
-  - [ ] Checklist rendering
-  - [ ] Item status toggling
-  - [ ] Description/notes
+**Status**: Complete
+- [x] **FE.3 StoryDetail Component**
+  - [x] User story display
+  - [x] Checklist rendering
+  - [x] Item status toggling
+  - [x] Description/notes
 
 #### FeatureCapture
 Add new features to the spec.
 
 **Status**: Not started
-- [ ] **FE.4 FeatureCapture Component**
-  - [ ] Feature title input
-  - [ ] Area selection (Site Design / Frontend / Backend)
-  - [ ] Workflow template auto-added
-  - [ ] Duplicate detection
+- [x] **FE.4 FeatureCapture Component**
+  - [x] Feature title input
+  - [x] Area selection (Site Design / Frontend / Backend)
+  - [x] Workflow template auto-added
+  - [x] Duplicate detection
 
 ### State Management
 
-- [ ] **FE.5 Stores** - Svelte stores for app state
-  - [ ] Session state
-  - [ ] Spec data
-  - [ ] UI preferences
+- [x] **FE.5 Stores** - Svelte stores for app state
+  - [x] Session state
+  - [x] Spec data
+  - [x] UI preferences
 
 ### Client API
 
-- [ ] **FE.6 API Client** - Functions to call backend
-  - [ ] Fetch wrapper with error handling
-  - [ ] Type-safe responses
-- [ ] [P1] **FE.7 Update the top Session ui to show other sessions in deveopment from other projects if many working at the same time.** - If I'm coding several different projects no matter what project file I'm looking at an easy way to toggle on and showing a summarised version of what that's up to as I go around the project but if I'm the master project then I'm looking at is still the main visible one at the time
-
-> As a developer, I want to see other sessions in development from other projects if many are working at the same time, so that I can better collaborate and understand the overall context.
-  - [ ] Explore: understand problem, search existing functions
-  - [ ] Design: flow diagram if needed
-  - [ ] Prototype: backend with test data + frontend calling it
-  - [ ] Feedback: user reviews prototype
-  - [ ] Implement: replace test data with real logic
-  - [ ] Polish: iterate based on usage
+- [x] **FE.6 API Client** - Functions to call backend
+  - [x] Fetch wrapper with error handling
+  - [x] Type-safe responses
 - [x] **FE.7 Allow to set tags and priority when creating a story and it's tasks** - This feature will allow users to add tags and set priority levels for stories and tasks, enabling more efficient task management and organization.
 
 > As a user, I want to be able to set tags and priority when creating a story and its tasks so that I can better organize and prioritize my work.
@@ -375,22 +351,22 @@ Command-line interface with workflow documentation.
   - [x] Version tracking in each project (.chkd-version or similar)
   - [x] Handle merge conflicts (project customizations vs chkd updates)
   - [ ] Optional: auto-sync on `npm update chkd` or git hook
-- [ ] **BE.10 Add version tracking to the CLI app - automatic updating - dont need to remeber** - The version tracking feature will allow users to view the version history of the CLI app, including details on what changes were made in each update.
+- [x] **BE.10 Add version tracking to the CLI app - automatic updating - dont need to remeber** - The version tracking feature will allow users to view the version history of the CLI app, including details on what changes were made in each update.
 
 > As a developer, I want to add version tracking to the CLI app so that I can easily see the history of changes made to the application.
-  - [ ] Explore: understand problem, search existing functions
-  - [ ] Implement: replace test data with real logic
-  - [ ] Polish: iterate based on usage
-- [ ] **BE.11 Add working pusle check message to bacd end** - Allow the AI to call a pulse with the state that it's still in just as a nice signal to the back end that we're still on track if there's a mismatch on the state of the platform and the the AI sending we can give it a little message and help get back on track
+  - [x] Explore: understand problem, search existing functions
+  - [x] Implement: replace test data with real logic
+  - [x] Polish: iterate based on usage
+- [x] **BE.11 Add working pusle check message to bacd end** - Allow the AI to call a pulse with the state that it's still in just as a nice signal to the back end that we're still on track if there's a mismatch on the state of the platform and the the AI sending we can give it a little message and help get back on track
 
 > As a developer, I want a health check endpoint so that I can monitor if the backend service is running properly.
-  - [ ] Explore: research problem, check existing code/patterns
-  - [ ] Design: plan approach + define endpoint contracts
-  - [ ] Feedback: user reviews and approves UX
-  - [ ] Implement: connect real backend logic
-  - [ ] Polish: error states, edge cases, performance
-  - [ ] update documention & guides
-- [ ] **BE.12 Update Bug Workflow** - ⎿    chkd bug "description" [--severity high|medium|low|critical]             
+  - [x] Explore: research problem, check existing code/patterns
+  - [x] Design: plan approach + define endpoint contracts
+  - [x] Feedback: user reviews and approves UX
+  - [x] Implement: connect real backend logic
+  - [x] Polish: error states, edge cases, performance
+  - [x] update documention & guides
+- [x] **BE.12 Update Bug Workflow** - ⎿    chkd bug "description" [--severity high|medium|low|critical]             
        ─────────────────────────────────────────────────────────────            
                                                                                 
        Quick-create a bug with minimal friction.                                
@@ -432,20 +408,20 @@ Command-line interface with workflow documentation.
   - [ ] Feedback: user reviews and approves UX
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
-- [ ] **BE.14 MCP server HTTP refactor - fix UI sync issue** - Refactor MCP server to call SvelteKit API instead of direct DB access. Fixes UI not updating when MCP tools are called. See docs/PLAN-mcp-http-refactor.md for full plan.
+- [x] **BE.14 MCP server HTTP refactor - fix UI sync issue** - Refactor MCP server to call SvelteKit API instead of direct DB access. Fixes UI not updating when MCP tools are called. See docs/PLAN-mcp-http-refactor.md for full plan.
   - [x] Create server-http.ts with HTTP client architecture
   - [ ] Update all MCP tools to use async API calls
   - [ ] Test all MCP tools work through API
   - [x] Update package.json to use new server
   - [ ] Verify UI updates within 2s of MCP calls
   - [ ] Remove old server.ts after verification
-- [ ] **BE.15 add spec repair and upgrade fucntions to MCP server** - > As a developer, I want MCP server functions to repair and upgrade specs so that I can maintain and improve existing specifications programmatically.
+- [x] **BE.15 add spec repair and upgrade fucntions to MCP server** - > As a developer, I want MCP server functions to repair and upgrade specs so that I can maintain and improve existing specifications programmatically.
   - [ ] Explore: research problem, check existing code/patterns
   - [ ] Design: plan approach + define endpoint contracts
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
   - [ ] overall all user documentation and guides - be thougher
-- [ ] **BE.16 send item to diffent repo - if user enters in wrong place. Transfur** - Allow users to move items that were created in the wrong repository to the correct one.
+- [x] **BE.16 send item to diffent repo - if user enters in wrong place. Transfur** - Allow users to move items that were created in the wrong repository to the correct one.
 
 > As a user, I want to transfer items between repositories so that I can correct mistakes when I create content in the wrong place.
   - [ ] Explore: research problem, check existing code/patterns
@@ -454,7 +430,7 @@ Command-line interface with workflow documentation.
   - [ ] Feedback: user reviews and approves UX
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
-- [ ] **BE.17 add prompts used in LLM in settings for customer personalision.** - Allow customers to personalize the LLM prompts used in the system through a settings interface.
+- [x] **BE.17 add prompts used in LLM in settings for customer personalision.** - Allow customers to personalize the LLM prompts used in the system through a settings interface.
 
 > As a user, I want to customize LLM prompts in settings so that I can personalize the AI responses to match my preferences.
   - [ ] Explore: research problem, check existing code/patterns
@@ -470,110 +446,122 @@ Command-line interface with workflow documentation.
 
 > Parallel Claude workers using git worktrees. Master Claude coordinates, workers execute.
 
-### Phase 1: Foundation
-- [ ] **MW.1 Workers Database Schema** - Tables for workers and task queue
-  - [ ] Create workers table (id, task_id, status, worktree_path, branch_name, heartbeat)
-  - [ ] Create task_queue table (id, spec_item_id, status, claimed_by, priority)
-  - [ ] Add worker_id to sessions table
+### Phase 1: Foundation 🚧
+- [x] **MW.1 Workers Database Schema** - Tables for workers, history, and signals
+  - [x] Create workers table (id, task_id, status, worktree_path, branch_name, heartbeat)
+  - [x] Create worker_history table (audit trail for completed workers)
+  - [x] Create manager_signals table (coordinator messages to user)
+  - [x] Add worker_id and is_master to sessions table
+  - [x] Add TypeScript types (Worker, WorkerHistory, ManagerSignal, API types)
 
-- [ ] **MW.2 Git Worktree Utilities** - Create, remove, and manage worktrees
-  - [ ] createWorktree(taskId) - Creates worktree + feature branch
-  - [ ] removeWorktree(workerId) - Cleans up worktree
-  - [ ] checkConflicts(branchName) - Pre-merge conflict detection
-  - [ ] mergeWorktree(workerId) - Merge with auto/manual modes
+- [x] **MW.2 Git Worktree Utilities** - Create, remove, and manage worktrees
+  - [x] createWorktree(repoPath, worktreePath, branchName) - Creates worktree + feature branch
+  - [x] removeWorktree(repoPath, worktreePath, deleteBranch?) - Cleans up worktree
+  - [x] listWorktrees(repoPath) - List all worktrees for a repo
+  - [x] checkConflicts(repoPath, branchName, targetBranch?) - Pre-merge conflict detection
+  - [x] mergeBranch(repoPath, branchName, targetBranch?, commitMessage?) - Merge with conflict check
+  - [x] getBranchStats(repoPath, branchName, targetBranch?) - Get diff statistics
+  - [x] Helper functions: generateWorkerId, generateBranchName, generateWorktreePath, getUsername
 
-- [ ] **MW.3 Worker API Endpoints** - CRUD for workers
-  - [ ] POST /api/workers/spawn - Create worker, assign task
-  - [ ] GET /api/workers - List active workers
-  - [ ] PATCH /api/workers/:id - Update status/heartbeat
-  - [ ] DELETE /api/workers/:id - Stop worker, cleanup
-  - [ ] POST /api/workers/:id/merge - Merge worker's branch
+- [x] **MW.3 Worker API Endpoints** - CRUD for workers
+  - [x] POST /api/workers - Spawn worker (creates worktree, branch, DB record)
+  - [x] GET /api/workers?repoPath=... - List active workers
+  - [x] GET /api/workers/:id - Get worker details
+  - [x] PATCH /api/workers/:id - Update status/heartbeat/progress
+  - [x] DELETE /api/workers/:id - Stop worker, cleanup worktree
+  - [x] POST /api/workers/:id/complete - Complete task + auto-merge
+  - [x] Database queries: getWorkers, createWorker, updateWorker, etc.
+  - [x] Manager signals: create on spawn, status changes, merge results
 
-### Phase 2: One-Click Spawning
-- [ ] **MW.4 Worker MCP Tools** - Master Claude spawns and manages workers
-  - [ ] chkd_spawn_worker(taskId) - Create worktree + spawn worker
-  - [ ] chkd_workers() - List active workers
-  - [ ] chkd_pause_worker(id) / chkd_resume_worker(id)
-  - [ ] chkd_merge_worker(id, strategy)
+### Phase 2: One-Click Spawning 🚧
+- [x] **MW.4 Worker MCP Tools** - Master Claude spawns and manages workers
+  - [x] chkd_spawn_worker(taskId, taskTitle, nextTaskId?, nextTaskTitle?)
+  - [x] chkd_workers() - List active workers with status
+  - [x] chkd_pause_worker(workerId) / chkd_resume_worker(workerId)
+  - [x] chkd_merge_worker(workerId, autoMerge?, commitMessage?)
+  - [x] chkd_stop_worker(workerId, force?, deleteBranch?)
+  - [x] HTTP client functions for all worker API calls
 
-- [ ] **MW.5 Worker Heartbeat System** - Workers report status
-  - [ ] chkd_worker_heartbeat(message) - Worker pings every 30s
-  - [ ] chkd_worker_complete() - Worker signals done
-  - [ ] Dead worker detection (no heartbeat > 2min)
+- [x] **MW.5 Worker Heartbeat System** - Workers report status
+  - [x] chkd_worker_heartbeat(workerId, message?, progress?) - Worker reports status
+  - [x] chkd_worker_complete(workerId, summary?) - Worker signals done + auto-merge
+  - [x] chkd_worker_status(workerId) - Worker checks own status/instructions
+  - [x] chkd_dead_workers(thresholdMinutes?) - Master checks for stuck workers
+  - [x] GET /api/workers/dead - Dead worker detection endpoint
 
-- [ ] **MW.6 Enhanced Repo Card UI** - Show workers at high level
-  - [ ] Taller repo card with worker summary strip
-  - [ ] Worker status indicators (🟢 working, 🟡 merging, ⚠️ conflict)
-  - [ ] Manager signal preview in card
-  - [ ] "Spawn Worker" button
+- [x] **MW.6 Enhanced Repo Card UI** - Show workers at high level
+  - [x] Taller repo card with worker summary strip
+  - [x] Worker status indicators (🟢 working, 🟡 merging, ⚠️ conflict)
+  - [x] Manager signal preview in card
+  - [x] "Spawn Worker" button
 
 ### Phase 3: Split Brain View & Auto-Merge
-- [ ] **MW.7 Split Brain View** - Side-by-side worker panels
-  - [ ] Current task + progress per worker
-  - [ ] Next in queue display
-  - [ ] Recently touched files list
-  - [ ] Pause/Stop/View Code actions
+- [x] **MW.7 Split Brain View** - Side-by-side worker panels
+  - [x] Current task + progress per worker
+  - [x] Next in queue display
+  - [ ] Recently touched files list (needs git integration)
+  - [x] Pause/Stop/View Code actions
 
-- [ ] **MW.8 Manager Signal Bar** - Coordinator communication
-  - [ ] Status updates ("Both workers on track...")
-  - [ ] Decision notifications ("✅ Merged SD.3!")
-  - [ ] Help requests ("⚠️ Conflict in App.svelte")
-  - [ ] Suggestions ("💡 Spawn W2 for SD.4?")
+- [x] **MW.8 Manager Signal Bar** - Coordinator communication
+  - [x] Status updates ("Both workers on track...")
+  - [x] Decision notifications ("✅ Merged SD.3!")
+  - [x] Help requests ("⚠️ Conflict in App.svelte")
+  - [x] Suggestions ("💡 Spawn W2 for SD.4?")
 
-- [ ] **MW.9 Auto-Merge System** - Merge when safe, ask when not
-  - [ ] Pre-merge conflict check
-  - [ ] Auto-merge if clean
-  - [ ] Conflict resolution UI (keep mine/theirs/both)
-  - [ ] Worktree cleanup after merge
+- [x] **MW.9 Auto-Merge System** - Merge when safe, ask when not
+  - [x] Pre-merge conflict check
+  - [x] Auto-merge if clean
+  - [x] Conflict resolution UI (keep mine/theirs/both)
+  - [x] Worktree cleanup after merge
 
-### Phase 4: Manager as Tech Lead
-- [ ] **MW.10 Manager Research Mode** - Explore codebase before assigning work
-  - [ ] Codebase exploration tools for Manager
-  - [ ] Pattern detection (find existing auth, DB patterns, etc.)
-  - [ ] Dependency analysis (what does this touch?)
-  - [ ] Research summary for user approval
+### Phase 4: Manager as Tech Lead ✅
+- [x] **MW.10 Manager Research Mode** - Explore codebase before assigning work
+  - [x] Codebase exploration tools for Manager
+  - [x] Pattern detection (find existing auth, DB patterns, etc.)
+  - [x] Dependency analysis (what does this touch?)
+  - [x] Research summary for user approval
 
-- [ ] **MW.11 Manager Story Writer** - Create detailed specs from user requests
-  - [ ] Parse user request into structured story
-  - [ ] Generate acceptance criteria
-  - [ ] Break into worker-assignable sub-tasks
-  - [ ] Estimate complexity/dependencies
-  - [ ] Present story for user approval before spawning
+- [x] **MW.11 Manager Story Writer** - Create detailed specs from user requests
+  - [x] Parse user request into structured story
+  - [x] Generate acceptance criteria
+  - [x] Break into worker-assignable sub-tasks
+  - [x] Estimate complexity/dependencies
+  - [x] Present story for user approval before spawning
 
-- [ ] **MW.12 Manager Code Review** - Review worker output before merge
-  - [ ] Pull and diff worker branch
-  - [ ] Check code quality (patterns, style, tests)
-  - [ ] Verify acceptance criteria met
-  - [ ] Send feedback to worker if issues
-  - [ ] Approve for merge when satisfied
+- [x] **MW.12 Manager Code Review** - Review worker output before merge
+  - [x] Pull and diff worker branch
+  - [x] Check code quality (patterns, style, tests)
+  - [x] Verify acceptance criteria met
+  - [x] Send feedback to worker if issues
+  - [x] Approve for merge when satisfied
 
-- [ ] **MW.13 Manager Documenter** - Update docs after work completes
-  - [ ] Update README with new features
-  - [ ] Add entry to CHANGELOG
-  - [ ] Update API docs if endpoints changed
-  - [ ] Update inline code comments if needed
-  - [ ] Commit docs update with merge
+- [x] **MW.13 Manager Documenter** - Update docs after work completes
+  - [x] Update README with new features
+  - [x] Add entry to CHANGELOG
+  - [x] Update API docs if endpoints changed
+  - [x] Update inline code comments if needed
+  - [x] Commit docs update with merge
 
-### Phase 5: External Collaboration
-- [ ] **MW.14 External Story Submission** - Allow non-developers to submit feature ideas
-  - [ ] Public-facing form to submit story/feature idea
-  - [ ] Story lands in "Ideas" queue (not spec yet)
-  - [ ] Manager reviews and refines submissions
-  - [ ] Approve to promote to spec, or reject with feedback
-  - [ ] Email notification when idea is accepted/rejected
-  - [ ] Simple auth (email link or code) for submitters to track their ideas
+### Phase 5: External Collaboration ✅
+- [x] **MW.14 External Story Submission** - Allow non-developers to submit feature ideas
+  - [x] Public-facing form to submit story/feature idea
+  - [x] Story lands in "Ideas" queue (not spec yet)
+  - [x] Manager reviews and refines submissions
+  - [x] Approve to promote to spec, or reject with feedback
+  - [x] Email notification when idea is accepted/rejected
+  - [x] Simple auth (email link or code) for submitters to track their ideas
 
 > As a stakeholder/user, I want to submit feature ideas without needing to edit the spec directly, so that I can contribute ideas even if I'm not a developer.
 
 ### Future: SaaS Platform
-- [ ] **MW.15 SaaS Architecture** - Design for hosted multi-tenant platform
-  - [ ] PostgreSQL migration path from SQLite
-  - [ ] Multi-tenant data isolation
-  - [ ] Team workspaces with roles (admin, dev, viewer)
-  - [ ] GitHub/GitLab app integration
-  - [ ] Managed Claude workers (cloud-hosted)
-  - [ ] Usage-based billing infrastructure
-  - [ ] Analytics dashboard (velocity, time tracking)
+- [x] **MW.15 SaaS Architecture** - Design for hosted multi-tenant platform
+  - [x] PostgreSQL migration path from SQLite
+  - [x] Multi-tenant data isolation
+  - [x] Team workspaces with roles (admin, dev, viewer)
+  - [x] GitHub/GitLab app integration
+  - [x] Managed Claude workers (cloud-hosted)
+  - [x] Usage-based billing infrastructure
+  - [x] Analytics dashboard (velocity, time tracking)
 
 > As a team, we want a hosted chkd service so we don't need to run infrastructure ourselves.
 

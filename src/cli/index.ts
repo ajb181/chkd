@@ -103,6 +103,20 @@ async function showContext() {
   }
 }
 
+// Show queue items with instruction for Claude
+async function showQueueReminder() {
+  const cwd = process.cwd();
+  const res = await api(`/api/session/queue?repoPath=${encodeURIComponent(cwd)}`);
+
+  if (!res.success || !res.data?.items?.length) return;
+
+  console.log(`\n  📬 Queue (${res.data.items.length}) - Add to your internal todo:`);
+  for (const item of res.data.items) {
+    const title = item.title.length > 55 ? item.title.slice(0, 52) + '...' : item.title;
+    console.log(`     • ${title}`);
+  }
+}
+
 // ============================================
 // Commands
 // ============================================
@@ -157,6 +171,7 @@ async function tick(itemQuery: string) {
     console.log(`  → ${res.data.nextStep}`);
   }
 
+  await showQueueReminder();
   console.log('');
 }
 
@@ -584,7 +599,10 @@ async function start(taskQuery: string) {
     console.log(`  📝 "${res.data.handoverNote.note}"`);
   }
 
-  console.log(`  💡 Run 'chkd progress' to see sub-items.\n`);
+  console.log(`  💡 Run 'chkd progress' to see sub-items.`);
+
+  await showQueueReminder();
+  console.log('');
 }
 
 async function working(itemQuery: string) {
@@ -647,6 +665,7 @@ async function working(itemQuery: string) {
   } else {
     console.log(`  💡 Run 'chkd tick' when done.`);
   }
+  await showQueueReminder();
   console.log('');
 }
 
@@ -678,6 +697,8 @@ async function iterate() {
     console.log(`  💡 ${phaseNudge}`);
   }
   console.log(`  📋 ${reminder}`);
+
+  await showQueueReminder();
   console.log('');
 }
 
@@ -779,12 +800,53 @@ async function progress() {
     console.log(`  No sub-items for this task`);
   }
 
+  await showQueueReminder();
   console.log('');
 }
 
 async function fix(bugQuery: string) {
   if (!bugQuery) {
-    console.log(`\n  Usage: chkd fix "bug title or ID"\n`);
+    console.log(`\n  Usage: chkd fix "bug title or ID"`);
+    console.log(`\n  Signal that a fix is ready for verification.`);
+    console.log(`  Does NOT close the bug - run 'chkd resolve' after user verifies.\n`);
+    return;
+  }
+
+  const cwd = process.cwd();
+
+  // Find the bug to show its title
+  const listRes = await api(`/api/bugs?repoPath=${encodeURIComponent(cwd)}`);
+  if (!listRes.success) {
+    console.log(`\n  ❌ ${listRes.error}\n`);
+    return;
+  }
+
+  const bugs = listRes.data || [];
+  const queryLower = bugQuery.toLowerCase();
+  const bug = bugs.find((b: any) =>
+    b.id === bugQuery ||
+    (typeof b.id === 'string' && b.id.startsWith(bugQuery)) ||
+    b.title.toLowerCase().includes(queryLower)
+  );
+
+  if (!bug) {
+    console.log(`\n  ❌ Bug not found: "${bugQuery}"`);
+    return;
+  }
+
+  console.log(`\n  🔧 Fix ready: ${bug.title}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  ⚠️  VERIFY WITH USER:`);
+  console.log(`     Ask user to confirm the fix solves the problem.`);
+  console.log(`     Do not close until user has verified.`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  💡 Run 'chkd resolve "${bugQuery}"' after user confirms\n`);
+}
+
+async function resolveBug(bugQuery: string) {
+  if (!bugQuery) {
+    console.log(`\n  Usage: chkd resolve "bug title or ID"`);
+    console.log(`\n  Close a bug after user has verified the fix works.\n`);
     return;
   }
 
@@ -799,17 +861,26 @@ async function fix(bugQuery: string) {
     return;
   }
 
+  // End the debug session
+  await api('/api/session', {
+    method: 'PATCH',
+    body: JSON.stringify({ repoPath: cwd, status: 'idle' }),
+  });
+
   console.log(`\n  ✅ ${res.data.message}`);
-  console.log(`  💡 Run /retro to capture learnings.\n`);
+  console.log(`  📴 Debug session ended\n`);
 }
 
-async function startBugfix(query: string) {
+async function startBugfix(query: string, options: { convert?: boolean } = {}) {
   if (!query) {
     console.log(`\n  Usage: chkd bugfix "bug title or ID"`);
-    console.log(`\n  Start working on a bug with confirmation.`);
+    console.log(`\n  Start working on a bug. Non-interactive - use flags for options.`);
+    console.log(`\n  Options:`);
+    console.log(`    --convert    Convert to a proper story/task instead`);
     console.log(`\n  Examples:`);
-    console.log(`    chkd bugfix "save button"    # By partial title`);
-    console.log(`    chkd bugfix "a1b2c3"         # By ID\n`);
+    console.log(`    chkd bugfix "save button"       # Start bugfix by title`);
+    console.log(`    chkd bugfix "a1b2c3"            # Start bugfix by ID`);
+    console.log(`    chkd bugfix "big issue" --convert  # Convert to story\n`);
     return;
   }
 
@@ -843,26 +914,8 @@ async function startBugfix(query: string) {
     return;
   }
 
-  // Show the bug and confirm
-  const sevIcon = bug.severity === 'critical' ? '🔴' :
-                  bug.severity === 'high' ? '🟠' :
-                  bug.severity === 'low' ? '🟢' : '🟡';
-
-  console.log(`\n  🐛 Bug: ${bug.title}`);
-  console.log(`  ─────────────────────────────────`);
-  console.log(`  Severity: ${sevIcon} ${bug.severity.toUpperCase()}`);
-  if (bug.description) {
-    console.log(`  Description: ${bug.description}`);
-  }
-  console.log(`\n  Is this a quick fix (<10 lines, clear cause)?`);
-  console.log(`    y = Yes, start debug session`);
-  console.log(`    n = No, cancel`);
-  console.log(`    c = Convert to a proper story/task (if bigger)\n`);
-
-  const answer = await confirm('  Your choice [y/n/c]: ');
-
-  if (answer === 'c' || answer === 'convert') {
-    // Convert to story
+  // Convert to story if requested
+  if (options.convert) {
     console.log(`\n  Converting to story...\n`);
 
     const addRes = await api('/api/spec/add', {
@@ -876,7 +929,6 @@ async function startBugfix(query: string) {
     });
 
     if (addRes.success) {
-      // Mark bug as linked to story (or delete it)
       await api('/api/bugs', {
         method: 'PATCH',
         body: JSON.stringify({ repoPath: cwd, bugQuery: bug.id, status: 'wont_fix' }),
@@ -891,9 +943,16 @@ async function startBugfix(query: string) {
     return;
   }
 
-  if (answer !== 'y' && answer !== 'yes') {
-    console.log(`\n  Cancelled.\n`);
-    return;
+  // Show the bug details
+  const sevIcon = bug.severity === 'critical' ? '🔴' :
+                  bug.severity === 'high' ? '🟠' :
+                  bug.severity === 'low' ? '🟢' : '🟡';
+
+  console.log(`\n  🐛 Bug: ${bug.title}`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  Severity: ${sevIcon} ${bug.severity.toUpperCase()}`);
+  if (bug.description) {
+    console.log(`  Description: ${bug.description}`);
   }
 
   // Start debug session
@@ -917,10 +976,24 @@ async function startBugfix(query: string) {
     body: JSON.stringify({ repoPath: cwd, bugQuery: bug.id, status: 'in_progress' }),
   });
 
-  console.log(`\n  🔧 Debug session started: ${bug.title}`);
+  console.log(`\n  🔧 Debug session started`);
   console.log(`  ─────────────────────────────────`);
-  console.log(`  💡 Research first, then fix minimally`);
-  console.log(`  💡 Run 'chkd fix "${bug.title.slice(0, 20)}..."' when verified fixed\n`);
+  console.log(`  ⚠️  ALIGN WITH USER FIRST:`);
+  console.log(`     Explain your understanding of this bug.`);
+  console.log(`     Get agreement on what the problem is before proceeding.`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  Workflow:`);
+  console.log(`  1. Align   → Agree with user on what bug means`);
+  console.log(`  2. Research → Find root cause`);
+  console.log(`  3. Propose → Suggest fix, get approval`);
+  console.log(`  4. Fix     → Make minimal change`);
+  console.log(`  5. Verify  → User confirms it's solved`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  💡 Use 'chkd pulse "status"' to stay connected`);
+  console.log(`  💡 Run 'chkd fix' when ready → then 'chkd resolve' after user verifies`);
+
+  await showQueueReminder();
+  console.log('');
 }
 
 async function repair() {
@@ -1048,7 +1121,7 @@ async function bug(description: string, flags: Record<string, string | boolean>)
   if (isBig || !isSmall) {
     console.log(`  🔍 Complex bug → run /bugfix for guided debugging`);
   } else {
-    console.log(`  💡 Quick fix (<10 lines). Get user acceptance before 'chkd fix'.`);
+    console.log(`  💡 Quick fix. Check solution with user before 'chkd fix'.`);
   }
 
   // Remind of current context (don't get distracted by the bug!)
@@ -1742,7 +1815,10 @@ async function quickwin(query: string) {
 
 async function status() {
   const cwd = process.cwd();
-  const res = await api(`/api/status?repoPath=${encodeURIComponent(cwd)}`);
+  const [res, queueRes] = await Promise.all([
+    api(`/api/status?repoPath=${encodeURIComponent(cwd)}`),
+    api(`/api/session/queue?repoPath=${encodeURIComponent(cwd)}`)
+  ]);
 
   if (!res.success) {
     console.log(`❌ ${res.error}`);
@@ -1766,14 +1842,22 @@ async function status() {
 
   if (data.spec) {
     const bar = '█'.repeat(Math.floor(data.spec.progress / 5)) + '░'.repeat(20 - Math.floor(data.spec.progress / 5));
-    console.log(`  Progress: [${bar}] ${data.spec.progress}%`);
-    console.log(`  Items: ${data.spec.completedItems}/${data.spec.totalItems} complete`);
+    console.log(`  Progress: [${bar}] ${data.spec.progress}% (${data.spec.completedItems}/${data.spec.totalItems})`);
   }
 
   if (data.session.currentTask) {
-    console.log(`\n  🔨 Current task:`);
-    console.log(`     ${data.session.currentTask.title}`);
+    const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max - 3) + '...' : s;
+    console.log(`\n  🔨 ${truncate(data.session.currentTask.title, 50)}`);
     console.log(`     Iteration ${data.session.iteration} • ${formatTime(data.session.elapsedMs)}`);
+  }
+
+  // Show queue items if any
+  if (queueRes.success && queueRes.data?.items?.length > 0) {
+    console.log(`\n  📬 Queue (${queueRes.data.items.length}):`);
+    for (const item of queueRes.data.items) {
+      const title = item.title.length > 50 ? item.title.slice(0, 47) + '...' : item.title;
+      console.log(`     • ${title}`);
+    }
   }
 
   console.log(`\n  ${data.summary}\n`);
@@ -1840,6 +1924,19 @@ async function list() {
       console.log(`    ${status} ${severity} ${id}  ${title}`);
     }
     console.log('');
+  }
+}
+
+function version() {
+  // Read version from package.json
+  const packagePath = resolve(__dirname, '..', '..', 'package.json');
+  try {
+    const pkg = JSON.parse(readFileSync(packagePath, 'utf-8'));
+    console.log(`\n  chkd v${pkg.version}`);
+    console.log(`  Development quality control - spec-driven workflow\n`);
+  } catch {
+    console.log(`\n  chkd (version unknown)`);
+    console.log(`  Could not read package.json\n`);
   }
 }
 
@@ -1917,13 +2014,16 @@ function help(command?: string) {
     status              Show current progress and task
     list                List all spec items by area
     workflow            Show the development workflow
+    version             Show chkd version
     help [command]      Show detailed help for a command
 
   BUGS
 
     bug "desc"          Quick-create a bug
     bugs                List open bugs
-    fix "bug"           Mark a bug as fixed
+    bugfix "bug"        Start working on a bug (aligns with user first)
+    fix "bug"           Signal fix ready (prompts for user verification)
+    resolve "bug"       Close bug after user verified
 
   WORKFLOW
 
@@ -2052,6 +2152,27 @@ function showCommandHelp(command: string) {
 
   TIP: Use task IDs shown here with /chkd command.
 `,
+    version: `
+  chkd version
+  ─────────────────────────────────────────────────────────────
+
+  Show the installed version of chkd.
+
+  ALIASES:
+    chkd version
+    chkd --version
+    chkd -v
+
+  OUTPUT:
+    - Version number from package.json
+    - Brief description
+
+  EXAMPLES:
+    chkd version           # Show version
+    chkd -v                # Short form
+
+  TIP: Useful for troubleshooting or checking for updates.
+`,
     bug: `
   chkd bug "description" [--severity high|medium|low|critical]
   ─────────────────────────────────────────────────────────────
@@ -2112,35 +2233,99 @@ function showCommandHelp(command: string) {
     - Use '/bugfix' in Claude Code to fix a bug
     - Run 'chkd bug "desc"' to add more bugs
 `,
+    bugfix: `
+  chkd bugfix "bug" [--convert]
+  ─────────────────────────────────────────────────────────────
+
+  Start working on a bug with alignment step.
+
+  ARGUMENTS:
+    "bug"       Bug title or ID (first 6 chars of UUID)
+
+  OPTIONS:
+    --convert   Convert to a proper story/task instead of fixing directly
+
+  WHAT IT DOES:
+    1. Shows bug details
+    2. Starts a debug session
+    3. Prompts to ALIGN with user on what the bug means
+    4. Gives workflow steps
+
+  THE WORKFLOW:
+    1. Align   → Explain your understanding, get user agreement
+    2. Research → Find root cause
+    3. Propose → Suggest fix, get approval
+    4. Fix     → Make minimal change
+    5. Verify  → User confirms it's solved
+
+  EXAMPLES:
+    chkd bugfix "Save button"         # Start bugfix
+    chkd bugfix "a1b2c3"              # By ID
+    chkd bugfix "big issue" --convert # Convert to story instead
+
+  NEXT STEPS:
+    - Use 'chkd pulse "status"' to stay connected while working
+    - Run 'chkd fix' when fix is ready
+    - Run 'chkd resolve' after user verifies
+`,
     fix: `
   chkd fix "bug"
   ─────────────────────────────────────────────────────────────
 
-  Mark a bug as fixed.
+  Signal that a fix is ready for user verification.
+
+  IMPORTANT: This does NOT close the bug. It prompts you to
+  verify with the user that the fix works, then use 'resolve'.
+
+  ARGUMENTS:
+    "bug"    Bug title or ID (first 6 chars of UUID)
+
+  WHAT IT DOES:
+    - Shows the bug being fixed
+    - Prompts: "Verify with user that fix solves the problem"
+    - Tells you to run 'chkd resolve' after verification
+
+  WHEN TO USE:
+    - After implementing the fix
+    - Before marking the bug as closed
+    - When ready for user to test/verify
+
+  EXAMPLES:
+    chkd fix "Save button"      # Signal fix ready
+    chkd fix "a1b2c3"           # By ID prefix
+
+  NEXT STEP:
+    After user confirms the fix works:
+    → chkd resolve "bug"
+`,
+    resolve: `
+  chkd resolve "bug"
+  ─────────────────────────────────────────────────────────────
+
+  Close a bug after user has verified the fix works.
 
   ARGUMENTS:
     "bug"    Bug title or ID (first 6 chars of UUID)
 
   WHAT IT DOES:
     - Marks bug as 'fixed' in the database
+    - Ends the debug session
     - Sets resolved_at timestamp
-    - Prompts you to document learnings
 
   WHEN TO USE:
-    - After successfully fixing a bug
-    - When closing bugs during cleanup
+    - ONLY after user has verified the fix works
+    - After running 'chkd fix' and getting user confirmation
 
   EXAMPLES:
-    chkd fix "Save button"      # By title
-    chkd fix "a1b2c3"           # By ID prefix
+    chkd resolve "Save button"      # Close after verified
+    chkd resolve "a1b2c3"           # By ID prefix
 
-  LEARNINGS PROMPT:
-    After fixing, consider:
-    - What caused this bug? (root cause)
-    - How to prevent similar bugs? (patterns)
-    - Should CLAUDE.md be updated?
-
-  TIP: Use /retro in Claude Code for a full retrospective.
+  THE FULL FLOW:
+    1. chkd bugfix "bug"    → Start (align with user)
+    2. ... work on fix ...
+    3. chkd fix "bug"       → Signal ready (get verification)
+    4. ... user verifies ...
+    5. chkd resolve "bug"   → Close (confirmed fixed)
 `,
     also: `
   chkd also [description]
@@ -3342,8 +3527,11 @@ async function main() {
     case 'fix':
       await fix(arg);
       break;
+    case 'resolve':
+      await resolveBug(arg);
+      break;
     case 'bugfix':
-      await startBugfix(arg);
+      await startBugfix(arg, { convert: flags.convert });
       break;
     case 'win':
       await win(arg);
@@ -3408,6 +3596,11 @@ async function main() {
       break;
     case 'hosts':
       await setupHosts(arg);
+      break;
+    case 'version':
+    case '--version':
+    case '-v':
+      version();
       break;
     case 'help':
     case '--help':

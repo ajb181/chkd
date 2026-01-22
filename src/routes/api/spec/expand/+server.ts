@@ -15,6 +15,8 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const apiKey = getSetting('anthropic_api_key');
+    const llmTone = getSetting('llm_tone') || 'default';
+    const llmCustomPrefix = getSetting('llm_custom_prefix') || '';
 
     if (!apiKey) {
       // No API key - return a simple template instead
@@ -46,6 +48,21 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
+    // Build tone instruction
+    let toneInstruction = '';
+    if (llmTone === 'formal') {
+      toneInstruction = '\n\nUSE A FORMAL, PROFESSIONAL TONE in all generated text.';
+    } else if (llmTone === 'casual') {
+      toneInstruction = '\n\nUSE A CASUAL, FRIENDLY TONE in all generated text.';
+    } else if (llmTone === 'concise') {
+      toneInstruction = '\n\nBE EXTREMELY CONCISE - use shortest possible descriptions.';
+    }
+
+    // Build custom instructions
+    const customInstructions = llmCustomPrefix
+      ? `\n\nUSER CUSTOM INSTRUCTIONS:\n${llmCustomPrefix}`
+      : '';
+
     // Call Anthropic API with enhanced prompt
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -59,7 +76,7 @@ export const POST: RequestHandler = async ({ request }) => {
         max_tokens: 1024,
         messages: [{
           role: 'user',
-          content: `You help prepare feature ideas for a software spec. Your job:
+          content: `You help prepare feature ideas for a software spec. Your job:${toneInstruction}${customInstructions}
 
 1. POLISH the title: Fix spelling/grammar, make it concise (under 80 chars ideally)
 2. PRESERVE context: If the title is long/rambling, extract the key idea as title and move details to description
@@ -68,13 +85,15 @@ export const POST: RequestHandler = async ({ request }) => {
 5. Suggest which area it belongs to
 6. Generate smart workflow tasks adapted to this specific feature
 
-WORKFLOW PHILOSOPHY:
-- Explore first (research problem, check existing code)
-- Design approach + endpoint contracts
-- Prototype with mock data (fast iteration)
-- Get user feedback BEFORE full implementation
-- Then implement real logic
-- Polish based on actual usage
+WORKFLOW PHILOSOPHY (8 steps):
+1. Explore first (research problem, check existing code)
+2. Design approach + endpoint contracts
+3. Prototype with mock data (fast iteration)
+4. Get user feedback BEFORE full implementation
+5. Implement real logic
+6. Polish based on actual usage
+7. Capture and document any changes (if applicable)
+8. Get final sign-off from user
 
 Feature idea: "${title}"
 ${areaCode ? `Target area: ${areaCode}` : ''}
@@ -89,8 +108,8 @@ Respond with JSON only (no markdown code blocks):
   "tasks": ["Task 1: specific to this feature", "Task 2: adapted step", ...]
 }
 
-For tasks: Adapt the standard 6-step workflow to this feature. Keep tasks SHORT (under 60 chars).
-Simple fixes can have fewer steps. Complex features need all 6.`
+For tasks: Adapt the 8-step workflow to this feature. Keep tasks SHORT (under 60 chars).
+Simple fixes: 3-4 steps. Medium features: 5-6 steps. Complex features: all 8.`
         }]
       })
     });
