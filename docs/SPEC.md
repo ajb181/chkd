@@ -40,11 +40,11 @@ How to use chkd - workflow explanation, commands, troubleshooting.
 The main workspace. Shows current task, story list, progress.
 
 **Status**: Not started
-- [ ] **SD.3 Command Center Layout** - Main page structure
-  - [ ] Current task card (pinned at top)
-  - [ ] Story list sidebar
-  - [ ] Story detail panel
-  - [ ] Progress overview
+- [x] **SD.3 Command Center Layout** - Main page structure
+  - [x] Current task card (pinned at top)
+  - [x] Story list sidebar
+  - [x] Story detail panel
+  - [x] Progress overview
 
 #### Settings (`/settings`)
 Configure repos and preferences.
@@ -78,14 +78,6 @@ Configure repos and preferences.
   - [x] Feedback: user reviews prototype
   - [x] Implement: replace test data with real logic
   - [x] Polish: iterate based on usage
-- [x] **SD.9 Test Queue Feature** - Dummy task for testing the queue feature
-- [x] **SD.10 Test Queue Feature** - Dummy task for testing queue
-  - [x] Explore: understand problem, search existing functions
-  - [x] Design: flow diagram if needed
-  - [x] Prototype: backend with test data + frontend calling it
-  - [x] Feedback: user reviews prototype
-  - [~] Implement: replace test data with real logic
-  - [ ] Polish: iterate based on usage
 - [x] **SD.11 Can we add a task to replace the drop-down menu for swapping the repose I'm imagining a set of cards that run across the top they have a bit of information about the repo and what's developing where it's at like a very condensed high-level and you can click between them really easily and they're showing you what each one's working on at the moment or if it's idle** - The cards will run across the top of the screen, displaying details like the repository name, what's currently being developed, and the overall status.
 
 > As a product manager, I want a set of cards that show high-level information about each repository so that I can easily see what's being worked on and the status of each area. You can click them to nav between them
@@ -176,7 +168,13 @@ Configure repos and preferences.
   - [ ] Feedback: user reviews and approves UX
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
-
+- [ ] **SD.19 Update the brand homepage** - > As a website visitor, I want to see an updated brand homepage so that I get the latest information about the company and its offerings.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
 ---
 
 ## Frontend
@@ -246,11 +244,12 @@ Add new features to the spec.
   - [ ] Feedback: user reviews prototype
   - [ ] Implement: replace test data with real logic
   - [ ] Polish: iterate based on usage
-- [ ] **FE.7 Allow to set tags and priority when creating a story and it's tasks** - This feature will allow users to add tags and set priority levels for stories and tasks, enabling more efficient task management and organization.
+- [x] **FE.7 Allow to set tags and priority when creating a story and it's tasks** - This feature will allow users to add tags and set priority levels for stories and tasks, enabling more efficient task management and organization.
 
 > As a user, I want to be able to set tags and priority when creating a story and its tasks so that I can better organize and prioritize my work.
   - [ ] Explore: research problem, check existing code/patterns
   - [ ] Design: plan approach + define endpoint contracts
+    - [ ] Add tags property to SpecItem interface
   - [ ] Prototype: build UI with mock data, stub backend
   - [ ] Feedback: user reviews and approves UX
   - [ ] Implement: connect real backend logic
@@ -426,6 +425,157 @@ Command-line interface with workflow documentation.
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
   - [ ] update documention and guides
+- [x] **BE.13 Backend: Tags support in parser and writer** #backend #parser #writer - As a developer, I want tags to be parsed from spec markdown and written back correctly
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+- [ ] **BE.14 MCP server HTTP refactor - fix UI sync issue** - Refactor MCP server to call SvelteKit API instead of direct DB access. Fixes UI not updating when MCP tools are called. See docs/PLAN-mcp-http-refactor.md for full plan.
+  - [x] Create server-http.ts with HTTP client architecture
+  - [ ] Update all MCP tools to use async API calls
+  - [ ] Test all MCP tools work through API
+  - [x] Update package.json to use new server
+  - [ ] Verify UI updates within 2s of MCP calls
+  - [ ] Remove old server.ts after verification
+- [ ] **BE.15 add spec repair and upgrade fucntions to MCP server** - > As a developer, I want MCP server functions to repair and upgrade specs so that I can maintain and improve existing specifications programmatically.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+  - [ ] overall all user documentation and guides - be thougher
+- [ ] **BE.16 send item to diffent repo - if user enters in wrong place. Transfur** - Allow users to move items that were created in the wrong repository to the correct one.
+
+> As a user, I want to transfer items between repositories so that I can correct mistakes when I create content in the wrong place.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+- [ ] **BE.17 add prompts used in LLM in settings for customer personalision.** - Allow customers to personalize the LLM prompts used in the system through a settings interface.
+
+> As a user, I want to customize LLM prompts in settings so that I can personalize the AI responses to match my preferences.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+
+---
+
+## Multi-Worker System
+
+> Parallel Claude workers using git worktrees. Master Claude coordinates, workers execute.
+
+### Phase 1: Foundation
+- [ ] **MW.1 Workers Database Schema** - Tables for workers and task queue
+  - [ ] Create workers table (id, task_id, status, worktree_path, branch_name, heartbeat)
+  - [ ] Create task_queue table (id, spec_item_id, status, claimed_by, priority)
+  - [ ] Add worker_id to sessions table
+
+- [ ] **MW.2 Git Worktree Utilities** - Create, remove, and manage worktrees
+  - [ ] createWorktree(taskId) - Creates worktree + feature branch
+  - [ ] removeWorktree(workerId) - Cleans up worktree
+  - [ ] checkConflicts(branchName) - Pre-merge conflict detection
+  - [ ] mergeWorktree(workerId) - Merge with auto/manual modes
+
+- [ ] **MW.3 Worker API Endpoints** - CRUD for workers
+  - [ ] POST /api/workers/spawn - Create worker, assign task
+  - [ ] GET /api/workers - List active workers
+  - [ ] PATCH /api/workers/:id - Update status/heartbeat
+  - [ ] DELETE /api/workers/:id - Stop worker, cleanup
+  - [ ] POST /api/workers/:id/merge - Merge worker's branch
+
+### Phase 2: One-Click Spawning
+- [ ] **MW.4 Worker MCP Tools** - Master Claude spawns and manages workers
+  - [ ] chkd_spawn_worker(taskId) - Create worktree + spawn worker
+  - [ ] chkd_workers() - List active workers
+  - [ ] chkd_pause_worker(id) / chkd_resume_worker(id)
+  - [ ] chkd_merge_worker(id, strategy)
+
+- [ ] **MW.5 Worker Heartbeat System** - Workers report status
+  - [ ] chkd_worker_heartbeat(message) - Worker pings every 30s
+  - [ ] chkd_worker_complete() - Worker signals done
+  - [ ] Dead worker detection (no heartbeat > 2min)
+
+- [ ] **MW.6 Enhanced Repo Card UI** - Show workers at high level
+  - [ ] Taller repo card with worker summary strip
+  - [ ] Worker status indicators (🟢 working, 🟡 merging, ⚠️ conflict)
+  - [ ] Manager signal preview in card
+  - [ ] "Spawn Worker" button
+
+### Phase 3: Split Brain View & Auto-Merge
+- [ ] **MW.7 Split Brain View** - Side-by-side worker panels
+  - [ ] Current task + progress per worker
+  - [ ] Next in queue display
+  - [ ] Recently touched files list
+  - [ ] Pause/Stop/View Code actions
+
+- [ ] **MW.8 Manager Signal Bar** - Coordinator communication
+  - [ ] Status updates ("Both workers on track...")
+  - [ ] Decision notifications ("✅ Merged SD.3!")
+  - [ ] Help requests ("⚠️ Conflict in App.svelte")
+  - [ ] Suggestions ("💡 Spawn W2 for SD.4?")
+
+- [ ] **MW.9 Auto-Merge System** - Merge when safe, ask when not
+  - [ ] Pre-merge conflict check
+  - [ ] Auto-merge if clean
+  - [ ] Conflict resolution UI (keep mine/theirs/both)
+  - [ ] Worktree cleanup after merge
+
+### Phase 4: Manager as Tech Lead
+- [ ] **MW.10 Manager Research Mode** - Explore codebase before assigning work
+  - [ ] Codebase exploration tools for Manager
+  - [ ] Pattern detection (find existing auth, DB patterns, etc.)
+  - [ ] Dependency analysis (what does this touch?)
+  - [ ] Research summary for user approval
+
+- [ ] **MW.11 Manager Story Writer** - Create detailed specs from user requests
+  - [ ] Parse user request into structured story
+  - [ ] Generate acceptance criteria
+  - [ ] Break into worker-assignable sub-tasks
+  - [ ] Estimate complexity/dependencies
+  - [ ] Present story for user approval before spawning
+
+- [ ] **MW.12 Manager Code Review** - Review worker output before merge
+  - [ ] Pull and diff worker branch
+  - [ ] Check code quality (patterns, style, tests)
+  - [ ] Verify acceptance criteria met
+  - [ ] Send feedback to worker if issues
+  - [ ] Approve for merge when satisfied
+
+- [ ] **MW.13 Manager Documenter** - Update docs after work completes
+  - [ ] Update README with new features
+  - [ ] Add entry to CHANGELOG
+  - [ ] Update API docs if endpoints changed
+  - [ ] Update inline code comments if needed
+  - [ ] Commit docs update with merge
+
+### Phase 5: External Collaboration
+- [ ] **MW.14 External Story Submission** - Allow non-developers to submit feature ideas
+  - [ ] Public-facing form to submit story/feature idea
+  - [ ] Story lands in "Ideas" queue (not spec yet)
+  - [ ] Manager reviews and refines submissions
+  - [ ] Approve to promote to spec, or reject with feedback
+  - [ ] Email notification when idea is accepted/rejected
+  - [ ] Simple auth (email link or code) for submitters to track their ideas
+
+> As a stakeholder/user, I want to submit feature ideas without needing to edit the spec directly, so that I can contribute ideas even if I'm not a developer.
+
+### Future: SaaS Platform
+- [ ] **MW.15 SaaS Architecture** - Design for hosted multi-tenant platform
+  - [ ] PostgreSQL migration path from SQLite
+  - [ ] Multi-tenant data isolation
+  - [ ] Team workspaces with roles (admin, dev, viewer)
+  - [ ] GitHub/GitLab app integration
+  - [ ] Managed Claude workers (cloud-hosted)
+  - [ ] Usage-based billing infrastructure
+  - [ ] Analytics dashboard (velocity, time tracking)
+
+> As a team, we want a hosted chkd service so we don't need to run infrastructure ourselves.
 
 ---
 
@@ -437,6 +587,15 @@ Command-line interface with workflow documentation.
 - [ ] **FUT.1 Test Generation** - Auto-generate tests on commit (port from v1)
 - [ ] **FUT.2 Sceptic Check** - Validate ideas before building
 - [ ] **FUT.3 Quality Gates** - Block bad code from main
+- [ ] **FUT.4 Code Health Checks** - Simple quality checks before/after tasks using jscpd (duplication) and knip (dead code). Integrate into Explore phase - flag issues, let user decide to refactor or proceed. Not a gate, just information.
+
+> As a developer, I want code health checks before starting a task so I can decide whether to refactor first, and after finishing so I can log any new technical debt.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
 
 ### Git & Source Control (UI owns this)
 - [ ] **FUT.4 Diff View** - See what changed during session
@@ -448,6 +607,17 @@ Command-line interface with workflow documentation.
 ### Advanced Features
 - [ ] **FUT.9 WebSocket Updates** - Real-time UI updates
 - [ ] **FUT.10 Version History** - Track spec changes over time
+- [ ] **FUT.11 Create the best debug workflow and tool in the MCP ever created** - Create comprehensive debugging capabilities and workflow tools that surpass existing MCP debugging solutions.
+
+> As a developer, I want powerful debug tools and workflows so that I can efficiently troubleshoot and resolve issues in the MCP system.
+  - [ ] Explore: research existing MCP debug tools & pain points
+  - [ ] Explore: audit current logging/error handling capabilities
+  - [ ] Design: debug workflow + tool architecture/contracts
+  - [ ] Prototype: core debug tools with mock error scenarios
+  - [ ] Get feedback: test debug workflow with real issues
+  - [ ] Implement: full debug toolset with enhanced logging
+  - [ ] Polish: refine tools based on usage patterns
+  - [ ] Document: debug workflow guide & tool reference
 
 ---
 
