@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRepoByPath, getSession, saveItemDuration, updateSession, clearSession } from '$lib/server/db/queries';
 import { SpecParser } from '$lib/server/spec/parser';
-import { markItemComplete } from '$lib/server/spec/writer';
+import { markItemComplete, removeCompletedChildren } from '$lib/server/spec/writer';
 import { clearQueue } from '$lib/server/proposal';
 import path from 'path';
 
@@ -281,6 +281,12 @@ export const POST: RequestHandler = async ({ request }) => {
     // If ticking a top-level item (no parent), clear the session
     if (repo && !parentId) {
       clearSession(repo.id);
+      // Clean up workflow scaffolding - remove completed children
+      try {
+        await removeCompletedChildren(specPath, targetId);
+      } catch {
+        // Non-fatal - item still completed even if cleanup fails
+      }
     }
 
     // Get and clear queued items (user added while Claude was working)

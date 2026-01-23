@@ -988,6 +988,73 @@ export async function deleteItem(specPath: string, itemId: string): Promise<void
 }
 
 /**
+ * Remove all children from a completed item (keeps the parent)
+ * Use after completing a feature/bug to clean up workflow scaffolding
+ * Only removes children if ALL are completed - leaves incomplete work visible
+ */
+export async function removeCompletedChildren(
+  specPath: string,
+  itemId: string
+): Promise<{ removed: number; kept: number; reason?: string }> {
+  const content = await fs.readFile(specPath, 'utf-8');
+  const lines = content.split('\n');
+  const parser = new SpecParser();
+  const spec = parser.parse(content);
+
+  // Find the item
+  let itemInfo;
+  try {
+    itemInfo = findItemByQuery(spec, itemId);
+  } catch {
+    return { removed: 0, kept: 0, reason: 'Item not found' };
+  }
+
+  const startLine = itemInfo.item.line - 1;
+  const itemIndent = lines[startLine].match(/^(\s*)/)?.[1].length || 0;
+
+  // Find all children and check if they're all completed
+  const childLines: number[] = [];
+  let allCompleted = true;
+
+  for (let i = startLine + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const lineMatch = line.match(/^(\s*)-\s+\[([x ])\]/i);
+    if (lineMatch) {
+      const lineIndent = lineMatch[1].length;
+      if (lineIndent > itemIndent) {
+        childLines.push(i);
+        // Check if completed (case insensitive x)
+        if (lineMatch[2].toLowerCase() !== 'x') {
+          allCompleted = false;
+        }
+      } else {
+        break;
+      }
+    } else if (line.match(/^##/)) {
+      break;
+    }
+  }
+
+  // No children to remove
+  if (childLines.length === 0) {
+    return { removed: 0, kept: 0, reason: 'No children' };
+  }
+
+  // Don't remove if some children incomplete
+  if (!allCompleted) {
+    return { removed: 0, kept: childLines.length, reason: 'Some children incomplete' };
+  }
+
+  // Remove all children (reverse order to maintain line numbers)
+  for (let i = childLines.length - 1; i >= 0; i--) {
+    lines.splice(childLines[i], 1);
+  }
+
+  await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
+  return { removed: childLines.length, kept: 0 };
+}
+
+/**
  * Add a child item to an existing item
  */
 export async function addChildItem(
