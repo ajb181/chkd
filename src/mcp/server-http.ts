@@ -610,7 +610,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n💡 Run chkd_resolve("${query}") after user confirms`
+        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Commit fix with clear message\n   2. Push to remote\n   3. Then resolve\n─────────────────────────────────\n💡 Run chkd_resolve("${query}") after commit+push and user confirms`
       }]
     };
   }
@@ -892,7 +892,9 @@ server.tool(
       });
     }
 
-    text += `\n\n💭 When done, run chkd_tick() immediately.`;
+    text += `\n\n⚠️ IMPORTANT: Tick each sub-item as you complete it.`;
+    text += `\n   Do NOT batch ticks at the end - tick as you go!`;
+    text += `\n\n💭 When done, run chkd_tick("${item}")`;
 
     return {
       content: [{
