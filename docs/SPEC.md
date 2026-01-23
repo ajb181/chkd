@@ -94,7 +94,7 @@ Configure repos and preferences.
 > As a developer, I want to be able to add instructions into the Philosophy section to help with bug fixes, and be able to apply different approaches to size the bug as small or large, so that I can more effectively resolve issues.
   - [x] Explore: understand problem, search existing functions
   - [ ] Design: flow diagram if needed
-  - [~] Prototype: backend with test data + frontend calling it
+  - [x] Prototype: backend with test data + frontend calling it
   - [x] Feedback: user reviews prototype
   - [ ] Implement: replace test data with real logic
   - [ ] Polish: iterate based on usage
@@ -301,6 +301,40 @@ Add new features to the spec.
   - [x] Feedback: user reviews and approves UX
   - [x] Implement: connect real backend logic
   - [!] Polish: overflow/cropping issue with tmux status bar needs different approach
+- [x] **FE.9 Remove terminal from UI** - Delete embedded terminal code and button from dashboard
+
+> As a developer, I want to remove the unused terminal feature so the codebase is cleaner
+
+**Key requirements:**
+- Remove terminal button from nav
+- Remove terminal panel from main area
+- Remove terminal state and imports
+- Remove terminal CSS styles
+
+**Files to change:**
+- src/routes/+page.svelte
+
+**Testing:**
+- Dashboard loads without errors
+- No terminal button visible
+- Ctrl+` shortcut removed
+
+  - [x] Explore > Research: investigate codebase and problem space
+  - [x] Explore > Share: inform user of findings before continuing
+  - [x] Design > Draft: create initial design/approach
+  - [x] Design > Review: show user, iterate if needed
+  - [x] Prototype > Build: create the prototype
+  - [x] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [x] Feedback > Demo: show user the prototype
+  - [x] Feedback > Iterate: make changes based on feedback
+  - [x] Implement > Build: implement real logic
+  - [x] Implement > Verify: test functionality works
+  - [x] Polish > Build: add error handling, edge cases
+  - [x] Polish > Verify: confirm edge cases handled
+  - [x] Document > Write: update relevant documentation
+  - [x] Document > Review: confirm docs match implementation
+  - [x] Commit > Stage: review changes, stage files
+  - [x] Commit > Commit: write message with assumptions noted
 
 ---
 
@@ -614,6 +648,40 @@ Command-line interface with workflow documentation.
   - [x] Document: update templates
     - [x] Write: update SPEC.md.template with new structure
     - [x] Review: templates match implementation
+- [ ] **BE.21 Story type flags for different workflows** - As a developer, I want to specify story types (remove, backend, refactor) when adding items so the workflow phases match the task
+
+**Key requirements:**
+- Add --type flag to chkd add command
+- Support types: remove, backend, refactor
+- Each type generates different workflow phases
+- Update writer.ts to handle type-specific phases
+
+**Files to change:**
+- src/cli/index.ts
+- src/lib/server/spec/writer.ts
+- src/routes/api/spec/add/+server.ts
+
+**Testing:**
+- chkd add "test" --type remove creates item with reduced phases
+- chkd add "test" --type backend skips UI phases
+- Default (no type) still creates full workflow
+
+  - [~] Explore > Research: investigate codebase and problem space
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Build: add error handling, edge cases
+  - [ ] Polish > Verify: confirm edge cases handled
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: write message with assumptions noted
 
 ---
 

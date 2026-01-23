@@ -580,8 +580,8 @@ async function start(taskQuery: string) {
 
   if (!res.success) {
     console.log(`\n  ❌ ${res.error}`);
-    if (res.suggestion) {
-      console.log(`  💡 ${res.suggestion}`);
+    if (res.hint) {
+      console.log(`  💡 ${res.hint}`);
     }
     console.log('');
     return;
@@ -1401,6 +1401,13 @@ async function add(title: string, flags: Record<string, string | boolean>) {
   if (tasks && tasks.length > 0) {
     body.tasks = tasks;
     body.withWorkflow = true; // Has explicit tasks
+  }
+
+  // Warn if --story alone - will create TBC fields that block start
+  if (story && !tasks) {
+    console.log(`\n  ⚠️  Warning: --story alone creates TBC placeholders.`);
+    console.log(`     This will block 'chkd start' until filled in.`);
+    console.log(`     Use 'chkd edit' after creation to update TBC fields - discuss with user first.\n`);
   }
 
   const res = await api('/api/spec/add', {
