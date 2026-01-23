@@ -1,13 +1,13 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { SpecParser } from '$lib/server/spec/parser';
-import { addItem, DEFAULT_WORKFLOW_STEPS } from '$lib/server/spec/writer';
+import { addItem, DEFAULT_WORKFLOW_STEPS, getWorkflowByType } from '$lib/server/spec/writer';
 import path from 'path';
 
 // Known parameters for validation
 const KNOWN_PARAMS = [
   'repoPath', 'title', 'description', 'areaCode',
-  'withWorkflow', 'tasks', 'dryRun', 'confirmLarge',
+  'withWorkflow', 'workflowType', 'tasks', 'dryRun', 'confirmLarge',
   'story', 'keyRequirements', 'filesToChange', 'testing', 'fileLink'
 ];
 
@@ -21,6 +21,7 @@ export const POST: RequestHandler = async ({ request }) => {
       description,
       areaCode,
       withWorkflow = true,
+      workflowType,
       tasks,
       dryRun = false,
       confirmLarge = false,
@@ -67,7 +68,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Determine which tasks will be added
     const tasksToAdd = withWorkflow
-      ? (tasks && tasks.length > 0 ? tasks : DEFAULT_WORKFLOW_STEPS)
+      ? (tasks && tasks.length > 0 ? tasks : getWorkflowByType(workflowType))
       : [];
 
     // Check for large additions
@@ -136,7 +137,8 @@ export const POST: RequestHandler = async ({ request }) => {
       testing: Array.isArray(testing) ? testing : undefined,
       fileLink: typeof fileLink === 'string' ? fileLink : undefined,
       tasks: Array.isArray(tasks) ? tasks : undefined,
-      withWorkflow
+      withWorkflow,
+      workflowType: typeof workflowType === 'string' ? workflowType : undefined
     });
 
     return json({

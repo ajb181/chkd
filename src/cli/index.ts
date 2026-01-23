@@ -1361,12 +1361,20 @@ async function add(title: string, flags: Record<string, string | boolean>) {
     console.log(`\n  Options:`);
     console.log(`    --story "text"     User story (As a... I want... so that...)`);
     console.log(`    --area SD|FE|BE    Target area (Site Design/Frontend/Backend)`);
+    console.log(`    --type TYPE        Workflow type: remove|backend|refactor|audit|debug`);
     console.log(`    --tasks "a,b,c"    Explicit task list (comma-separated)`);
     console.log(`    --no-workflow      No sub-tasks at all`);
     console.log(`    --dry-run          Preview without creating`);
+    console.log(`\n  Workflow Types:`);
+    console.log(`    remove     Explore → Implement → Commit (for deletions)`);
+    console.log(`    backend    Explore → Design → Implement → Polish → Commit (no UI)`);
+    console.log(`    refactor   Explore → Implement → Polish → Commit`);
+    console.log(`    audit      Explore → Feedback → Document → Commit (research only)`);
+    console.log(`    debug      Explore → Verify → Implement → Commit (investigate + confirm fix)`);
     console.log(`\n  Examples:`);
     console.log(`    chkd add "Dark Mode Theme" --story "As a user, I want dark mode"`);
-    console.log(`    chkd add "User Auth" --area BE --tasks "Explore: check auth,Implement: login"`);
+    console.log(`    chkd add "Delete terminal" --type remove --area FE`);
+    console.log(`    chkd add "API endpoint" --type backend --area BE`);
     console.log(`    chkd add "Fix Bug" --no-workflow     # Single item, no tasks\n`);
     return;
   }
@@ -1377,9 +1385,18 @@ async function add(title: string, flags: Record<string, string | boolean>) {
   const areaCode = typeof flags.area === 'string' ? flags.area.toUpperCase() : undefined;
   const story = typeof flags.story === 'string' ? flags.story :
                 typeof flags.desc === 'string' ? flags.desc : undefined;
+  const workflowType = typeof flags.type === 'string' ? flags.type.toLowerCase() : undefined;
   const dryRun = Boolean(flags['dry-run'] || flags.dryRun);
   const noWorkflow = Boolean(flags['no-workflow'] || flags.noWorkflow);
   const confirmLarge = Boolean(flags['confirm-large'] || flags.confirmLarge);
+
+  // Validate workflow type
+  const validTypes = ['remove', 'backend', 'refactor', 'audit', 'debug'];
+  if (workflowType && !validTypes.includes(workflowType)) {
+    console.log(`\n  ❌ Invalid workflow type: ${workflowType}`);
+    console.log(`  💡 Valid types: ${validTypes.join(', ')}\n`);
+    return;
+  }
 
   // Parse explicit tasks if provided
   let tasks: string[] | undefined;
@@ -1398,6 +1415,7 @@ async function add(title: string, flags: Record<string, string | boolean>) {
 
   if (areaCode) body.areaCode = areaCode;
   if (story) body.description = story;
+  if (workflowType) body.workflowType = workflowType;
   if (tasks && tasks.length > 0) {
     body.tasks = tasks;
     body.withWorkflow = true; // Has explicit tasks
@@ -3579,7 +3597,7 @@ async function main() {
   const restArgs = args.slice(1);
 
   // Flags that expect a value
-  const valueFlagSet = new Set(['severity', 'area', 'tasks', 'story', 'desc', 'title']);
+  const valueFlagSet = new Set(['severity', 'area', 'tasks', 'story', 'desc', 'title', 'type']);
 
   for (let i = 0; i < restArgs.length; i++) {
     const a = restArgs[i];

@@ -20,6 +20,7 @@ export interface AddItemOptions {
   // Workflow
   tasks?: WorkflowStep[];  // Custom tasks, or uses DEFAULT_WORKFLOW_STEPS
   withWorkflow?: boolean;  // Default true - set false for simple items
+  workflowType?: string;  // 'remove' | 'backend' | 'refactor' | 'audit' - uses type-specific phases
 }
 
 export interface AddItemResult {
@@ -128,6 +129,66 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   }
 ];
 
+// Type-specific workflows - reduced phases for different task types
+
+/** Remove workflow: Explore → Implement → Commit (skip UI/feedback phases) */
+export const REMOVE_WORKFLOW: WorkflowStep[] = [
+  DEFAULT_WORKFLOW_STEPS[0], // Explore
+  DEFAULT_WORKFLOW_STEPS[4], // Implement
+  DEFAULT_WORKFLOW_STEPS[7], // Commit
+];
+
+/** Backend workflow: Explore → Design → Implement → Polish → Commit (skip Prototype/Feedback) */
+export const BACKEND_WORKFLOW: WorkflowStep[] = [
+  DEFAULT_WORKFLOW_STEPS[0], // Explore
+  DEFAULT_WORKFLOW_STEPS[1], // Design
+  DEFAULT_WORKFLOW_STEPS[4], // Implement
+  DEFAULT_WORKFLOW_STEPS[5], // Polish
+  DEFAULT_WORKFLOW_STEPS[7], // Commit
+];
+
+/** Refactor workflow: Explore → Implement → Polish → Commit */
+export const REFACTOR_WORKFLOW: WorkflowStep[] = [
+  DEFAULT_WORKFLOW_STEPS[0], // Explore
+  DEFAULT_WORKFLOW_STEPS[4], // Implement
+  DEFAULT_WORKFLOW_STEPS[5], // Polish
+  DEFAULT_WORKFLOW_STEPS[7], // Commit
+];
+
+/** Audit workflow: Explore → Feedback → Document → Commit (research + discuss findings) */
+export const AUDIT_WORKFLOW: WorkflowStep[] = [
+  DEFAULT_WORKFLOW_STEPS[0], // Explore
+  DEFAULT_WORKFLOW_STEPS[3], // Feedback (discuss findings)
+  DEFAULT_WORKFLOW_STEPS[6], // Document
+  DEFAULT_WORKFLOW_STEPS[7], // Commit
+];
+
+/** Debug workflow: Explore → Verify → Implement → Commit (investigate + confirm fix approach + fix) */
+export const DEBUG_WORKFLOW: WorkflowStep[] = [
+  DEFAULT_WORKFLOW_STEPS[0], // Explore
+  {
+    task: 'Verify: confirm findings and fix approach with user',
+    children: ['Share: present findings to user', 'Confirm: get user approval on fix approach']
+  },
+  DEFAULT_WORKFLOW_STEPS[4], // Implement
+  DEFAULT_WORKFLOW_STEPS[7], // Commit
+];
+
+/** Valid workflow types */
+export type WorkflowType = 'remove' | 'backend' | 'refactor' | 'audit' | 'debug';
+
+/** Get workflow steps by type */
+export function getWorkflowByType(type?: string): WorkflowStep[] {
+  switch (type) {
+    case 'remove': return REMOVE_WORKFLOW;
+    case 'backend': return BACKEND_WORKFLOW;
+    case 'refactor': return REFACTOR_WORKFLOW;
+    case 'audit': return AUDIT_WORKFLOW;
+    case 'debug': return DEBUG_WORKFLOW;
+    default: return DEFAULT_WORKFLOW_STEPS;
+  }
+}
+
 /**
  * Add a new item to the spec - SINGLE UNIFIED FUNCTION
  * All item creation goes through here.
@@ -156,7 +217,7 @@ export async function addItem(opts: AddItemOptions): Promise<AddItemResult> {
 
   // Determine workflow tasks
   const tasks = withWorkflow
-    ? (opts.tasks && opts.tasks.length > 0 ? opts.tasks : DEFAULT_WORKFLOW_STEPS)
+    ? (opts.tasks && opts.tasks.length > 0 ? opts.tasks : getWorkflowByType(opts.workflowType))
     : undefined;
 
   // Build the new item lines
