@@ -1100,15 +1100,15 @@ server.tool(
       };
     }
 
-    let text = `✅ Added: ${title}\n`;
+    const specCode = response.data.sectionId || response.data.itemId;
+    let text = `✅ Added: ${specCode} ${title}\n`;
     text += `Area: ${areaCode}\n`;
-    text += `ID: ${response.data.itemId}\n`;
     if (tasks && tasks.length > 0) {
       text += `Tasks: ${tasks.length} custom sub-tasks\n`;
     } else {
       text += `Tasks: Standard workflow (6 phases)\n`;
     }
-    text += `\n💡 Use chkd_working("${response.data.itemId}") to start working on it`;
+    text += `\n💡 Use chkd_working("${specCode}") to start working on it`;
 
     return {
       content: [{
