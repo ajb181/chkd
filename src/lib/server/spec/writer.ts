@@ -96,8 +96,8 @@ export async function markItemIncomplete(specPath: string, itemId: string): Prom
  */
 export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   {
-    task: 'Explore: research problem, check existing code/patterns',
-    children: ['Research: investigate codebase and problem space', 'Questions: consider if clarification needed - ask user if unclear', 'Share: inform user of findings before continuing']
+    task: 'Explore: research problem, check existing code/patterns & files',
+    children: ['Research: investigate codebase, problem space, and any discovery docs', 'Questions: consider if clarification needed - ask user if unclear', 'Share: inform user of findings before continuing']
   },
   {
     task: 'Design: plan approach + define endpoint contracts',
@@ -117,7 +117,7 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   },
   {
     task: 'Polish: error states, edge cases, second-order effects',
-    children: ['Consider: wider impact, what else could this affect', 'Review: inspect the work thoroughly', 'Confirm: show user findings, get approval before commit']
+    children: ['Consider: wider impact, what else could this affect', 'Review: inspect the work thoroughly', 'Confirm: verify against discovery assumptions if any, show user findings, get approval']
   },
   {
     task: 'Document: update docs, guides, and CLAUDE.md if needed',
@@ -132,12 +132,12 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
 // Area-specific Polish steps
 const FE_POLISH_STEP: WorkflowStep = {
   task: 'Polish: error states, edge cases, second-order effects',
-  children: ['Consider: wider impact - loading states, empty states, error displays', 'Review: open browser, visually check UI renders correctly', 'Confirm: show user findings, get approval before commit']
+  children: ['Consider: wider impact - loading states, empty states, error displays', 'Review: open browser, visually check UI renders correctly', 'Confirm: verify against discovery assumptions if any, show user findings, get approval']
 };
 
 const BE_POLISH_STEP: WorkflowStep = {
   task: 'Polish: error states, edge cases, second-order effects',
-  children: ['Consider: wider impact - error handling, input validation, edge cases', 'Review: trace through scenarios, check error paths work', 'Confirm: show user findings, get approval before commit']
+  children: ['Consider: wider impact - error handling, input validation, edge cases', 'Review: trace through scenarios, check error paths work', 'Confirm: verify against discovery assumptions if any, show user findings, get approval']
 };
 
 /** Get area-appropriate Polish step */
