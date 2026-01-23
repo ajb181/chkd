@@ -9,17 +9,6 @@
   import SplitBrainView from '$lib/components/SplitBrainView.svelte';
   import ConflictResolution from '$lib/components/ConflictResolution.svelte';
 
-  // Terminal state - dynamic import to avoid SSR issues with xterm.js
-  let showTerminal = false;
-  let TerminalComponent: any = null;
-
-  // Load terminal component only in browser
-  $: if (browser && showTerminal && !TerminalComponent) {
-    import('$lib/components/Terminal.svelte').then(m => {
-      TerminalComponent = m.default;
-    });
-  }
-
   // Configure marked for inline rendering (no <p> tags for short text)
   const markedInline = (text: string) => {
     if (!text) return '';
@@ -1221,10 +1210,8 @@
 
   function handleViewWorkerCode(worktreePath: string | null) {
     if (!worktreePath) return;
-    // Open terminal or code editor to the worktree path
-    // For now, just log - could integrate with terminal component
+    // Show the worktree path to the user
     console.log('View code at:', worktreePath);
-    // Could dispatch to terminal or show a modal with path
     alert(`Worker code is at:\n${worktreePath}`);
   }
 
@@ -1743,19 +1730,7 @@
 
   // Keyboard handler for closing popups
   function handleKeydown(e: KeyboardEvent) {
-    // Ctrl+` or Cmd+` to toggle terminal
-    if ((e.ctrlKey || e.metaKey) && e.key === '`') {
-      showTerminal = !showTerminal;
-      e.preventDefault();
-      return;
-    }
-
     if (e.key === 'Escape') {
-      if (showTerminal) {
-        showTerminal = false;
-        e.preventDefault();
-        return;
-      }
       if (bugsExpanded) {
         bugsExpanded = false;
         e.preventDefault();
@@ -1772,9 +1747,6 @@
     <nav class="header-nav">
       <a href="/guide{currentRepo ? `?repo=${encodeURIComponent(currentRepo.path)}` : ''}" class="nav-link">Guide</a>
       <a href="/settings" class="nav-link">Settings</a>
-      <button class="nav-link terminal-toggle" class:active={showTerminal} on:click={() => showTerminal = !showTerminal} title="Toggle Terminal (Ctrl+`)">
-        📟 {showTerminal ? 'Hide' : 'Terminal'}
-      </button>
     </nav>
 
     <form on:submit|preventDefault={handleQuickCapture} class="capture-form">
@@ -2559,14 +2531,7 @@
     />
   {/if}
 
-  <div class="main-area" class:with-terminal={showTerminal && TerminalComponent}>
-    <!-- Terminal Panel (LEFT side when visible) -->
-    {#if showTerminal && TerminalComponent}
-      <div class="terminal-panel">
-        <svelte:component this={TerminalComponent} repoPath={repoPath} visible={showTerminal} />
-      </div>
-    {/if}
-
+  <div class="main-area">
     <main>
     <!-- Context Helper Bar - only show when NOT building (session card handles that) -->
     {#if !loading && session && session.status !== 'building'}
@@ -3377,22 +3342,7 @@
     background: var(--surface-hover);
   }
 
-  /* Terminal Toggle */
-  .terminal-toggle {
-    background: none;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    font-family: inherit;
-  }
-
-  .terminal-toggle.active {
-    background: var(--primary);
-    color: var(--bg);
-    border-color: var(--primary);
-  }
-
-  /* Terminal Panel */
-  /* Main Area - 50/50 split when terminal is shown */
+  /* Main Area */
   .main-area {
     flex: 1;
     display: flex;
@@ -3403,24 +3353,6 @@
     flex: 1;
     overflow-y: auto;
   }
-
-  .main-area.with-terminal main {
-    flex: 1;
-  }
-
-  .terminal-panel {
-    flex: 1;
-    background: #1a1a2e;
-    border-right: 2px solid var(--primary);
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    overflow: hidden;
-    max-height: calc(100vh - 120px);
-    clip-path: inset(0);
-  }
-
-  /* Terminal stays 50% even when detail sidebar is open */
 
   /* Repo Selector */
   /* Repo Cards Strip */

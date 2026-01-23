@@ -301,7 +301,7 @@ chkd tick "sub-item title"      # 3. Mark done (10s minimum after working)
 
 **⛔ NEVER chain commands:**
 ```bash
-chkd working "item" && chkd tick "item"  # BLOCKED - 10 second minimum enforced
+chkd working "item" && chkd tick "item"  # BLOCKED - 2 second minimum enforced
 ```
 
 **Feedback items require explicit user approval** - wait for "yes"/"approved" before ticking.

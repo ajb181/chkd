@@ -55,7 +55,7 @@ If status is IDLE, start a session first:
 
 ### ⛔ NEVER Batch Tick Calls
 
-The system enforces a 10-second minimum between `working` and `tick`:
+The system enforces a 2-second minimum between `working` and `tick`:
 ```bash
 # BLOCKED - will fail with debounce error
 chkd working "item" && chkd tick "item"

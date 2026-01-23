@@ -236,12 +236,12 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    // DEBOUNCE: Block tick if working was called less than 10 seconds ago
+    // DEBOUNCE: Block tick if working was called less than 2 seconds ago
     // This prevents batch calls like: chkd working && chkd tick
     if (repo && session?.currentItem?.startTime) {
       const startTime = new Date(session.currentItem.startTime + 'Z').getTime();
       const timeSinceWorking = Date.now() - startTime;
-      const MIN_WORK_TIME_MS = 10000; // 10 seconds
+      const MIN_WORK_TIME_MS = 2000; // 2 seconds
 
       if (timeSinceWorking < MIN_WORK_TIME_MS) {
         const remainingSeconds = Math.ceil((MIN_WORK_TIME_MS - timeSinceWorking) / 1000);

@@ -723,7 +723,7 @@ async function working(itemQuery: string) {
   console.log(`\n  ─────────────────────────────────────────────────────`);
   console.log(`  ⚠️  DO THE WORK FIRST, then tick.`);
   console.log(`     NEVER chain: chkd working && chkd tick`);
-  console.log(`     There's a 10-second minimum before tick is allowed.`);
+  console.log(`     There's a 2-second minimum before tick is allowed.`);
   console.log(`  ─────────────────────────────────────────────────────`);
 
   await showQueueReminder();

@@ -87,10 +87,10 @@ chkd tick "sub-item title"
 
 **⛔ NEVER do this:**
 ```bash
-chkd working "item" && chkd tick "item"  # BLOCKED - 10 second minimum
+chkd working "item" && chkd tick "item"  # BLOCKED - 2 second minimum
 ```
 
-The system enforces a 10-second minimum between `working` and `tick`. This ensures you actually do the work, not just announce intentions.
+The system enforces a 2-second minimum between `working` and `tick`. This ensures you actually do the work, not just announce intentions.
 
 ### Example:
 
@@ -288,7 +288,7 @@ The spec uses these markers:
 ### DON'T:
 - Work on wrong task
 - **Batch all ticks at the end**
-- **NEVER chain: `chkd working && chkd tick`** (10-second enforced minimum)
+- **NEVER chain: `chkd working && chkd tick`** (2-second enforced minimum)
 - Skip the Feedback pause
 - **Tick Feedback items without explicit user approval** (user must say "yes"/"approved"/etc.)
 - **Treat one approval as blanket approval** (each feature needs its own feedback)
