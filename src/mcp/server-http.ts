@@ -615,7 +615,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Commit fix with clear message\n   2. Push to remote\n   3. Then resolve\n─────────────────────────────────\n💡 Run chkd_resolve("${query}") after commit+push and user confirms`
+        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Commit with descriptive message:\n      - Summary: what was fixed\n      - Body: root cause + how fixed\n   2. Push to remote\n   3. Then resolve\n─────────────────────────────────\n💡 Run chkd_resolve("${query}") after commit+push and user confirms`
       }]
     };
   }
@@ -1400,7 +1400,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `✅ Quick win completed: ${query}\n\n📦 Don't forget to commit+push the QUICKWINS.md change!\n\n💡 Nice! Keep knocking them out.`
+        text: `✅ Quick win completed: ${query}\n\n📦 Commit with descriptive message (what you did + why), then push!\n\n💡 Nice! Keep knocking them out.`
       }]
     };
   }

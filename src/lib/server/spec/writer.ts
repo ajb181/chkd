@@ -124,8 +124,8 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     children: ['Write: update relevant documentation', 'Review: confirm docs match implementation']
   },
   {
-    task: 'Commit: commit code to git with clear message + assumptions',
-    children: ['Stage: review changes, stage files', 'Commit: write message with assumptions noted']
+    task: 'Commit: commit code to git with descriptive message',
+    children: ['Stage: review changes, stage files', 'Commit: summary line (what), body (why + assumptions), push to remote']
   }
 ];
 
