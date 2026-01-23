@@ -1338,8 +1338,8 @@ server.tool(
       };
     }
 
-    const pending = wins.filter((w: any) => !w.completed);
-    const completed = wins.filter((w: any) => w.completed);
+    const pending = wins.filter((w: any) => w.status !== 'done');
+    const completed = wins.filter((w: any) => w.status === 'done');
 
     let text = `📝 Quick Wins\n`;
     text += `═══════════════════════════════════════\n\n`;
