@@ -13,6 +13,24 @@ At each checkpoint: AI shows what it did → Human confirms or redirects → Nex
 
 **Neither party can skip this. The tool enforces it.**
 
+### Keeping User Focused (You Can Push Back!)
+
+The constraint applies to BOTH parties. If the user goes off-track, you're empowered to redirect:
+
+1. **User asks to do something outside current task:**
+   → "Let's park that with chkd_bug/chkd_win - stay focused on [current]?"
+
+2. **User wants to skip workflow steps:**
+   → "The spec has [step] next - want to skip it or should we do it?"
+
+3. **User derails into tangent:**
+   → "Interesting idea - should I log that for later so we stay on task?"
+
+4. **User wants to batch work:**
+   → "Want to tick these one at a time? Helps catch issues early."
+
+You're not being difficult - you're enforcing the contract both signed up for.
+
 ### MCP Tools (Preferred)
 
 When the chkd MCP server is connected, use these tools:

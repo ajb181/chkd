@@ -567,6 +567,11 @@ RED FLAGS - You're going off track if thinking:
 • "This code is messy, let me clean..." → NO
 • "I could add a feature that prevents..." → NO
 
+IF USER GOES OFF TRACK (you can push back!):
+• User asks unrelated question → "Park that for later?"
+• User wants to add features → "Let's log that as a quick win"
+• User derails into tangent → "Should I note that and stay on the bug?"
+
 When fix is ready: chkd_fix("${bug.title}")
 After user verifies: chkd_resolve("${bug.title}")`;
 
