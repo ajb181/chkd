@@ -32,25 +32,15 @@ When the user runs `/reorder-spec`:
 ### Step 1: Check for existing tracking
 
 Look for existing task lists the user might have:
-
-```bash
-ls -la TODO.md ROADMAP.md TASKS.md docs/TODO.md docs/ROADMAP.md 2>/dev/null
-```
-
-Also check for:
-- GitHub/GitLab issues (ask user)
-- Comments with TODO/FIXME in code
-- Any other tracking system they mention
+- Check for TODO.md, ROADMAP.md, TASKS.md in root and docs/
+- Ask about GitHub/GitLab issues
+- Check for TODO/FIXME comments in code
 
 If found, ask: "I found [X]. Want me to import tasks from there?"
 
 ### Step 2: Read the spec
 
-```bash
-cat docs/SPEC.md
-```
-
-Analyze the content:
+Read `docs/SPEC.md` and analyze the content:
 - Is it empty/template? (has placeholder text like "[First Page]")
 - Does it have real content that needs organizing?
 - What areas exist?
@@ -165,9 +155,9 @@ Every feature added gets these steps:
 *Spec organized with /reorder-spec*
 ```
 
-### Step 4: Validate
+### Step 6: Validate
 
-Run `chkd status` to verify the spec parses correctly.
+Use `chkd_status` to verify the spec parses correctly.
 
 ## Example Transformations
 

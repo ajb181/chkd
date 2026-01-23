@@ -95,76 +95,31 @@ If status is IDLE:
 4. **Tick as you go** - Call `chkd_tick` immediately after completing sub-items
 5. **Log bugs immediately** - `chkd_bug("description")` then continue your work
 
-## CLI Commands (Fallback)
+## Skills (in Claude Code)
 
-**Full reference:** See `docs/CLI.md` for complete documentation.
-
-### Quick Reference
-```bash
-# Status
-chkd status              # ALWAYS run first - see progress & current task
-chkd progress            # See current task's sub-items
-
-# Building (tick as you go!)
-chkd working "item"      # Signal you're starting an item
-chkd tick "item"         # Mark item complete
-
-# Ad-hoc Work (keeps UI engaged)
-chkd impromptu "desc"    # Start ad-hoc work not in spec
-chkd debug "desc"        # Start debug/investigation session
-
-# Adding Features
-chkd add "title"              # Add feature with workflow sub-tasks
-chkd add "title" --story "x"  # Add with story/description
-chkd add "title" --area FE    # Specify area (SD, FE, BE, FUT)
-chkd edit "SD.1" --story "x"  # Update existing item's story
-
-# Bugs
-chkd bug "description"   # Quick-create a bug
-chkd bugs                # List open bugs
-chkd bugfix "bug"        # Start bugfix (align with user first)
-chkd fix "bug"           # Signal fix ready (get verification)
-chkd resolve "bug"       # Close bug after user verified
-
-# Quick Wins
-chkd win "title"         # Add a quick win
-chkd wins                # List quick wins
-chkd won "query"         # Complete a quick win
-
-# Help
-chkd help [command]      # Get detailed help
-```
-
-### Skills (in Claude Code)
-- `/chkd SD.1` - Build a specific task from the spec
-- `/story` - Refine specs, plan features
-- `/bugfix` - Fix bugs with minimal changes (research first!)
-- `/commit` - Safe commit workflow
-- `/retro` - Capture learnings after fixing bugs
+| Skill | When to use |
+|-------|-------------|
+| `/chkd SD.1` | Build a specific task from the spec |
+| `/spec-check` | Validate SPEC.md format after editing |
+| `/reorder-spec` | Organize a messy or empty spec |
+| `/commit` | Safe commit workflow |
 
 ## Keep the UI Engaged (IMPORTANT!)
 
 **Before writing any code, ask yourself:** Am I in a session?
 
 - **Working on a spec task?** → Use `/chkd SD.1` (starts session automatically)
-- **Doing ad-hoc work not in spec?** → Run `chkd impromptu "what I'm doing"` FIRST
-- **Debugging something?** → Run `chkd debug "what I'm investigating"` FIRST
+- **Doing ad-hoc work not in spec?** → Use `chkd_impromptu("what I'm doing")` FIRST
+- **Debugging something?** → Use `chkd_debug("what I'm investigating")` FIRST
 
 **The UI should NEVER show "IDLE" while you're coding.** If it does, start a session!
-
-```bash
-chkd status              # Check current state
-chkd impromptu "desc"    # Start ad-hoc session
-chkd debug "desc"        # Start debug session
-chkd done                # End session when finished
-```
 
 ## Staying Focused
 
 When working on a task:
 
-1. **User reports a bug/issue** → `chkd bug "description"` then CONTINUE your task
-2. **You notice a bug** → `chkd bug "description"` then CONTINUE your task
+1. **User reports a bug/issue** → `chkd_bug("description")` then CONTINUE your task
+2. **You notice a bug** → `chkd_bug("description")` then CONTINUE your task
 3. **Something seems wrong** → Log it, don't fix it (unless it blocks you)
 
 **DON'T** derail from your current task to investigate/fix unrelated issues.
@@ -181,7 +136,7 @@ During the **Explore** phase of any task:
    - "This area could use refactoring first"
    - "This file is 500+ lines, might want to split"
 3. **Let user decide** - They choose whether to refactor first or proceed
-4. **If refactoring:** `chkd pause` → create refactor story → do that first → return
+4. **If refactoring:** Use `chkd_add` to create refactor story → do that first → return
 
 Don't dive into changes without understanding what you're touching.
 Don't add features on top of messy code without flagging it.
@@ -190,7 +145,6 @@ Don't add features on top of messy code without flagging it.
 
 - `docs/SPEC.md` - Feature checklist (SD.1, FE.1, BE.1 format)
 - `docs/GUIDE.md` - How to use chkd workflow
-- `docs/CLI.md` - Complete CLI reference
 - This file - Instructions for Claude
 
 ## Development Commands
@@ -302,7 +256,7 @@ Items must have section numbers:
 ## Workflow
 
 ### Basic Flow
-1. `chkd status` - See progress and what's next
+1. `chkd_status` - See progress and what's next
 2. `/chkd SD.1` - Build a task (use task ID from spec)
 3. Review and iterate
 
@@ -310,17 +264,14 @@ Items must have section numbers:
 
 For tasks with sub-items, **tick as you go**:
 
-```bash
+```
 # For EACH sub-item:
-chkd working "sub-item title"   # 1. Signal start
-# ... ACTUALLY BUILD IT ...     # 2. Do the work!
-chkd tick "sub-item title"      # 3. Mark done (10s minimum after working)
+chkd_working("sub-item title")   # 1. Signal start
+# ... ACTUALLY BUILD IT ...      # 2. Do the work!
+chkd_tick("sub-item title")      # 3. Mark done (2s minimum after working)
 ```
 
-**⛔ NEVER chain commands:**
-```bash
-chkd working "item" && chkd tick "item"  # BLOCKED - 2 second minimum enforced
-```
+**⛔ NEVER batch ticks** - the system enforces a 2-second minimum between working and tick.
 
 **Feedback items require explicit user approval** - wait for "yes"/"approved" before ticking.
 

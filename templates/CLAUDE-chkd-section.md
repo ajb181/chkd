@@ -67,41 +67,24 @@ If status is IDLE, start a session first:
 
 ### Skills (in Claude Code)
 - `/chkd FE.1` - Build a specific task from the spec
-- `/story` - Refine specs, plan features
-- `/bugfix` - Fix bugs with minimal changes
+- `/spec-check` - Validate SPEC.md format after editing
+- `/reorder-spec` - Organize a messy or empty spec
 - `/commit` - Safe commit workflow
 
 ### ⛔ NEVER Batch Tick Calls
 
-The system enforces a 2-second minimum between `working` and `tick`:
-```bash
-# BLOCKED - will fail with debounce error
-chkd working "item" && chkd tick "item"
-```
+The system enforces a 2-second minimum between `working` and `tick`.
 
 **Correct flow:**
-1. `chkd working "item"` - signal you're starting
+1. `chkd_working("item")` - signal you're starting
 2. **Actually do the work** (write code, make changes)
-3. `chkd tick "item"` - mark complete
+3. `chkd_tick("item")` - mark complete
 
 **Feedback items require user approval:**
 - Wait for explicit "yes" or "approved" before ticking
 - One approval ≠ blanket approval for other items
 
 **If not following chkd rules:** Re-read this CLAUDE.md and respect ALL instructions.
-
-### CLI Fallback
-
-If MCP isn't connected, use CLI commands:
-```bash
-chkd status              # See progress
-chkd working "item"      # Signal starting
-# ... do actual work ...
-chkd tick "item"         # Mark complete (10s minimum after working)
-chkd impromptu "desc"    # Start ad-hoc session
-chkd debug "desc"        # Start debug session
-chkd done                # End session
-```
 
 ### Source of Truth
 - `docs/SPEC.md` - Feature checklist

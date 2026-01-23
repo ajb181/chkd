@@ -2,6 +2,7 @@
 
 Small improvements to make when you have time.
 
+- [x] Remove CLI references from CLAUDE.md - MCP is primary, review skills for potential move to workflow design on add
 - [ ] Add audit-code-against-spec workflow - strong questions, area-aware checks (FE: use Chrome, BE: check database/logic), verify features match spec requirements
 - [ ] Add chkd_quickwin start command - shows guidance, tracks session, reminds to clarify before coding
 - [x] Quick win workflow should include commit+push after marking done - update chkd_won output

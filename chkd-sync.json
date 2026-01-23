@@ -24,13 +24,6 @@
       "description": "How to use chkd workflow"
     },
     {
-      "name": "cli-reference",
-      "source": "templates/docs/CLI.md",
-      "destination": "docs/CLI.md",
-      "mode": "copy",
-      "description": "CLI command reference"
-    },
-    {
       "name": "spec-template",
       "source": "templates/docs/SPEC.md.template",
       "destination": "docs/SPEC.md",
