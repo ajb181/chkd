@@ -97,7 +97,7 @@ export async function markItemIncomplete(specPath: string, itemId: string): Prom
 export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   {
     task: 'Explore: research problem, check existing code/patterns',
-    children: ['Research: investigate codebase and problem space', 'Share: inform user of findings before continuing']
+    children: ['Research: investigate codebase and problem space', 'Questions: consider if clarification needed - ask user if unclear', 'Share: inform user of findings before continuing']
   },
   {
     task: 'Design: plan approach + define endpoint contracts',
