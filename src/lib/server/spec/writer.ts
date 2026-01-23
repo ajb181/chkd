@@ -382,12 +382,13 @@ function buildItemLines(
           lines.push(`  - [ ] ${sub}`);
         }
       } else {
-        // New format: WorkflowStep with children
+        // New format: WorkflowStep with children - FLATTEN with Parent > Child
         if (sub.task.trim()) {
-          lines.push(`  - [ ] ${sub.task}`);
+          // Extract parent phase name (e.g., "Explore" from "Explore: research problem...")
+          const parentName = sub.task.split(':')[0].trim();
           for (const child of sub.children) {
             if (child.trim()) {
-              lines.push(`    - [ ] ${child}`);
+              lines.push(`  - [ ] ${parentName} > ${child}`);
             }
           }
         }
