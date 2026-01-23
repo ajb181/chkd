@@ -31,28 +31,18 @@ How to use chkd - workflow explanation, commands, troubleshooting.
 **Status**: Docs exist, UI page needed
 - [x] **SD.1 Guide Documentation** - docs/GUIDE.md created
 - [x] **SD.2 Guide Page** - Svelte page at /guide route
-  - [x] Workflow diagram
-  - [x] Session lifecycle visual
-  - [x] Quick reference cards
-  - [x] Troubleshooting section
 
 #### Command Center (`/`)
 The main workspace. Shows current task, story list, progress.
 
 **Status**: Not started
 - [x] **SD.3 Command Center Layout** - Main page structure
-  - [x] Current task card (pinned at top)
-  - [x] Story list sidebar
-  - [x] Story detail panel
-  - [x] Progress overview
 
 #### Settings (`/settings`)
 Configure repos and preferences.
 
 **Status**: Not started
 - [x] **SD.4 Settings Page** - Basic settings
-  - [x] Repository path configuration
-  - [x] Theme toggle (dark/light)
 
 ### Design System
 
@@ -60,33 +50,10 @@ Configure repos and preferences.
 - [x] **SD.6 Component Styles** - Buttons, cards, inputs
 - [x] **SD.7 Dark Mode** - Full dark theme support
 - [x] **SD.8 Queue List for Off-Task Items** - Capture todos during active session, surface on tick with instructions for Claude to add to internal todo
-  - [x] Queue input in task card (visible during active session)
-  - [x] Queued item count badge
-  - [x] Remove items before tick
-  - [x] POST /api/session/queue - Add item
-  - [x] GET /api/session/queue - List items
-  - [x] DELETE /api/session/queue/:id - Remove item
-  - [x] Update tick response to include queued items + instructions
-  - [x] Auto-clear queue after surfacing
 - [x] **SD.11 Can we add a task to replace the drop-down menu for swapping the repose I'm imagining a set of cards that run across the top they have a bit of information about the repo and what's developing where it's at like a very condensed high-level and you can click between them really easily and they're showing you what each one's working on at the moment or if it's idle** - The cards will run across the top of the screen, displaying details like the repository name, what's currently being developed, and the overall status.
 
 > As a product manager, I want a set of cards that show high-level information about each repository so that I can easily see what's being worked on and the status of each area. You can click them to nav between them
-  - [x] Explore: understand problem, search existing functions
-  - [x] Design: flow diagram if needed
-  - [x] Prototype: backend with test data + frontend calling it
-  - [x] Feedback: user reviews prototype
-  - [x] Implement: replace test data with real logic
-  - [x] Polish: iterate based on usage
-  - [x] Allow quick message to the queue that gets pulled in on the next "click"
-  - [x] Add ability to receive a message when Claude asked multi questions and is blocking to continue you could handle it in the app
-  - [x] Connect blocking questions UI to embedded terminal (after SD.12)
 - [x] **SD.12 Embedded Terminal** - Add xterm.js terminal to chkd UI with tmux backend for session persistence. Can run Claude Code directly in the web app, survives page refresh, can also attach from regular terminal.
-  - [x] Explore: xterm.js, node-pty, tmux integration
-  - [x] Design: terminal panel layout in UI
-  - [x] Prototype: xterm.js + WebSocket + node-pty
-  - [x] Add tmux session management (create/attach/reattach)
-  - [x] Handle page refresh reconnection
-  - [x] Polish: resize handling, styling, keyboard shortcuts
   - [!] Future: Connect blocking questions API to terminal events
   - [!] Fix terminal overflow/cropping issue (tmux status bar leaks outside container)
 - [x] **SD.13 add instrcutions into the Philosophy to use for bug fix when getting bugs, add apply to size the bug big or small using different approaches** - The feature will allow developers to include instructions in the Philosophy section of the application to provide guidance on how to approach and fix bugs, as well as provide tools to help assess the size and complexity of the bug.
@@ -101,12 +68,6 @@ Configure repos and preferences.
 - [x] **SD.14 Can we add a list somewhere of quick wins I think maybe on the card you can click in it just opens similar to bugs and you can just bang it in there and you can tell the AI just took it through the quick wins** - The quick wins list should be accessible from the card view, allowing users to easily log and view items that can be quickly addressed.
 
 > As a user, I want a quick wins list that I can easily access and add to, so that I can quickly capture and surface potential improvements.
-  - [x] Explore: research problem, check existing code/patterns
-  - [x] Design: plan approach + define endpoint contracts
-  - [x] Prototype: build UI with mock data, stub backend
-  - [x] Feedback: user reviews and approves UX
-  - [x] Implement: connect real backend logic
-  - [x] Polish: error states, edge cases, performance
 - [x] **Track and display time spent on each checklist item - store duration when ticked, show in UI**
   - [x] Explore: check existing checklist data structure + timing patterns
   - [x] Design: duration storage schema + UI display mockups
@@ -115,56 +76,19 @@ Configure repos and preferences.
   - [ ] Implement: real duration tracking + database storage
   - [ ] Polish: pause/resume states + duration formatting
 - [x] **FE Terminal WebSocket connection - investigate why terminal shows disconnected and fix**
-  - [x] Explore: check WebSocket connection logs and existing terminal code
-  - [x] Design: identify connection failure points and reconnection strategy
-  - [x] Prototype: test WebSocket with mock terminal data
-  - [x] Feedback: verify connection stability in test environment
-  - [x] Implement: fix connection issues and add proper error handling
-  - [x] Polish: add connection status indicators and auto-reconnect
 - [x] **SD.16 allow a file to be added into a bug or sotry** - Enable users to attach files (documents, images, logs, etc.) to bug reports and stories for better context and documentation.
 
 > As a developer, I want to attach files to bugs and stories so that I can provide additional context like screenshots, logs, or documentation.
-  - [x] Explore: research problem, check existing code/patterns
-  - [x] Design: plan approach + define endpoint contracts
-  - [x] Prototype: build UI with mock data, stub backend
-  - [x] Feedback: user reviews and approves UX
-  - [x] Implement: connect real backend logic
-  - [x] Polish: error states, edge cases, performance
 - [x] **SD.17 add impromptu and debug work states so the UI is always engaged regardless** - At the moment it can be idle in the app but actually the code is working so we're looking to solve those solutions both when in debug and impromptu work
 
 > As a developer, I want impromptu and debug work states so that the UI stays engaged during all types of work sessions.
-  - [x] Explore: research problem, check existing code/patterns
-  - [x] Design: plan approach + define endpoint contracts
-  - [x] Prototype: build UI with mock data, stub backend
-  - [x] Feedback: user reviews and approves UX
-  - [x] review overall code around this update for simplification if possible
-  - [x] Implement: connect real backend logic
-  - [x] Polish: error states, edge cases, performance
 - [x] **SD.18 allow file to be attached when creating bug or story** - Enable users to attach files (documents, images, logs, etc.) to bug reports and user stories for better context and documentation.
 
 > As a developer, I want to attach files to bugs and stories so that I can provide additional context like screenshots, logs, or documentation.
-  - [x] Explore: research problem, check existing code/patterns
-  - [x] Design: plan approach + define endpoint contracts
-  - [x] Prototype: build UI with mock data, stub backend
-  - [x] Feedback: user reviews and approves UX
-  - [x] Implement: connect real backend logic
-  - [x] Polish: error states, edge cases, performance
 - [x] **SD.19 Update the brand homepage** - > As a website visitor, I want to see an updated brand homepage so that I get the latest information about the company and its offerings.
-  - [x] Explore: research problem, check existing code/patterns
-  - [x] Design: plan approach + define endpoint contracts
-  - [x] Prototype: build UI with mock data, stub backend
-  - [x] Feedback: user reviews and approves UX
-  - [x] Implement: connect real backend logic
-  - [x] Polish: error states, edge cases, performance
 - [x] **SD.20 add most recent adds to the spec & most recent acchieved** - Display the most recently added items and recently completed/achieved features prominently in the specification interface.
 
 > As a developer, I want to see recent additions and achievements in the spec so that I can quickly track progress and stay updated on latest changes.
-  - [x] Explore: research problem, check existing code/patterns
-  - [x] Design: plan approach + define endpoint contracts
-  - [x] Prototype: build UI with mock data, stub backend
-  - [x] Feedback: user reviews and approves UX
-  - [x] Implement: connect real backend logic
-  - [x] Polish: error states, edge cases, performance
 - [ ] **SD.21 AI Prompt Studio - View, edit, version, and test all LLM prompts** - As a user, I want to see and edit all AI prompts used in chkd so that I can customize how the AI generates content and have full transparency and control. Based on Strateo's proven AI Studio architecture with version control, testing, and audit trails.
   - [ ] Explore: research problem, check existing code/patterns
   - [ ] Design: plan approach + define endpoint contracts
@@ -245,43 +169,26 @@ Collapsible list of areas and stories.
 
 **Status**: Complete
 - [x] **FE.2 StoryList Component**
-  - [x] Area grouping (expandable)
-  - [x] Story selection
-  - [x] Progress percentages
-  - [x] Status indicators
 
 #### StoryDetail
 Full story view with checklist.
 
 **Status**: Complete
 - [x] **FE.3 StoryDetail Component**
-  - [x] User story display
-  - [x] Checklist rendering
-  - [x] Item status toggling
-  - [x] Description/notes
 
 #### FeatureCapture
 Add new features to the spec.
 
 **Status**: Not started
 - [x] **FE.4 FeatureCapture Component**
-  - [x] Feature title input
-  - [x] Area selection (Site Design / Frontend / Backend)
-  - [x] Workflow template auto-added
-  - [x] Duplicate detection
 
 ### State Management
 
 - [x] **FE.5 Stores** - Svelte stores for app state
-  - [x] Session state
-  - [x] Spec data
-  - [x] UI preferences
 
 ### Client API
 
 - [x] **FE.6 API Client** - Functions to call backend
-  - [x] Fetch wrapper with error handling
-  - [x] Type-safe responses
 - [x] **FE.7 Allow to set tags and priority when creating a story and it's tasks** - This feature will allow users to add tags and set priority levels for stories and tasks, enabling more efficient task management and organization.
 
 > As a user, I want to be able to set tags and priority when creating a story and its tasks so that I can better organize and prioritize my work.
@@ -319,22 +226,35 @@ Add new features to the spec.
 - No terminal button visible
 - Ctrl+` shortcut removed
 
-  - [x] Explore > Research: investigate codebase and problem space
-  - [x] Explore > Share: inform user of findings before continuing
-  - [x] Design > Draft: create initial design/approach
-  - [x] Design > Review: show user, iterate if needed
-  - [x] Prototype > Build: create the prototype
-  - [x] Prototype > Verify: compare to spec/wireframe, iterate if gaps
-  - [x] Feedback > Demo: show user the prototype
-  - [x] Feedback > Iterate: make changes based on feedback
-  - [x] Implement > Build: implement real logic
-  - [x] Implement > Verify: test functionality works
-  - [x] Polish > Build: add error handling, edge cases
-  - [x] Polish > Verify: confirm edge cases handled
-  - [x] Document > Write: update relevant documentation
-  - [x] Document > Review: confirm docs match implementation
-  - [x] Commit > Stage: review changes, stage files
-  - [x] Commit > Commit: write message with assumptions noted
+- [ ] **FE.10 Epic view in UI - filter items by epic tag** - Add toggle in dashboard to switch between area view (current) and epic view. Epic view groups all items with same epic tag together, showing progress across areas. Makes it easy to see "everything for Auth System" instead of hunting through SD/FE/BE sections.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
 
 ---
 
@@ -348,11 +268,6 @@ Tracks current work context.
 
 **Status**: Complete
 - [x] **BE.1 Session Endpoints**
-  - [x] `GET /api/session` - Current session
-  - [x] `GET /api/status` - Human-friendly status
-  - [x] `POST /api/session/start` - Begin task
-  - [x] `POST /api/session/complete` - Mark task done
-  - [x] `POST /api/session/check` - Validate if on-plan
 
 ### Spec API
 
@@ -360,9 +275,6 @@ Manage the specification document.
 
 **Status**: Complete
 - [x] **BE.2 Spec Endpoints**
-  - [x] `GET /api/spec/full` - Parsed spec structure
-  - [x] `POST /api/spec/tick` - Toggle item status
-  - [x] `POST /api/spec/add` - Add new feature (with workflow template)
 
 ### Repository API
 
@@ -370,8 +282,6 @@ Manage repo configuration.
 
 **Status**: Complete
 - [x] **BE.3 Repo Endpoints**
-  - [x] `GET /api/repos` - List repos
-  - [x] `POST /api/repos` - Add repo
 
 ### Bug Queue API
 
@@ -379,8 +289,6 @@ Track bugs for later.
 
 **Status**: Complete
 - [x] **BE.4 Bug Endpoints**
-  - [x] `GET /api/bugs` - List bugs
-  - [x] `POST /api/bugs` - Add bug
 
 ### Core Services
 
@@ -389,20 +297,12 @@ Parses SPEC.md into structured data.
 
 **Status**: Complete
 - [x] **BE.5 Spec Parser** - `src/lib/server/spec/parser.ts`
-  - [x] Area/item extraction
-  - [x] User story capture
-  - [x] Progress calculation
-  - [x] Format validation
 
 #### Spec Writer
 Modifies SPEC.md programmatically.
 
 **Status**: Complete
 - [x] **BE.6 Spec Writer** - `src/lib/server/spec/writer.ts`
-  - [x] Mark items complete/incomplete
-  - [x] Add new items
-  - [x] Add workflow template sub-items
-  - [x] Update status emojis (with unicode fix)
 
 ### Database
 
@@ -410,8 +310,6 @@ SQLite via better-sqlite3.
 
 **Status**: Complete
 - [x] **BE.7 Database Layer** - `src/lib/server/db/`
-  - [x] Schema (repos, sessions, bugs)
-  - [x] Query functions
 
 ### CLI
 
@@ -419,23 +317,9 @@ Command-line interface with workflow documentation.
 
 **Status**: Complete
 - [x] **BE.8 CLI** - `src/cli/index.ts`
-  - [x] status, start, tick, done commands
-  - [x] check, add, bug commands
-  - [x] workflow command (shows diagram)
-  - [x] help command
 - [x] **BE.9 Session & Task Management Improvements** - Simple session control and task editing.
 
 > As a user, I want better control over sessions and ability to edit task details.
-  - [x] Explore: understand problem, search existing functions
-  - [x] Design: flow diagram if needed
-  - [x] Prototype: backend with test data + frontend calling it
-  - [x] `chkd idle` command - manually return session to idle
-  - [x] Editable task title/description in detail popout
-  - [x] Timer per task (track time on each)
-  - [x] Fix main timer not resetting for each story
-  - [x] Feedback: user reviews prototype
-  - [x] Implement: connect real logic
-  - [x] Polish: edge cases
 - [x] [P1] **BE.10 Sync/Distribution System** - Auto-sync chkd skills, CLAUDE.md sections, and config to other projects using chkd
 
 > As a developer, I want chkd updates to automatically roll out to all my projects so that every Claude instance has the latest workflow instructions and skills.
@@ -450,18 +334,9 @@ Command-line interface with workflow documentation.
 - [x] **BE.10 Add version tracking to the CLI app - automatic updating - dont need to remeber** - The version tracking feature will allow users to view the version history of the CLI app, including details on what changes were made in each update.
 
 > As a developer, I want to add version tracking to the CLI app so that I can easily see the history of changes made to the application.
-  - [x] Explore: understand problem, search existing functions
-  - [x] Implement: replace test data with real logic
-  - [x] Polish: iterate based on usage
 - [x] **BE.11 Add working pusle check message to bacd end** - Allow the AI to call a pulse with the state that it's still in just as a nice signal to the back end that we're still on track if there's a mismatch on the state of the platform and the the AI sending we can give it a little message and help get back on track
 
 > As a developer, I want a health check endpoint so that I can monitor if the backend service is running properly.
-  - [x] Explore: research problem, check existing code/patterns
-  - [x] Design: plan approach + define endpoint contracts
-  - [x] Feedback: user reviews and approves UX
-  - [x] Implement: connect real backend logic
-  - [x] Polish: error states, edge cases, performance
-  - [x] update documention & guides
 - [x] **BE.12 Update Bug Workflow** - ⎿    chkd bug "description" [--severity high|medium|low|critical]             
        ─────────────────────────────────────────────────────────────            
                                                                                 
@@ -648,7 +523,7 @@ Command-line interface with workflow documentation.
   - [x] Document: update templates
     - [x] Write: update SPEC.md.template with new structure
     - [x] Review: templates match implementation
-- [ ] **BE.21 Story type flags for different workflows** - As a developer, I want to specify story types (remove, backend, refactor) when adding items so the workflow phases match the task
+- [x] **BE.21 Story type flags for different workflows** - As a developer, I want to specify story types (remove, backend, refactor) when adding items so the workflow phases match the task
 
 **Key requirements:**
 - Add --type flag to chkd add command
@@ -666,7 +541,19 @@ Command-line interface with workflow documentation.
 - chkd add "test" --type backend skips UI phases
 - Default (no type) still creates full workflow
 
-  - [~] Explore > Research: investigate codebase and problem space
+- [ ] **BE.22 Mind Reader discovery mode** - Add --mind-reader flag to chkd add. Claude asks itself 30 product/UX/technical questions, answers based on context, writes to docs/mind-reader/{ID}-{title}.md. Helps create better specs upfront. Explore step references discovery docs, Polish > Confirm verifies against assumptions.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
   - [ ] Explore > Share: inform user of findings before continuing
   - [ ] Design > Draft: create initial design/approach
   - [ ] Design > Review: show user, iterate if needed
@@ -676,12 +563,42 @@ Command-line interface with workflow documentation.
   - [ ] Feedback > Iterate: make changes based on feedback
   - [ ] Implement > Build: implement real logic
   - [ ] Implement > Verify: test functionality works
-  - [ ] Polish > Build: add error handling, edge cases
-  - [ ] Polish > Verify: confirm edge cases handled
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
   - [ ] Document > Write: update relevant documentation
   - [ ] Document > Review: confirm docs match implementation
   - [ ] Commit > Stage: review changes, stage files
   - [ ] Commit > Commit: write message with assumptions noted
+- [~] **BE.23 Epic management for large features** - Add epic system for big features that span multiple spec items. Epic lives in docs/epics/{name}.md with overview, tag, and scope. Items link via tag. UI can filter by epic to see all related items together. Includes overhaul checklist when all items complete - end-to-end test, integration check, final sign-off. Commands: chkd epic "name" (create), chkd add --epic (link item).
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
 
 ---
 
@@ -691,52 +608,17 @@ Command-line interface with workflow documentation.
 
 ### Phase 1: Foundation 🚧
 - [x] **MW.1 Workers Database Schema** - Tables for workers, history, and signals
-  - [x] Create workers table (id, task_id, status, worktree_path, branch_name, heartbeat)
-  - [x] Create worker_history table (audit trail for completed workers)
-  - [x] Create manager_signals table (coordinator messages to user)
-  - [x] Add worker_id and is_master to sessions table
-  - [x] Add TypeScript types (Worker, WorkerHistory, ManagerSignal, API types)
 
 - [x] **MW.2 Git Worktree Utilities** - Create, remove, and manage worktrees
-  - [x] createWorktree(repoPath, worktreePath, branchName) - Creates worktree + feature branch
-  - [x] removeWorktree(repoPath, worktreePath, deleteBranch?) - Cleans up worktree
-  - [x] listWorktrees(repoPath) - List all worktrees for a repo
-  - [x] checkConflicts(repoPath, branchName, targetBranch?) - Pre-merge conflict detection
-  - [x] mergeBranch(repoPath, branchName, targetBranch?, commitMessage?) - Merge with conflict check
-  - [x] getBranchStats(repoPath, branchName, targetBranch?) - Get diff statistics
-  - [x] Helper functions: generateWorkerId, generateBranchName, generateWorktreePath, getUsername
 
 - [x] **MW.3 Worker API Endpoints** - CRUD for workers
-  - [x] POST /api/workers - Spawn worker (creates worktree, branch, DB record)
-  - [x] GET /api/workers?repoPath=... - List active workers
-  - [x] GET /api/workers/:id - Get worker details
-  - [x] PATCH /api/workers/:id - Update status/heartbeat/progress
-  - [x] DELETE /api/workers/:id - Stop worker, cleanup worktree
-  - [x] POST /api/workers/:id/complete - Complete task + auto-merge
-  - [x] Database queries: getWorkers, createWorker, updateWorker, etc.
-  - [x] Manager signals: create on spawn, status changes, merge results
 
 ### Phase 2: One-Click Spawning 🚧
 - [x] **MW.4 Worker MCP Tools** - Master Claude spawns and manages workers
-  - [x] chkd_spawn_worker(taskId, taskTitle, nextTaskId?, nextTaskTitle?)
-  - [x] chkd_workers() - List active workers with status
-  - [x] chkd_pause_worker(workerId) / chkd_resume_worker(workerId)
-  - [x] chkd_merge_worker(workerId, autoMerge?, commitMessage?)
-  - [x] chkd_stop_worker(workerId, force?, deleteBranch?)
-  - [x] HTTP client functions for all worker API calls
 
 - [x] **MW.5 Worker Heartbeat System** - Workers report status
-  - [x] chkd_worker_heartbeat(workerId, message?, progress?) - Worker reports status
-  - [x] chkd_worker_complete(workerId, summary?) - Worker signals done + auto-merge
-  - [x] chkd_worker_status(workerId) - Worker checks own status/instructions
-  - [x] chkd_dead_workers(thresholdMinutes?) - Master checks for stuck workers
-  - [x] GET /api/workers/dead - Dead worker detection endpoint
 
 - [x] **MW.6 Enhanced Repo Card UI** - Show workers at high level
-  - [x] Taller repo card with worker summary strip
-  - [x] Worker status indicators (🟢 working, 🟡 merging, ⚠️ conflict)
-  - [x] Manager signal preview in card
-  - [x] "Spawn Worker" button
 
 ### Phase 3: Split Brain View & Auto-Merge
 - [x] **MW.7 Split Brain View** - Side-by-side worker panels
@@ -746,65 +628,25 @@ Command-line interface with workflow documentation.
   - [x] Pause/Stop/View Code actions
 
 - [x] **MW.8 Manager Signal Bar** - Coordinator communication
-  - [x] Status updates ("Both workers on track...")
-  - [x] Decision notifications ("✅ Merged SD.3!")
-  - [x] Help requests ("⚠️ Conflict in App.svelte")
-  - [x] Suggestions ("💡 Spawn W2 for SD.4?")
 
 - [x] **MW.9 Auto-Merge System** - Merge when safe, ask when not
-  - [x] Pre-merge conflict check
-  - [x] Auto-merge if clean
-  - [x] Conflict resolution UI (keep mine/theirs/both)
-  - [x] Worktree cleanup after merge
 
 ### Phase 4: Manager as Tech Lead ✅
 - [x] **MW.10 Manager Research Mode** - Explore codebase before assigning work
-  - [x] Codebase exploration tools for Manager
-  - [x] Pattern detection (find existing auth, DB patterns, etc.)
-  - [x] Dependency analysis (what does this touch?)
-  - [x] Research summary for user approval
 
 - [x] **MW.11 Manager Story Writer** - Create detailed specs from user requests
-  - [x] Parse user request into structured story
-  - [x] Generate acceptance criteria
-  - [x] Break into worker-assignable sub-tasks
-  - [x] Estimate complexity/dependencies
-  - [x] Present story for user approval before spawning
 
 - [x] **MW.12 Manager Code Review** - Review worker output before merge
-  - [x] Pull and diff worker branch
-  - [x] Check code quality (patterns, style, tests)
-  - [x] Verify acceptance criteria met
-  - [x] Send feedback to worker if issues
-  - [x] Approve for merge when satisfied
 
 - [x] **MW.13 Manager Documenter** - Update docs after work completes
-  - [x] Update README with new features
-  - [x] Add entry to CHANGELOG
-  - [x] Update API docs if endpoints changed
-  - [x] Update inline code comments if needed
-  - [x] Commit docs update with merge
 
 ### Phase 5: External Collaboration ✅
 - [x] **MW.14 External Story Submission** - Allow non-developers to submit feature ideas
-  - [x] Public-facing form to submit story/feature idea
-  - [x] Story lands in "Ideas" queue (not spec yet)
-  - [x] Manager reviews and refines submissions
-  - [x] Approve to promote to spec, or reject with feedback
-  - [x] Email notification when idea is accepted/rejected
-  - [x] Simple auth (email link or code) for submitters to track their ideas
 
 > As a stakeholder/user, I want to submit feature ideas without needing to edit the spec directly, so that I can contribute ideas even if I'm not a developer.
 
 ### Future: SaaS Platform
 - [x] **MW.15 SaaS Architecture** - Design for hosted multi-tenant platform
-  - [x] PostgreSQL migration path from SQLite
-  - [x] Multi-tenant data isolation
-  - [x] Team workspaces with roles (admin, dev, viewer)
-  - [x] GitHub/GitLab app integration
-  - [x] Managed Claude workers (cloud-hosted)
-  - [x] Usage-based billing infrastructure
-  - [x] Analytics dashboard (velocity, time tracking)
 
 > As a team, we want a hosted chkd service so we don't need to run infrastructure ourselves.
 
