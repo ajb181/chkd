@@ -615,7 +615,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Commit with descriptive message:\n      - Summary: what was fixed\n      - Body: root cause + how fixed\n   2. Push to remote\n   3. Then resolve\n─────────────────────────────────\n💡 Run chkd_resolve("${query}") after commit+push and user confirms`
+        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Review docs - update if behavior changed:\n      - CLAUDE.md, README.md, GUIDE.md\n      - CLI help text, API docs\n   2. Commit with descriptive message:\n      - Summary: what was fixed\n      - Body: root cause + how fixed\n   3. Push to remote\n   4. Then resolve\n─────────────────────────────────\n💡 Run chkd_resolve("${query}") after docs+commit+push and user confirms`
       }]
     };
   }
@@ -1400,7 +1400,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `✅ Quick win completed: ${query}\n\n📦 Commit with descriptive message (what you did + why), then push!\n\n💡 Nice! Keep knocking them out.`
+        text: `✅ Quick win completed: ${query}\n\n📦 Before committing:\n   1. Review docs - update if behavior changed:\n      - CLAUDE.md, README.md, GUIDE.md\n      - CLI help text, API docs\n   2. Commit with descriptive message (what + why)\n   3. Push to remote\n\n💡 Nice! Keep knocking them out.`
       }]
     };
   }
