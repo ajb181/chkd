@@ -2,6 +2,7 @@
 
 Small improvements to make when you have time.
 
+- [ ] Add chkd_quickwin start command - shows guidance, tracks session, reminds to clarify before coding
 - [x] Quick win workflow should include commit+push after marking done - update chkd_won output
 - [x] Bugfix workflow should include commit+push after each fix - add reminder to chkd_resolve output
 - [x] Context-aware Polish phase - FE gets browser inspection prompts, BE gets scenario tracing prompts in Consider and Review steps
