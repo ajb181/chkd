@@ -359,3 +359,28 @@ export async function getDeadWorkers(repoPath: string, thresholdMs?: number) {
   if (thresholdMs) params.thresholdMs = String(thresholdMs);
   return request('GET', '/api/workers/dead', undefined, params);
 }
+
+// ============================================
+// Epics API
+// ============================================
+
+export async function getEpics(repoPath: string) {
+  return request('GET', '/api/epics', undefined, { repoPath });
+}
+
+export async function createEpic(
+  repoPath: string,
+  name: string,
+  description: string,
+  scope?: string[]
+) {
+  return request('POST', '/api/epics', { repoPath, name, description, scope });
+}
+
+export async function updateEpicStatus(
+  repoPath: string,
+  query: string,
+  status: 'planning' | 'in-progress' | 'review' | 'complete'
+) {
+  return request('PATCH', '/api/epics', { repoPath, query, status });
+}

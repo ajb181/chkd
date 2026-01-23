@@ -1078,14 +1078,15 @@ server.tool(
 // chkd_add - Add a feature to spec
 server.tool(
   "chkd_add",
-  "Add a new feature or task to the spec. Creates item with workflow sub-tasks.",
+  "Add a new feature or task to the spec. Creates item with workflow sub-tasks. Use 'epic' param to link to an epic.",
   {
     title: z.string().describe("Feature title (e.g., 'User authentication')"),
     areaCode: z.string().describe("Area code: SD, FE, BE, or FUT"),
     description: z.string().optional().describe("Optional description or user story"),
-    tasks: z.array(z.string()).optional().describe("Optional custom sub-tasks (defaults to standard workflow)")
+    tasks: z.array(z.string()).optional().describe("Optional custom sub-tasks (defaults to standard workflow)"),
+    epic: z.string().optional().describe("Epic tag to link this item to (e.g., 'auth-overhaul')")
   },
-  async ({ title, areaCode, description, tasks }) => {
+  async ({ title, areaCode, description, tasks, epic }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
@@ -1108,6 +1109,17 @@ server.tool(
     } else {
       text += `Tasks: Standard workflow (6 phases)\n`;
     }
+
+    // If epic specified, tag the item
+    if (epic) {
+      const tagResponse = await api.setTags(repoPath, specCode, [epic]);
+      if (tagResponse.success) {
+        text += `Epic: #${epic} ✓\n`;
+      } else {
+        text += `Epic: Failed to tag - ${tagResponse.error}\n`;
+      }
+    }
+
     text += `\n💡 Use chkd_working("${specCode}") to start working on it`;
 
     return {
@@ -1401,6 +1413,104 @@ server.tool(
       content: [{
         type: "text",
         text: `✅ Quick win completed: ${query}\n\n📦 Before committing:\n   1. Review docs - update if behavior changed:\n      - CLAUDE.md, README.md, GUIDE.md\n      - CLI help text, API docs\n   2. Commit with descriptive message (what + why)\n   3. Push to remote\n\n💡 Nice! Keep knocking them out.`
+      }]
+    };
+  }
+);
+
+// ============================================
+// Epic Tools
+// ============================================
+
+// chkd_epic - Create a new epic
+server.tool(
+  "chkd_epic",
+  "Create a new epic for a large feature spanning multiple spec items. Creates docs/epics/{name}.md with overview, tag, and overhaul checklist.",
+  {
+    name: z.string().describe("Epic name (e.g., 'Auth Overhaul', 'Performance Sprint')"),
+    description: z.string().describe("Brief description of the epic's goal"),
+    scope: z.array(z.string()).optional().describe("Optional list of what's in scope")
+  },
+  async ({ name, description, scope }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const response = await api.createEpic(repoPath, name, description, scope);
+
+    if (!response.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${response.error}`
+        }]
+      };
+    }
+
+    const epic = response.data;
+    let text = `✅ Epic created: ${epic.name}\n`;
+    text += `───────────────────────────────────\n`;
+    text += `📁 File: docs/epics/${epic.slug}.md\n`;
+    text += `🏷️  Tag: ${epic.tag}\n\n`;
+    text += `💡 Link items to this epic:\n`;
+    text += `   chkd_add("title", areaCode="FE", epic="${epic.tag}")\n`;
+    text += `   Or existing items: chkd_tag("FE.1", ["${epic.tag}"])`;
+
+    return {
+      content: [{
+        type: "text",
+        text
+      }]
+    };
+  }
+);
+
+// chkd_epics - List all epics
+server.tool(
+  "chkd_epics",
+  "List all epics in the project with their progress.",
+  {},
+  async () => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const response = await api.getEpics(repoPath);
+    const epics = response.data || [];
+
+    if (epics.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: `📦 No epics yet\n\n💡 Create one with chkd_epic("name", "description")`
+        }]
+      };
+    }
+
+    let text = `📦 Epics\n`;
+    text += `═══════════════════════════════════════\n\n`;
+
+    for (const epic of epics) {
+      const statusEmoji = {
+        'planning': '📋',
+        'in-progress': '🔨',
+        'review': '👀',
+        'complete': '✅'
+      }[epic.status] || '📋';
+
+      const progressBar = epic.itemCount > 0
+        ? `[${epic.completedCount}/${epic.itemCount}] ${epic.progress}%`
+        : 'No items linked';
+
+      text += `${statusEmoji} ${epic.name}\n`;
+      text += `   Tag: #${epic.tag} | ${progressBar}\n`;
+      text += `   ${epic.description}\n\n`;
+    }
+
+    text += `💡 Link items: chkd_tag("ITEM.ID", ["epic-tag"])`;
+
+    return {
+      content: [{
+        type: "text",
+        text
       }]
     };
   }
