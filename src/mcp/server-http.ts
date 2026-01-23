@@ -138,7 +138,29 @@ function formatNudges(nudges: string[]): string {
 
 // Server version identifier
 const SERVER_TYPE = "http-based";
-const SERVER_VERSION = "2.0.0";
+const SERVER_VERSION = "2.1.0";  // Bump when adding new tools!
+
+// Track when this server instance started (for stale detection)
+const SERVER_START_TIME = Date.now();
+const SERVER_FILE_PATH = import.meta.url.replace('file://', '');
+
+// Check if the source file has been modified since server started
+function isServerStale(): boolean {
+  try {
+    const fs = require('fs');
+    const stat = fs.statSync(SERVER_FILE_PATH);
+    return stat.mtimeMs > SERVER_START_TIME;
+  } catch {
+    return false;
+  }
+}
+
+function getStaleWarning(): string {
+  if (isServerStale()) {
+    return `\n⚠️ MCP SERVER OUTDATED - Restart session for new tools!`;
+  }
+  return '';
+}
 
 // Create MCP Server
 const server = new McpServer({
@@ -186,7 +208,7 @@ server.tool(
 
     let statusText = `📁 ${path.basename(repoPath)}\n`;
     statusText += `Progress: ${progress.percentage}% (${progress.completed}/${progress.total})\n`;
-    statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION} ✓\n\n`;
+    statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}\n\n`;
 
     // Queue first
     if (queue.length > 0) {
@@ -231,7 +253,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: statusText + formatNudges(nudges)
+        text: statusText + formatNudges(nudges) + getStaleWarning()
       }]
     };
   }
@@ -309,12 +331,42 @@ server.tool(
     const queueResponse = await api.getQueue(repoPath);
     const queue = queueResponse.data?.items || [];
 
-    let text = `🔧 Debug session started\n`;
-    text += `Investigating: ${description}\n`;
-    text += `───────────────────\n`;
-    text += `Focus on understanding, not fixing yet.\n`;
-    text += `If you find a bug: chkd_bug() to log it\n`;
-    text += `When done: chkd_done() to end session`;
+    let text = `🔍 INVESTIGATION MODE
+═══════════════════════════════════════
+Investigating: ${description}
+
+MINDSET: You're a detective, not a fixer.
+Your goal is UNDERSTANDING, not solutions.
+───────────────────────────────────────
+
+📓 START DEBUG NOTES:
+   echo "## Investigation: $(date '+%H:%M')" >> .debug-notes.md
+   echo "**Question:** ${description}" >> .debug-notes.md
+
+INVESTIGATION PROCESS:
+1. OBSERVE  → What exactly is happening? Gather facts.
+2. QUESTION → Ask the user for context, reproduction steps.
+3. HYPOTHESIZE → List 2-3 possible causes.
+4. TEST    → Check each hypothesis systematically.
+5. CONCLUDE → What did you learn? Document it.
+
+⚠️  DISCIPLINE:
+• Don't jump to fixes - understand first
+• Don't assume - ask the user
+• Don't rush - investigation takes time
+• Update .debug-notes.md as you work
+
+CHECKPOINTS (get user alignment):
+□ "Here's what I'm seeing... does that match your experience?"
+□ "I have 3 hypotheses: X, Y, Z. Which should I check first?"
+□ "I think I found the cause: [X]. Does that make sense?"
+
+WHEN YOU FIND SOMETHING:
+• Bug to fix? → chkd_bugfix("description")
+• Just learning? → Document in .debug-notes.md
+• Scope creep idea? → chkd_bug("idea") or chkd_win("idea")
+
+When done: chkd_done()`;
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -461,26 +513,62 @@ server.tool(
                     bug.severity === 'high' ? '🟠' :
                     bug.severity === 'low' ? '🟢' : '🟡';
 
-    let text = `🐛 Bug: ${bug.title}\n`;
-    text += `Severity: ${sevIcon} ${bug.severity.toUpperCase()}\n`;
-    if (bug.description) {
-      text += `Description: ${bug.description}\n`;
-    }
-    text += `\n🔧 Debug session started\n`;
-    text += `─────────────────────────────────\n`;
-    text += `⚠️  ALIGN WITH USER FIRST:\n`;
-    text += `   Explain your understanding of this bug.\n`;
-    text += `   Get agreement on what the problem is before proceeding.\n`;
-    text += `─────────────────────────────────\n`;
-    text += `Workflow:\n`;
-    text += `1. Align   → Agree with user on what bug means\n`;
-    text += `2. Research → Find root cause\n`;
-    text += `3. Propose → Suggest fix, get approval\n`;
-    text += `4. Fix     → Make minimal change\n`;
-    text += `5. Verify  → User confirms it's solved\n`;
-    text += `─────────────────────────────────\n`;
-    text += `💡 Use chkd_pulse() to stay connected\n`;
-    text += `💡 Run chkd_fix() when ready → then chkd_resolve() after user verifies`;
+    let text = `🔧 BUGFIX MODE
+═══════════════════════════════════════
+Bug: ${bug.title}
+Severity: ${sevIcon} ${bug.severity.toUpperCase()}${bug.description ? `\nDescription: ${bug.description}` : ''}
+
+MINDSET: Surgical precision. Fix the bug, nothing more.
+───────────────────────────────────────
+
+📓 START DEBUG NOTES:
+   echo "## Bugfix: $(date '+%H:%M')" >> .debug-notes.md
+   echo "**Bug:** ${bug.title}" >> .debug-notes.md
+
+FIRST: SIZE THE BUG
+┌─────────────────────────────────────┐
+│ SMALL BUG (Quick Fix Track)         │
+│ • Clear error with stack trace      │
+│ • Points to specific line           │
+│ • Fix will be < 10 lines            │
+│                                     │
+│ BIG BUG (Deep Investigation)        │
+│ • Vague symptoms, no clear error    │
+│ • Multiple possible causes          │
+│ • Can't reliably reproduce          │
+│ → Use chkd_debug() instead          │
+└─────────────────────────────────────┘
+
+THE PROCESS:
+1. ALIGN    → Explain your understanding to user. Get agreement.
+2. RESEARCH → Search first! Someone probably hit this before.
+3. REPRODUCE → Confirm you can trigger the bug.
+4. ISOLATE  → Find root cause. Think out loud.
+5. PROPOSE  → Describe fix to user. Get approval.
+6. FIX      → Minimal change only. Don't refactor.
+7. VERIFY   → User confirms it's fixed. Not you.
+
+⚠️  DISCIPLINE - You are in BUGFIX mode:
+• Research before brute force (web search is faster)
+• Minimal changes only - smallest fix that works
+• DON'T refactor "while you're in there"
+• DON'T add features or improvements
+• DON'T fix things that aren't broken
+• Capture ideas with chkd_bug() or chkd_win(), don't act
+
+CHECKPOINTS (get user alignment):
+□ "Here's my understanding of the bug... correct?"
+□ "I found this might be the cause: [X]. Should I dig deeper?"
+□ "I want to make this change: [X]. Sound right?"
+□ "Can you test now? Try the steps that caused the bug."
+
+RED FLAGS - You're going off track if thinking:
+• "While I'm here, I should also..."  → NO
+• "This code is messy, let me clean..." → NO
+• "I could add a feature that prevents..." → NO
+
+When fix is ready: chkd_fix("${bug.title}")
+After user verifies: chkd_resolve("${bug.title}")`;
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -1051,6 +1139,70 @@ server.tool(
     text += `Parent: ${parentId}\n`;
     text += `Child ID: ${response.data.childId}\n`;
     text += `\n💡 Use chkd_working("${title}") when ready to start`;
+
+    return {
+      content: [{
+        type: "text",
+        text
+      }]
+    };
+  }
+);
+
+// chkd_add_task - Add sub-task to current working item
+server.tool(
+  "chkd_add_task",
+  "Add a sub-task to the current working item (anchor). Convenience wrapper that doesn't require specifying parent ID.",
+  {
+    title: z.string().describe("Sub-task title")
+  },
+  async ({ title }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    // Get current session to find anchor
+    const sessionRes = await fetch(`${HTTP_BASE}/api/session?repoPath=${encodeURIComponent(repoPath)}`);
+    const sessionData = await sessionRes.json();
+
+    if (!sessionData.success || !sessionData.data) {
+      return {
+        content: [{
+          type: "text",
+          text: "❌ No active session. Start work on an item first with chkd_working() or chkd_impromptu()."
+        }]
+      };
+    }
+
+    const session = sessionData.data;
+
+    // Check for anchor
+    if (!session.anchor?.id) {
+      return {
+        content: [{
+          type: "text",
+          text: "❌ No current working item. Use chkd_working('item') to set an anchor first, or use chkd_add_child('parentId', 'title') to specify parent directly."
+        }]
+      };
+    }
+
+    const parentId = session.anchor.id;
+    const response = await api.addChildItem(repoPath, parentId, title);
+
+    if (!response.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${response.error}`
+        }]
+      };
+    }
+
+    let text = `✅ Added sub-task to current item\n`;
+    text += `═══════════════════════════════════════\n\n`;
+    text += `📝 "${title}"\n`;
+    text += `📍 Parent: ${parentId} (${session.anchor.title})\n`;
+    text += `🆔 ID: ${response.data.childId}\n`;
+    text += `\n💡 Use chkd_tick("${title}") when done`;
 
     return {
       content: [{
