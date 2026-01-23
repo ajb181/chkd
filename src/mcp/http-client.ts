@@ -172,6 +172,19 @@ export async function markInProgress(repoPath: string, itemQuery: string) {
   return request('POST', '/api/spec/in-progress', { repoPath, itemQuery });
 }
 
+export interface AddFeatureOptions {
+  title: string;
+  areaCode: string;
+  description?: string;
+  story?: string;
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+  fileLink?: string;  // Link to detailed design doc, Figma, etc.
+  tasks?: string[];
+  withWorkflow?: boolean;
+}
+
 export async function addFeature(
   repoPath: string,
   title: string,
@@ -186,6 +199,25 @@ export async function addFeature(
     description,
     withWorkflow: true,
     tasks
+  });
+}
+
+export async function addFeatureWithMetadata(
+  repoPath: string,
+  opts: AddFeatureOptions
+) {
+  return request('POST', '/api/spec/add', {
+    repoPath,
+    title: opts.title,
+    areaCode: opts.areaCode,
+    description: opts.description,
+    story: opts.story,
+    keyRequirements: opts.keyRequirements,
+    filesToChange: opts.filesToChange,
+    testing: opts.testing,
+    fileLink: opts.fileLink,
+    tasks: opts.tasks,
+    withWorkflow: opts.withWorkflow !== false
   });
 }
 
@@ -248,4 +280,82 @@ export async function getRepoByPath(repoPath: string) {
     return repos.find(r => r.path === repoPath);
   }
   return null;
+}
+
+// ============================================
+// Workers API (Multi-Worker System)
+// ============================================
+
+export async function getWorkers(repoPath: string) {
+  return request('GET', '/api/workers', undefined, { repoPath });
+}
+
+export async function spawnWorker(
+  repoPath: string,
+  taskId: string,
+  taskTitle: string,
+  username?: string,
+  nextTaskId?: string,
+  nextTaskTitle?: string
+) {
+  return request('POST', '/api/workers', {
+    repoPath,
+    taskId,
+    taskTitle,
+    username,
+    nextTaskId,
+    nextTaskTitle
+  });
+}
+
+export async function getWorker(workerId: string) {
+  return request('GET', `/api/workers/${workerId}`);
+}
+
+export async function updateWorker(
+  workerId: string,
+  updates: {
+    status?: string;
+    message?: string;
+    progress?: number;
+    heartbeat?: boolean;
+  }
+) {
+  return request('PATCH', `/api/workers/${workerId}`, updates);
+}
+
+export async function deleteWorker(workerId: string, force?: boolean, deleteBranch?: boolean) {
+  const params: Record<string, string> = {};
+  if (force) params.force = 'true';
+  if (deleteBranch) params.deleteBranch = 'true';
+  return request('DELETE', `/api/workers/${workerId}`, undefined, params);
+}
+
+export async function completeWorker(workerId: string, autoMerge?: boolean, commitMessage?: string) {
+  return request('POST', `/api/workers/${workerId}/complete`, {
+    autoMerge: autoMerge ?? true,
+    commitMessage
+  });
+}
+
+export async function workerHeartbeat(
+  workerId: string,
+  message?: string,
+  progress?: number
+) {
+  return request('PATCH', `/api/workers/${workerId}`, {
+    heartbeat: true,
+    message,
+    progress
+  });
+}
+
+export async function checkWorkerStatus(workerId: string) {
+  return request('GET', `/api/workers/${workerId}`);
+}
+
+export async function getDeadWorkers(repoPath: string, thresholdMs?: number) {
+  const params: Record<string, string> = { repoPath };
+  if (thresholdMs) params.thresholdMs = String(thresholdMs);
+  return request('GET', '/api/workers/dead', undefined, params);
 }

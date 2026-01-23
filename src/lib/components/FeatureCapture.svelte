@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
-  import { checkDuplicates, expandFeature, addFeature } from '$lib/api';
+  import { checkDuplicates, expandFeature, addFeature, uploadAttachment } from '$lib/api';
   import type { DuplicateMatch, ParsedSpec } from '$lib/api';
 
   export let repoPath: string;
@@ -13,7 +13,8 @@
   function saveDraft() {
     if (typeof window === 'undefined') return;
     try {
-      const draft = { title, description, userStory, selectedAreaCode, currentStep };
+      const draft = { title, description, userStory, selectedAreaCode, currentStep,
+        keyRequirements, filesToChange, testingNotes, fileLink };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
     } catch (e) { /* ignore */ }
   }
@@ -29,6 +30,10 @@
         if (draft.userStory) userStory = draft.userStory;
         if (draft.selectedAreaCode) selectedAreaCode = draft.selectedAreaCode;
         if (draft.currentStep) currentStep = draft.currentStep;
+        if (draft.keyRequirements) keyRequirements = draft.keyRequirements;
+        if (draft.filesToChange) filesToChange = draft.filesToChange;
+        if (draft.testingNotes) testingNotes = draft.testingNotes;
+        if (draft.fileLink) fileLink = draft.fileLink;
       }
     } catch (e) { /* ignore */ }
   }
@@ -51,29 +56,40 @@
   let currentStep: Step = 'discuss';
   const steps: Step[] = ['discuss', 'analyze', 'place', 'review', 'add'];
 
-  // Default workflow tasks - follows the chkd workflow philosophy:
-  // 1. Research before building
-  // 2. Design with endpoint contracts
-  // 3. Prototype with mock data for quick iteration
-  // 4. Get user feedback BEFORE investing in real implementation
-  // 5. Only then build the real thing
-  // 6. Polish based on actual usage
-  const DEFAULT_TASKS = [
-    'Explore: research problem, check existing code/patterns',
-    'Design: plan approach + define endpoint contracts',
-    'Prototype: build UI with mock data, stub backend',
-    'Feedback: user reviews and approves UX',
-    'Implement: connect real backend logic',
-    'Polish: error states, edge cases, performance'
+  import type { WorkflowStep } from '$lib/types';
+
+  // Default workflow tasks with nested checkpoint children
+  const DEFAULT_WORKFLOW: WorkflowStep[] = [
+    { task: 'Explore: research problem, check existing code/patterns', children: ['Research: investigate codebase and problem space', 'Share: inform user of findings before continuing'] },
+    { task: 'Design: plan approach + define endpoint contracts', children: ['Draft: create initial design/approach', 'Review: show user, iterate if needed'] },
+    { task: 'Prototype: build UI with mock data, stub backend', children: ['Build: create the prototype', 'Verify: compare to spec/wireframe, iterate if gaps'] },
+    { task: 'Feedback: user reviews and approves UX', children: ['Demo: show user the prototype', 'Iterate: make changes based on feedback'] },
+    { task: 'Implement: connect real backend logic', children: ['Build: implement real logic', 'Verify: test functionality works'] },
+    { task: 'Polish: error states, edge cases, performance', children: ['Build: add error handling, edge cases', 'Verify: confirm edge cases handled'] },
+    { task: 'Document: update docs, guides, and CLAUDE.md if needed', children: ['Write: update relevant documentation', 'Review: confirm docs match implementation'] },
+    { task: 'Commit: commit code to git with clear message + assumptions', children: ['Stage: review changes, stage files', 'Commit: write message with assumptions noted'] }
   ];
+
+  // Flat task strings for UI display (parent phases only - children auto-added)
+  const DEFAULT_TASKS = DEFAULT_WORKFLOW.map(w => w.task);
 
   // Feature data
   let title = initialTitle;
   let description = '';
   let userStory = '';
 
+  // Metadata fields (TBC if not provided)
+  let keyRequirements = '';  // Comma-separated
+  let filesToChange = '';    // Comma-separated
+  let testingNotes = '';     // Comma-separated
+  let fileLink = '';         // URL to design doc/Figma
+
+  // Track original user input (before AI changes)
+  let originalTitle = '';
+  let originalDescription = '';
+
   // Auto-save draft on changes
-  $: if (title || description || userStory || selectedAreaCode) saveDraft();
+  $: if (title || description || userStory || selectedAreaCode || keyRequirements || filesToChange || testingNotes || fileLink) saveDraft();
   let selectedAreaCode: string | null = null;
   let tasks: string[] = [...DEFAULT_TASKS];
   let newTaskText = '';
@@ -92,10 +108,15 @@
   // Adding state
   let adding = false;
   let addError: string | null = null;
+  let addSuccess: { sectionId: string; areaName: string; taskCount: number } | null = null;
 
-  // Get available areas
+  // Pending attachments (to be attached after feature is created)
+  let pendingFiles: File[] = [];
+  let uploadingAttachments = false;
+
+  // Get available areas (include FUT for future/backlog items)
   $: availableAreas = spec?.areas.filter(a =>
-    ['SD', 'FE', 'BE'].includes(a.code)
+    ['SD', 'FE', 'BE', 'FUT'].includes(a.code)
   ) || [];
 
   // Step labels for sidebar
@@ -129,6 +150,9 @@
 
       // Run analysis when moving from discuss to analyze
       if (currentStep === 'discuss' && nextStep === 'analyze') {
+        // Save original user input before AI might change things
+        originalTitle = title;
+        originalDescription = description;
         await runAnalysis();
       }
 
@@ -169,13 +193,13 @@
         aiPolishedTitle = expandRes.data.polishedTitle || '';
         aiTasks = expandRes.data.tasks || [];
 
-        // Auto-fill description/story/area if not already set
-        if (!description && aiDescription) description = aiDescription;
-        if (!userStory && aiStory) userStory = aiStory;
+        // Auto-fill area if not already set (but NOT description/story - keep original visible)
         if (!selectedAreaCode && aiArea) selectedAreaCode = aiArea;
 
-        // DON'T auto-apply polished title - let user choose
-        // DON'T auto-apply tasks - let user choose
+        // Auto-apply AI tasks as default workflow (user can reset to defaults)
+        if (aiTasks.length > 0) tasks = [...aiTasks];
+
+        // DON'T auto-apply polished title or description - keep user's original
       }
 
       // Determine verdict
@@ -221,11 +245,47 @@
     // Pass custom tasks if they differ from default
     const customTasks = tasks.length > 0 ? tasks : undefined;
 
-    const res = await addFeature(repoPath, title.trim(), areaCode, fullDescription || undefined, customTasks);
+    // Parse comma-separated metadata fields into arrays
+    const parseList = (s: string) => s.trim() ? s.split(',').map(x => x.trim()).filter(Boolean) : undefined;
 
-    if (res.success) {
+    const metadata = {
+      story: userStory.trim() || undefined,
+      keyRequirements: parseList(keyRequirements),
+      filesToChange: parseList(filesToChange),
+      testing: parseList(testingNotes),
+      fileLink: fileLink.trim() || undefined
+    };
+
+    const res = await addFeature(repoPath, title.trim(), areaCode, fullDescription || undefined, customTasks, metadata);
+
+    if (res.success && res.data) {
+      const itemId = res.data.sectionId || res.data.itemId;
+
+      // Upload pending attachments
+      if (pendingFiles.length > 0) {
+        uploadingAttachments = true;
+        for (const file of pendingFiles) {
+          try {
+            await uploadAttachment(repoPath, 'item', itemId, file);
+          } catch (e) {
+            console.error('Failed to upload attachment:', e);
+          }
+        }
+        uploadingAttachments = false;
+      }
+
       clearDraft();
-      dispatch('added');
+      addSuccess = {
+        sectionId: itemId,
+        areaName: res.data.areaName,
+        taskCount: res.data.taskCount
+      };
+      // Auto-close after 3 seconds, or user can click to close immediately
+      setTimeout(() => {
+        if (addSuccess) {
+          dispatch('added');
+        }
+      }, 3000);
     } else {
       addError = res.error || 'Failed to add feature';
     }
@@ -274,6 +334,26 @@
 
   function resetTasks() {
     tasks = [...DEFAULT_TASKS];
+  }
+
+  // File attachment handlers
+  function handleFileSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) {
+      pendingFiles = [...pendingFiles, file];
+    }
+    input.value = ''; // Reset so same file can be selected again
+  }
+
+  function removeFile(index: number) {
+    pendingFiles = pendingFiles.filter((_, i) => i !== index);
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   // Can proceed to next step?
@@ -367,6 +447,15 @@
         <div class="step-content">
           <h2>Analysis</h2>
 
+          <!-- Always show original statement prominently -->
+          <div class="original-statement">
+            <div class="original-label">You said:</div>
+            <div class="original-title">{originalTitle || title}</div>
+            {#if originalDescription}
+              <div class="original-desc">{originalDescription}</div>
+            {/if}
+          </div>
+
           {#if analyzing}
             <div class="analyzing">
               <div class="spinner"></div>
@@ -447,21 +536,14 @@
                   </div>
                 {/if}
 
-                <!-- Smart tasks with accept/keep buttons -->
-                {#if aiTasks.length > 0 && JSON.stringify(aiTasks) !== JSON.stringify(tasks)}
-                  <div class="ai-choice">
-                    <div class="ai-choice-header">
-                      <label>Smart Tasks ({aiTasks.length})</label>
-                      <div class="ai-choice-actions">
-                        <button class="btn-accept" on:click={() => { tasks = [...aiTasks]; }}>Use these</button>
-                        <button class="btn-keep" on:click={() => { aiTasks = []; }}>Keep defaults</button>
-                      </div>
+                <!-- AI tasks are now the default - show option to reset to standard workflow -->
+                {#if aiTasks.length > 0}
+                  <div class="ai-applied">
+                    <div class="ai-applied-header">
+                      <label>AI Workflow Applied ({tasks.length} tasks)</label>
+                      <button class="btn-reset-workflow" on:click={() => { tasks = [...DEFAULT_TASKS]; }}>Use standard workflow</button>
                     </div>
-                    <ul class="ai-tasks">
-                      {#each aiTasks as task, i}
-                        <li><span class="task-num">{i + 1}.</span> {task}</li>
-                      {/each}
-                    </ul>
+                    <p class="ai-applied-hint">Customized tasks based on your feature. Edit in Review step.</p>
                   </div>
                 {/if}
               </div>
@@ -506,6 +588,14 @@
           <h2>Review before adding</h2>
           <p class="step-desc">Edit title, story, and tasks. This is what will be added to the spec.</p>
 
+          <!-- Show original if title has been changed -->
+          {#if originalTitle && title !== originalTitle}
+            <div class="original-reminder">
+              <span class="original-reminder-label">You said:</span>
+              <span class="original-reminder-text">{originalTitle}</span>
+            </div>
+          {/if}
+
           <div class="review-section">
             <div class="form-group">
               <label for="final-title">Title</label>
@@ -526,6 +616,47 @@
                 placeholder="As a [user], I want to [action] so that [benefit]"
               />
             </div>
+          </div>
+
+          <!-- Metadata fields - optional, defaults to TBC if not provided -->
+          <div class="metadata-fields">
+            <div class="form-group">
+              <label for="key-requirements">Key Requirements <span class="optional">(comma-separated)</span></label>
+              <input
+                id="key-requirements"
+                type="text"
+                bind:value={keyRequirements}
+                placeholder="e.g., Auth required, Mobile responsive, < 200ms load time"
+              />
+            </div>
+            <div class="form-group">
+              <label for="files-to-change">Files to Change <span class="optional">(comma-separated)</span></label>
+              <input
+                id="files-to-change"
+                type="text"
+                bind:value={filesToChange}
+                placeholder="e.g., src/routes/+page.svelte, src/lib/api.ts"
+              />
+            </div>
+            <div class="form-group">
+              <label for="testing-notes">Testing <span class="optional">(comma-separated)</span></label>
+              <input
+                id="testing-notes"
+                type="text"
+                bind:value={testingNotes}
+                placeholder="e.g., Unit tests for validation, E2E for happy path"
+              />
+            </div>
+            <div class="form-group">
+              <label for="file-link">Details Link <span class="optional">(URL to design doc, Figma, etc.)</span></label>
+              <input
+                id="file-link"
+                type="url"
+                bind:value={fileLink}
+                placeholder="e.g., https://figma.com/design/..."
+              />
+            </div>
+            <p class="metadata-hint">Leave blank for TBC - fill in before starting work</p>
           </div>
 
           <div class="tasks-section">
@@ -576,51 +707,138 @@
               <button class="btn-add-task" on:click={addTask}>+ Add</button>
             </div>
           </div>
+
+          <!-- Attachments section -->
+          <div class="attachments-section">
+            <div class="attachments-header">
+              <label>Attachments</label>
+              <span class="attachments-hint">Screenshots, mockups, specs</span>
+            </div>
+
+            {#if pendingFiles.length > 0}
+              <ul class="pending-files">
+                {#each pendingFiles as file, index}
+                  <li class="pending-file">
+                    <span class="file-icon">📎</span>
+                    <span class="file-name">{file.name}</span>
+                    <span class="file-size">{formatFileSize(file.size)}</span>
+                    <button class="file-remove" on:click={() => removeFile(index)}>×</button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+
+            <div class="attach-upload">
+              <input
+                type="file"
+                class="attach-file-input"
+                on:change={handleFileSelect}
+                accept="image/*,.pdf,.md,.txt,.json"
+              />
+              <button
+                class="attach-btn"
+                on:click={(e) => {
+                  const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                  input?.click();
+                }}
+              >
+                📎 Add File
+              </button>
+            </div>
+          </div>
         </div>
       {/if}
 
       <!-- Step: Add -->
       {#if currentStep === 'add'}
         <div class="step-content">
-          <h2>Ready to add</h2>
-
-          <div class="summary">
-            <div class="summary-row">
-              <span class="summary-label">Title</span>
-              <span class="summary-value">{title}</span>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Area</span>
-              <span class="summary-value">{availableAreas.find(a => a.code === selectedAreaCode)?.name || selectedAreaCode}</span>
-            </div>
-            {#if userStory}
-              <div class="summary-row">
-                <span class="summary-label">Story</span>
-                <span class="summary-value story">{userStory}</span>
+          {#if addSuccess}
+            <!-- Success message -->
+            <div class="success-message">
+              <div class="success-icon">✓</div>
+              <h2>Feature Added!</h2>
+              <div class="success-details">
+                <div class="success-id">{addSuccess.sectionId}</div>
+                <div class="success-meta">
+                  Added to {addSuccess.areaName} with {addSuccess.taskCount} tasks
+                </div>
               </div>
-            {/if}
-            {#if description}
+              <button class="btn-primary" on:click={() => dispatch('added')}>
+                Done
+              </button>
+              <p class="success-hint">Closing automatically...</p>
+            </div>
+          {:else}
+            <h2>Ready to add</h2>
+
+            <div class="summary">
               <div class="summary-row">
-                <span class="summary-label">Description</span>
-                <span class="summary-value">{description}</span>
+                <span class="summary-label">Title</span>
+                <span class="summary-value">{title}</span>
               </div>
+              <div class="summary-row">
+                <span class="summary-label">Area</span>
+                <span class="summary-value">{availableAreas.find(a => a.code === selectedAreaCode)?.name || selectedAreaCode}</span>
+              </div>
+              {#if userStory}
+                <div class="summary-row">
+                  <span class="summary-label">Story</span>
+                  <span class="summary-value story">{userStory}</span>
+                </div>
+              {/if}
+              {#if description}
+                <div class="summary-row">
+                  <span class="summary-label">Description</span>
+                  <span class="summary-value">{description}</span>
+                </div>
+              {/if}
+              {#if pendingFiles.length > 0}
+                <div class="summary-row">
+                  <span class="summary-label">Attachments</span>
+                  <span class="summary-value">{pendingFiles.length} file{pendingFiles.length > 1 ? 's' : ''}</span>
+                </div>
+              {/if}
+              {#if keyRequirements.trim()}
+                <div class="summary-row">
+                  <span class="summary-label">Requirements</span>
+                  <span class="summary-value">{keyRequirements}</span>
+                </div>
+              {/if}
+              {#if filesToChange.trim()}
+                <div class="summary-row">
+                  <span class="summary-label">Files</span>
+                  <span class="summary-value">{filesToChange}</span>
+                </div>
+              {/if}
+              {#if testingNotes.trim()}
+                <div class="summary-row">
+                  <span class="summary-label">Testing</span>
+                  <span class="summary-value">{testingNotes}</span>
+                </div>
+              {/if}
+              {#if fileLink.trim()}
+                <div class="summary-row">
+                  <span class="summary-label">Details</span>
+                  <span class="summary-value"><a href={fileLink} target="_blank" rel="noopener">{fileLink}</a></span>
+                </div>
+              {/if}
+            </div>
+
+            <div class="workflow-info">
+              <h4>Tasks ({tasks.length}):</h4>
+              <ul class="task-preview">
+                {#each tasks as task, i}
+                  <li>
+                    <span class="task-preview-num">{i + 1}.</span>
+                    <span class="task-preview-text">{task}</span>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+
+            {#if addError}
+              <div class="error">{addError}</div>
             {/if}
-          </div>
-
-          <div class="workflow-info">
-            <h4>Tasks ({tasks.length}):</h4>
-            <ul class="task-preview">
-              {#each tasks as task, i}
-                <li>
-                  <span class="task-preview-num">{i + 1}.</span>
-                  <span class="task-preview-text">{task}</span>
-                </li>
-              {/each}
-            </ul>
-          </div>
-
-          {#if addError}
-            <div class="error">{addError}</div>
           {/if}
         </div>
       {/if}
@@ -636,8 +854,14 @@
         {/if}
 
         {#if currentStep === 'add'}
-          <button class="btn-primary" on:click={handleAdd} disabled={adding}>
-            {adding ? 'Adding...' : 'Add Feature'}
+          <button class="btn-primary" on:click={handleAdd} disabled={adding || uploadingAttachments}>
+            {#if uploadingAttachments}
+              Uploading files...
+            {:else if adding}
+              Adding...
+            {:else}
+              Add Feature
+            {/if}
           </button>
         {:else}
           <button class="btn-primary" on:click={nextStep} disabled={!canProceed}>
@@ -844,6 +1068,105 @@
     padding: var(--space-md) var(--space-lg) !important;
   }
 
+  /* Original statement - prominently displayed */
+  .original-statement {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-lg);
+  }
+
+  .original-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: var(--space-xs);
+  }
+
+  .original-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: var(--space-xs);
+  }
+
+  .original-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* AI applied confirmation */
+  .ai-applied {
+    background: var(--success-bg);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+  }
+
+  .ai-applied-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .ai-applied-header label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--success);
+  }
+
+  .ai-applied-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: var(--space-xs) 0 0;
+  }
+
+  .btn-reset-workflow {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: var(--bg);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+
+  .btn-reset-workflow:hover {
+    background: var(--bg-secondary);
+    color: var(--text);
+  }
+
+  /* Original reminder in review step */
+  .original-reminder {
+    background: var(--bg-tertiary);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-md);
+    font-size: 13px;
+    display: flex;
+    gap: var(--space-sm);
+    align-items: baseline;
+  }
+
+  .original-reminder-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .original-reminder-text {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
   /* Analysis step */
   .analyzing {
     display: flex;
@@ -1002,38 +1325,6 @@
     border-radius: var(--radius-sm);
   }
 
-  .ai-item.polished {
-    background: var(--success-bg);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-md);
-  }
-
-  .ai-item .polished-title {
-    font-weight: 600;
-    color: var(--success);
-  }
-
-  .ai-tasks {
-    list-style: none;
-    margin: var(--space-xs) 0 0;
-    padding: 0;
-    font-size: 13px;
-  }
-
-  .ai-tasks li {
-    padding: var(--space-xs) 0;
-    color: var(--text-muted);
-    display: flex;
-    gap: var(--space-sm);
-  }
-
-  .ai-tasks .task-num {
-    color: var(--primary);
-    font-weight: 500;
-    width: 20px;
-    flex-shrink: 0;
-  }
 
   /* AI choice UI */
   .ai-choice {
@@ -1122,7 +1413,7 @@
   /* Area selection */
   .area-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--space-md);
   }
 
@@ -1262,6 +1553,61 @@
     border-radius: var(--radius-md);
     color: var(--error);
     font-size: 14px;
+    margin-top: var(--space-md);
+  }
+
+  /* Success message */
+  .success-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--space-xl) var(--space-lg);
+    min-height: 300px;
+  }
+
+  .success-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--success);
+    color: white;
+    font-size: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-lg);
+  }
+
+  .success-message h2 {
+    color: var(--success);
+    margin-bottom: var(--space-md);
+  }
+
+  .success-details {
+    margin-bottom: var(--space-lg);
+  }
+
+  .success-id {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm);
+  }
+
+  .success-meta {
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .success-hint {
+    font-size: 12px;
+    color: var(--text-muted);
     margin-top: var(--space-md);
   }
 
@@ -1462,5 +1808,141 @@
   .btn-add-task:hover {
     background: var(--primary);
     color: white;
+  }
+
+  /* Attachments section */
+  .attachments-section {
+    margin-top: var(--space-lg);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+
+  .attachments-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+  }
+
+  .attachments-header label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .attachments-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .pending-files {
+    list-style: none;
+    margin: 0 0 var(--space-md);
+    padding: 0;
+  }
+
+  .pending-file {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-xs);
+    font-size: 13px;
+  }
+
+  .file-icon {
+    flex-shrink: 0;
+  }
+
+  .file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-size {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .file-remove {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+  }
+
+  .file-remove:hover {
+    background: var(--error-bg);
+    color: var(--error);
+  }
+
+  .attach-upload {
+    display: flex;
+    gap: var(--space-sm);
+  }
+
+  .attach-file-input {
+    display: none;
+  }
+
+  .attach-btn {
+    padding: var(--space-sm) var(--space-md);
+    font-size: 13px;
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+
+  .attach-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-bg);
+  }
+
+  /* Metadata fields section */
+  .metadata-fields {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-top: var(--space-lg);
+  }
+
+  .metadata-fields .form-group {
+    margin-bottom: var(--space-md);
+  }
+
+  .metadata-fields .form-group:last-of-type {
+    margin-bottom: var(--space-sm);
+  }
+
+  .metadata-fields label .optional {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .metadata-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: var(--space-sm) 0 0;
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--border);
   }
 </style>

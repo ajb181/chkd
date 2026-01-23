@@ -1,5 +1,34 @@
 import fs from 'fs/promises';
 import { SpecParser, type ParsedSpec, type SpecPhase, type SpecArea, type SpecItem } from './parser';
+import type { WorkflowStep } from '$lib/types';
+
+/**
+ * Options for adding a new item to the spec
+ * Single unified interface - all item creation goes through this
+ */
+export interface AddItemOptions {
+  specPath: string;
+  title: string;
+  areaCode: string;  // Required - SD, FE, BE, FUT
+  description?: string;
+  // Metadata
+  story?: string;
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+  fileLink?: string;  // Link to detailed design doc, Figma, etc.
+  // Workflow
+  tasks?: WorkflowStep[];  // Custom tasks, or uses DEFAULT_WORKFLOW_STEPS
+  withWorkflow?: boolean;  // Default true - set false for simple items
+}
+
+export interface AddItemResult {
+  itemId: string;
+  sectionId: string;  // e.g., "SD.1", "FE.3"
+  line: number;
+  areaCode: string;
+  title: string;
+}
 
 /**
  * Mark a spec item as complete
@@ -59,23 +88,64 @@ export async function markItemIncomplete(specPath: string, itemId: string): Prom
 }
 
 /**
- * Add a new item to an area by code (e.g., 'BE', 'FE', 'SD')
+ * Default workflow steps for new features with nested checkpoint children
+ *
+ * Philosophy: Get user feedback BEFORE investing in real implementation.
+ * Each phase has fixed sub-tasks that force human+AI checkpoints.
  */
-export async function addItemToArea(
-  specPath: string,
-  areaCode: string,
-  title: string,
-  description?: string,
-  subItems?: string[]
-): Promise<{ itemId: string; sectionId: string; line: number }> {
+export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    task: 'Explore: research problem, check existing code/patterns',
+    children: ['Research: investigate codebase and problem space', 'Share: inform user of findings before continuing']
+  },
+  {
+    task: 'Design: plan approach + define endpoint contracts',
+    children: ['Draft: create initial design/approach', 'Review: show user, iterate if needed']
+  },
+  {
+    task: 'Prototype: build UI with mock data, stub backend',
+    children: ['Build: create the prototype', 'Verify: compare to spec/wireframe, iterate if gaps']
+  },
+  {
+    task: 'Feedback: user reviews and approves UX',
+    children: ['Demo: show user the prototype', 'Iterate: make changes based on feedback']
+  },
+  {
+    task: 'Implement: connect real backend logic',
+    children: ['Build: implement real logic', 'Verify: test functionality works']
+  },
+  {
+    task: 'Polish: error states, edge cases, performance',
+    children: ['Build: add error handling, edge cases', 'Verify: confirm edge cases handled']
+  },
+  {
+    task: 'Document: update docs, guides, and CLAUDE.md if needed',
+    children: ['Write: update relevant documentation', 'Review: confirm docs match implementation']
+  },
+  {
+    task: 'Commit: commit code to git with clear message + assumptions',
+    children: ['Stage: review changes, stage files', 'Commit: write message with assumptions noted']
+  }
+];
+
+/**
+ * Add a new item to the spec - SINGLE UNIFIED FUNCTION
+ * All item creation goes through here.
+ */
+export async function addItem(opts: AddItemOptions): Promise<AddItemResult> {
+  const { specPath, title, areaCode, description, story, keyRequirements, filesToChange, testing, fileLink } = opts;
+  const withWorkflow = opts.withWorkflow !== false;  // Default true
+
   const content = await fs.readFile(specPath, 'utf-8');
   const lines = content.split('\n');
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
+  // Find the area
   const area = spec.areas.find(a => a.code === areaCode);
   if (!area) {
-    throw new Error(`Area ${areaCode} not found`);
+    const availableAreas = spec.areas.map(a => a.code).join(', ');
+    throw new Error(`Area "${areaCode}" not found. Available: ${availableAreas}`);
   }
 
   // Find insertion point
@@ -84,8 +154,23 @@ export async function addItemToArea(
   // Get the next section number (e.g., SD.1, FE.2)
   const sectionNumber = getNextSectionNumber(area);
 
-  // Build the new item lines with section number
-  const newLines = buildItemLines(title, description, subItems, sectionNumber);
+  // Determine workflow tasks
+  const tasks = withWorkflow
+    ? (opts.tasks && opts.tasks.length > 0 ? opts.tasks : DEFAULT_WORKFLOW_STEPS)
+    : undefined;
+
+  // Build the new item lines
+  const newLines = buildItemLines({
+    title,
+    description,
+    sectionNumber,
+    userStory: story,
+    keyRequirements,
+    filesToChange,
+    testing,
+    fileLink,
+    subItems: tasks,
+  });
 
   // Insert
   lines.splice(insertLine, 0, ...newLines);
@@ -94,83 +179,13 @@ export async function addItemToArea(
 
   const itemId = generateId(areaCode, title);
 
-  return { itemId, sectionId: sectionNumber, line: insertLine + 1 };
-}
-
-/**
- * Add a new item to a phase (backward compat)
- */
-export async function addItem(
-  specPath: string,
-  phaseNumber: number,
-  title: string,
-  description?: string,
-  subItems?: string[]
-): Promise<{ itemId: string; line: number }> {
-  const content = await fs.readFile(specPath, 'utf-8');
-  const lines = content.split('\n');
-  const parser = new SpecParser();
-  const spec = parser.parse(content);
-
-  const phase = spec.phases.find(p => p.number === phaseNumber);
-  if (!phase) {
-    throw new Error(`Phase ${phaseNumber} not found`);
-  }
-
-  // Find insertion point
-  const insertLine = findInsertionPointForArea(lines, phase, spec);
-
-  // Build the new item lines
-  const newLines = buildItemLines(title, description, subItems);
-
-  // Insert
-  lines.splice(insertLine, 0, ...newLines);
-
-  await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
-
-  const itemId = generateId(phase.code, title);
-
-  return { itemId, line: insertLine + 1 };
-}
-
-/**
- * Default workflow steps for new features
- *
- * Philosophy: Get user feedback BEFORE investing in real implementation.
- * - Prototype with mock data so you can iterate quickly
- * - Define endpoint contracts upfront so FE and BE can work in parallel
- * - Only build real backend AFTER user approves the UX
- */
-export const DEFAULT_WORKFLOW_STEPS = [
-  'Explore: research problem, check existing code/patterns',
-  'Design: plan approach + define endpoint contracts',
-  'Prototype: build UI with mock data, stub backend',
-  'Feedback: user reviews and approves UX',
-  'Implement: connect real backend logic',
-  'Polish: error states, edge cases, performance'
-];
-
-/**
- * Add workflow template sub-items to a new feature
- * Per V2_WORKFLOW_VISION.md
- * @param customTasks - Optional custom tasks to use instead of default workflow
- */
-export async function addFeatureWithWorkflow(
-  specPath: string,
-  areaCodeOrPhaseNum: string | number,
-  title: string,
-  description?: string,
-  customTasks?: string[]
-): Promise<{ itemId: string; sectionId?: string; line: number }> {
-  const workflowSteps = customTasks && customTasks.length > 0
-    ? customTasks
-    : DEFAULT_WORKFLOW_STEPS;
-
-  if (typeof areaCodeOrPhaseNum === 'string') {
-    return addItemToArea(specPath, areaCodeOrPhaseNum, title, description, workflowSteps);
-  } else {
-    return addItem(specPath, areaCodeOrPhaseNum, title, description, workflowSteps);
-  }
+  return {
+    itemId,
+    sectionId: sectionNumber,
+    line: insertLine + 1,
+    areaCode,
+    title
+  };
 }
 
 // ============================================
@@ -282,22 +297,100 @@ function getLastNestedItem(items: SpecItem[]): SpecItem {
   return last;
 }
 
-function buildItemLines(title: string, description?: string, subItems?: string[], sectionNumber?: string): string[] {
+interface BuildItemOptions {
+  title: string;
+  description?: string;
+  sectionNumber?: string;
+  // New metadata fields
+  userStory?: string;
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+  fileLink?: string;  // Link to detailed design doc, Figma, etc.
+  // Sub-items - accepts both old string[] and new WorkflowStep[] format
+  subItems?: string[] | WorkflowStep[];
+}
+
+function buildItemLines(
+  titleOrOptions: string | BuildItemOptions,
+  description?: string,
+  subItems?: string[] | WorkflowStep[],
+  sectionNumber?: string
+): string[] {
+  // Handle both old signature and new options object
+  let opts: BuildItemOptions;
+  if (typeof titleOrOptions === 'string') {
+    opts = { title: titleOrOptions, description, subItems, sectionNumber };
+  } else {
+    opts = titleOrOptions;
+  }
+
   const lines: string[] = [];
 
   // Format: - [ ] **XX.N Title** - Description
-  const titleWithNumber = sectionNumber ? `${sectionNumber} ${title}` : title;
+  const titleWithNumber = opts.sectionNumber ? `${opts.sectionNumber} ${opts.title}` : opts.title;
 
-  if (description) {
-    lines.push(`- [ ] **${titleWithNumber}** - ${description}`);
+  if (opts.description) {
+    lines.push(`- [ ] **${titleWithNumber}** - ${opts.description}`);
   } else {
     lines.push(`- [ ] **${titleWithNumber}**`);
   }
 
-  if (subItems && subItems.length > 0) {
-    for (const sub of subItems) {
-      if (sub.trim()) {
-        lines.push(`  - [ ] ${sub}`);
+  // Add user story as blockquote
+  if (opts.userStory) {
+    lines.push('');
+    lines.push(`> ${opts.userStory}`);
+  }
+
+  // Add key requirements section (TBC default if not provided)
+  lines.push('');
+  lines.push('**Key requirements:**');
+  const requirements = opts.keyRequirements && opts.keyRequirements.length > 0 ? opts.keyRequirements : ['TBC'];
+  for (const req of requirements) {
+    lines.push(`- ${req}`);
+  }
+
+  // Add files to change section (TBC default if not provided)
+  lines.push('');
+  lines.push('**Files to change:**');
+  const files = opts.filesToChange && opts.filesToChange.length > 0 ? opts.filesToChange : ['TBC'];
+  for (const file of files) {
+    lines.push(`- ${file}`);
+  }
+
+  // Add testing section (TBC default if not provided)
+  lines.push('');
+  lines.push('**Testing:**');
+  const tests = opts.testing && opts.testing.length > 0 ? opts.testing : ['TBC'];
+  for (const test of tests) {
+    lines.push(`- ${test}`);
+  }
+
+  // Add file link if provided (for detailed design docs, Figma, etc.)
+  if (opts.fileLink) {
+    lines.push('');
+    lines.push(`**Details:** [${opts.fileLink}](${opts.fileLink})`);
+  }
+
+  // Add sub-items (workflow phases)
+  if (opts.subItems && opts.subItems.length > 0) {
+    lines.push('');
+    for (const sub of opts.subItems) {
+      if (typeof sub === 'string') {
+        // Old format: flat string
+        if (sub.trim()) {
+          lines.push(`  - [ ] ${sub}`);
+        }
+      } else {
+        // New format: WorkflowStep with children
+        if (sub.task.trim()) {
+          lines.push(`  - [ ] ${sub.task}`);
+          for (const child of sub.children) {
+            if (child.trim()) {
+              lines.push(`    - [ ] ${child}`);
+            }
+          }
+        }
       }
     }
   }
@@ -570,13 +663,30 @@ export async function updateStory(
 /**
  * Edit an item's title and/or description
  */
+export interface EditItemOptions {
+  title?: string;
+  description?: string;
+  story?: string;
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+}
+
 export async function editItem(
   specPath: string,
   itemId: string,
-  newTitle?: string,
+  titleOrOptions?: string | EditItemOptions,
   newDescription?: string,
   newStory?: string
 ): Promise<void> {
+  // Handle both old signature and new options object
+  let opts: EditItemOptions;
+  if (typeof titleOrOptions === 'object') {
+    opts = titleOrOptions;
+  } else {
+    opts = { title: titleOrOptions, description: newDescription, story: newStory };
+  }
+
   const content = await fs.readFile(specPath, 'utf-8');
   const lines = content.split('\n');
   const parser = new SpecParser();
@@ -595,8 +705,8 @@ export async function editItem(
   }
 
   const prefix = match[1]; // indent + checkbox
-  const title = newTitle || itemInfo.item.title;
-  const desc = newDescription !== undefined ? newDescription : itemInfo.item.description;
+  const title = opts.title || itemInfo.item.title;
+  const desc = opts.description !== undefined ? opts.description : itemInfo.item.description;
 
   let newLine: string;
   if (desc) {
@@ -607,9 +717,72 @@ export async function editItem(
 
   lines[lineIndex] = newLine;
 
+  // Find the bounds of this item's content (before next item or header)
+  const indent = currentLine.match(/^(\s*)/)?.[1] || '';
+  let itemEndIndex = lineIndex + 1;
+  for (let i = lineIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Stop if we hit another checklist item at same or higher level, or a header
+    if (line.match(/^\s*-\s+\[/) || line.match(/^##/)) {
+      // Check if it's same or higher level
+      const lineIndent = line.match(/^(\s*)/)?.[1] || '';
+      if (lineIndent.length <= indent.length) {
+        break;
+      }
+    }
+    itemEndIndex = i + 1;
+  }
+
+  // Helper to find and update a metadata section
+  const updateSection = (sectionHeader: string, values: string[] | undefined) => {
+    if (values === undefined) return;
+
+    const headerRegex = new RegExp(`^\\*\\*${sectionHeader}:\\*\\*$`);
+    let sectionStart = -1;
+    let sectionEnd = -1;
+
+    // Find existing section
+    for (let i = lineIndex + 1; i < itemEndIndex; i++) {
+      if (lines[i].match(headerRegex)) {
+        sectionStart = i;
+        // Find end of section (next ** header or blank line before next section)
+        for (let j = i + 1; j < itemEndIndex; j++) {
+          if (lines[j].match(/^\*\*.*:\*\*$/) || lines[j].match(/^\s*-\s+\[/) || lines[j].match(/^##/)) {
+            sectionEnd = j;
+            break;
+          }
+          if (lines[j].trim() === '' && j + 1 < lines.length && lines[j + 1].match(/^\*\*/)) {
+            sectionEnd = j;
+            break;
+          }
+          sectionEnd = j + 1;
+        }
+        break;
+      }
+    }
+
+    // Build new section lines
+    const newSectionLines = [`**${sectionHeader}:**`, ...values.map(v => `- ${v}`)];
+
+    if (sectionStart >= 0) {
+      // Replace existing section
+      const deleteCount = sectionEnd - sectionStart;
+      lines.splice(sectionStart, deleteCount, '', ...newSectionLines);
+    } else {
+      // Insert new section before workflow sub-items (find first sub-item checkbox)
+      let insertAt = itemEndIndex;
+      for (let i = lineIndex + 1; i < itemEndIndex; i++) {
+        if (lines[i].match(/^\s+-\s+\[/)) {
+          insertAt = i;
+          break;
+        }
+      }
+      lines.splice(insertAt, 0, '', ...newSectionLines);
+    }
+  };
+
   // Handle story update - story is a blockquote line after the item
-  if (newStory !== undefined) {
-    const indent = currentLine.match(/^(\s*)/)?.[1] || '';
+  if (opts.story !== undefined) {
     const storyIndent = indent + '  '; // 2 more spaces for story
 
     // Check if there's already a story line (blockquote right after item)
@@ -627,8 +800,8 @@ export async function editItem(
       }
     }
 
-    if (newStory.trim()) {
-      const storyLine = `${storyIndent}> ${newStory.trim()}`;
+    if (opts.story.trim()) {
+      const storyLine = `${storyIndent}> ${opts.story.trim()}`;
       if (storyLineIndex >= 0) {
         // Update existing story
         lines[storyLineIndex] = storyLine;
@@ -640,6 +813,22 @@ export async function editItem(
       // Remove story if empty
       lines.splice(storyLineIndex, 1);
     }
+  }
+
+  // Update metadata sections (do these after story to avoid line number shifts)
+  // Re-parse to get updated line numbers
+  const updatedContent = lines.join('\n');
+  const updatedLines = updatedContent.split('\n');
+
+  // Update in reverse order of appearance to avoid index shifts
+  if (opts.testing !== undefined) {
+    updateSection('Testing', opts.testing);
+  }
+  if (opts.filesToChange !== undefined) {
+    updateSection('Files to change', opts.filesToChange);
+  }
+  if (opts.keyRequirements !== undefined) {
+    updateSection('Key requirements', opts.keyRequirements);
   }
 
   await fs.writeFile(specPath, lines.join('\n'), 'utf-8');
@@ -959,4 +1148,76 @@ export async function transferItem(
   await fs.writeFile(sourceSpecPath, sourceLines.join('\n'), 'utf-8');
 
   return { newItemId: sectionNumber, line: insertLine + 1 };
+}
+
+/**
+ * Check if an item has TBC (to be confirmed) fields that need to be filled in
+ * Returns array of field names that still have TBC
+ */
+export interface TbcCheckResult {
+  hasTbc: boolean;
+  tbcFields: string[];
+  itemTitle: string;
+}
+
+export async function checkItemTbc(specPath: string, itemId: string): Promise<TbcCheckResult> {
+  const content = await fs.readFile(specPath, 'utf-8');
+  const lines = content.split('\n');
+  const parser = new SpecParser();
+  const spec = parser.parse(content);
+
+  // Find the item
+  const itemInfo = findItemByQuery(spec, itemId);
+  const startLine = itemInfo.item.line - 1;
+
+  // Find the bounds of this item's content (before next item at same level or header)
+  const itemIndent = lines[startLine].match(/^(\s*)/)?.[1].length || 0;
+  let endLine = startLine + 1;
+
+  for (let i = startLine + 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Stop at next checklist item at same or higher level
+    const checkMatch = line.match(/^(\s*)-\s+\[/);
+    if (checkMatch) {
+      const indent = checkMatch[1].length;
+      if (indent <= itemIndent) {
+        break;
+      }
+    }
+    // Stop at headers
+    if (line.match(/^##/)) {
+      break;
+    }
+    endLine = i;
+  }
+
+  // Check for TBC in the item's content
+  const tbcFields: string[] = [];
+  let currentSection = '';
+
+  for (let i = startLine; i <= endLine; i++) {
+    const line = lines[i];
+
+    // Track which section we're in
+    if (line.match(/^\*\*Key requirements:\*\*/)) {
+      currentSection = 'Key requirements';
+    } else if (line.match(/^\*\*Files to change:\*\*/)) {
+      currentSection = 'Files to change';
+    } else if (line.match(/^\*\*Testing:\*\*/)) {
+      currentSection = 'Testing';
+    }
+
+    // Check for TBC
+    if (line.match(/^-\s+TBC\s*$/i) && currentSection) {
+      if (!tbcFields.includes(currentSection)) {
+        tbcFields.push(currentSection);
+      }
+    }
+  }
+
+  return {
+    hasTbc: tbcFields.length > 0,
+    tbcFields,
+    itemTitle: itemInfo.item.title
+  };
 }

@@ -46,14 +46,32 @@
 
 ### Workflow Template
 
-Every feature added gets these steps:
+Every feature added gets these 8 steps:
 ```
-- [ ] Explore: understand problem, search existing functions
-- [ ] Design: flow diagram if needed
-- [ ] Prototype: backend with test data + frontend calling it
-- [ ] Feedback: user reviews prototype
-- [ ] Implement: replace test data with real logic
-- [ ] Polish: iterate based on usage
+- [ ] Explore: research problem, check existing code/patterns
+  - [ ] Research: investigate codebase and problem space
+  - [ ] Share: inform user of findings before continuing
+- [ ] Design: plan approach + define endpoint contracts
+  - [ ] Draft: create initial design/approach
+  - [ ] Review: show user, iterate if needed
+- [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Build: create the prototype
+  - [ ] Verify: compare to spec/wireframe, iterate if gaps
+- [ ] Feedback: user reviews and approves UX
+  - [ ] Demo: show user the prototype
+  - [ ] Iterate: make changes based on feedback
+- [ ] Implement: connect real backend logic
+  - [ ] Build: implement real logic
+  - [ ] Verify: test functionality works
+- [ ] Polish: error states, edge cases, performance
+  - [ ] Build: add error handling, edge cases
+  - [ ] Verify: confirm edge cases handled
+- [ ] Document: update docs, guides, and CLAUDE.md if needed
+  - [ ] Write: update relevant documentation
+  - [ ] Review: confirm docs match implementation
+- [ ] Commit: commit code to git with clear message + assumptions
+  - [ ] Stage: review changes, stage files
+  - [ ] Commit: write message with assumptions noted
 ```
 
 ### Spec Format
@@ -61,7 +79,24 @@ Every feature added gets these steps:
 - Area header: `## Area Name`
 - Section numbers: `**XX.N Feature Name**` (e.g., BE.1, FE.2)
 - Checklist: `- [ ]` or `- [x]`
-- User story: Blockquote `>`
+- User story: `**Story:**` line
+- Metadata: Key Requirements, Files to Change, Testing (comma-separated or bullets)
+- Details link: `**Details:** [url](url)` for design docs, Figma, etc.
+
+Example item with metadata:
+```markdown
+- [ ] **BE.1 User Authentication** - OAuth2 login flow
+  **Story:** As a user, I want to log in with Google so I don't need another password
+  **Key Requirements:** OAuth2 with Google, Session management, Logout flow
+  **Files to Change:** src/routes/login, src/lib/auth.ts, src/hooks.server.ts
+  **Testing:** Unit tests for token validation, E2E for login/logout flow
+  **Details:** [Design Doc](https://docs.google.com/...)
+
+  - [ ] Explore: research OAuth libraries, check existing auth patterns
+    - [ ] Research: investigate codebase
+    - [ ] Share: inform user of findings
+  ...
+```
 
 ---
 

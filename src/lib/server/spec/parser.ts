@@ -10,9 +10,15 @@ export interface SpecItem {
   completed: boolean;  // backward compat: true if done
   status: ItemStatus;
   priority: Priority;  // null = backlog (untagged)
+  tags: string[];  // Tag names extracted from #tag syntax
   children: SpecItem[];
   line: number;
   story?: string;
+  // Metadata sections (extracted from markdown below item)
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+  fileLink?: string;  // Link to detailed design doc, Figma, etc.
 }
 
 export interface SpecArea {
@@ -222,6 +228,27 @@ export class SpecParser {
           itemTitle = itemTitle.replace(/^\[P[123]\]\s*/i, '');  // Remove tag from display title
         }
 
+        // Extract tags #tagname from description (they appear before the " - " dash)
+        // Tags can be in either itemTitle or itemDesc, so check both
+        const tags: string[] = [];
+        const tagRegex = /#(\w+(?:[-_]\w+)*)/g;
+
+        // Extract from title
+        let tagMatch;
+        while ((tagMatch = tagRegex.exec(itemTitle)) !== null) {
+          tags.push(tagMatch[1].toLowerCase());
+        }
+
+        // Extract from desc (before actual description)
+        tagRegex.lastIndex = 0;  // Reset regex
+        while ((tagMatch = tagRegex.exec(itemDesc)) !== null) {
+          tags.push(tagMatch[1].toLowerCase());
+        }
+
+        // Remove all tags from both title and description
+        itemTitle = itemTitle.replace(/#\w+(?:[-_]\w+)*/g, '').trim();
+        itemDesc = itemDesc.replace(/#\w+(?:[-_]\w+)*/g, '').trim();
+
         // Handle nesting based on indent (need to do this first to know parent)
         while (indentStack.length > 0 && indent <= indentStack[indentStack.length - 1]) {
           indentStack.pop();
@@ -239,11 +266,19 @@ export class SpecParser {
           completed,
           status,
           priority,
+          tags,
           children: [],
           line: lineNum,
         };
 
+        // Extract metadata sections for top-level items (Key requirements, Files to change, Testing)
         if (itemStack.length === 0) {
+          const metadata = this.extractItemMetadata(lines, i);
+          if (metadata.story) item.story = metadata.story;
+          if (metadata.keyRequirements?.length) item.keyRequirements = metadata.keyRequirements;
+          if (metadata.filesToChange?.length) item.filesToChange = metadata.filesToChange;
+          if (metadata.testing?.length) item.testing = metadata.testing;
+          if (metadata.fileLink) item.fileLink = metadata.fileLink;
           currentArea.items.push(item);
         } else {
           itemStack[itemStack.length - 1].children.push(item);
@@ -440,6 +475,103 @@ export class SpecParser {
     }
 
     return `${areaCode.toLowerCase()}-${slug}`;
+  }
+
+  /**
+   * Extract metadata sections (story, key requirements, files, testing) from lines after an item
+   */
+  private extractItemMetadata(lines: string[], itemLineIndex: number): {
+    story?: string;
+    keyRequirements?: string[];
+    filesToChange?: string[];
+    testing?: string[];
+    fileLink?: string;
+  } {
+    const result: {
+      story?: string;
+      keyRequirements?: string[];
+      filesToChange?: string[];
+      testing?: string[];
+      fileLink?: string;
+    } = {};
+
+    let currentSection: 'requirements' | 'files' | 'testing' | null = null;
+
+    // Scan lines after the item until we hit another item or header
+    for (let i = itemLineIndex + 1; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Stop at next checklist item at root level or header
+      if (line.match(/^- \[/) || line.match(/^##/)) {
+        break;
+      }
+
+      // Stop at indented checklist items (sub-items of this item)
+      if (line.match(/^\s+- \[/)) {
+        break;
+      }
+
+      // Extract story (blockquote)
+      const storyMatch = line.match(/^>\s*(.+)/);
+      if (storyMatch) {
+        result.story = storyMatch[1].trim();
+        continue;
+      }
+
+      // Detect section headers
+      if (line.match(/^\*\*Key requirements:\*\*/i)) {
+        currentSection = 'requirements';
+        result.keyRequirements = [];
+        continue;
+      }
+      if (line.match(/^\*\*Files to change:\*\*/i)) {
+        currentSection = 'files';
+        result.filesToChange = [];
+        continue;
+      }
+      if (line.match(/^\*\*Testing:\*\*/i)) {
+        currentSection = 'testing';
+        result.testing = [];
+        continue;
+      }
+
+      // Extract file link (Details section with markdown link)
+      const fileLinkMatch = line.match(/^\*\*Details:\*\*\s*\[([^\]]+)\]\(([^)]+)\)/i);
+      if (fileLinkMatch) {
+        result.fileLink = fileLinkMatch[2];  // Extract the URL
+        continue;
+      }
+
+      // Extract list items for current section
+      const listMatch = line.match(/^-\s+(.+)/);
+      if (listMatch && currentSection) {
+        const value = listMatch[1].trim();
+        // Include TBC values - let consumers decide how to display them
+        switch (currentSection) {
+          case 'requirements':
+            result.keyRequirements?.push(value);
+            break;
+          case 'files':
+            result.filesToChange?.push(value);
+            break;
+          case 'testing':
+            result.testing?.push(value);
+            break;
+        }
+      }
+
+      // Reset section on blank line followed by different section
+      if (line.trim() === '') {
+        // Keep currentSection - might have more items after blank line
+      }
+    }
+
+    // Clean up empty arrays
+    if (result.keyRequirements?.length === 0) delete result.keyRequirements;
+    if (result.filesToChange?.length === 0) delete result.filesToChange;
+    if (result.testing?.length === 0) delete result.testing;
+
+    return result;
   }
 
   private computeAreaStatus(area: SpecArea): void {

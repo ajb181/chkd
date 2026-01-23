@@ -142,11 +142,34 @@ export async function tickItem(repoPath: string, itemQuery: string): Promise<Api
 }
 
 // Add a feature with workflow template
-export async function addFeature(repoPath: string, title: string, areaCode?: string, description?: string, tasks?: string[]): Promise<ApiResponse<any>> {
+export interface AddFeatureOptions {
+  story?: string;
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+  fileLink?: string;
+}
+
+export async function addFeature(
+  repoPath: string,
+  title: string,
+  areaCode?: string,
+  description?: string,
+  tasks?: string[],
+  metadata?: AddFeatureOptions
+): Promise<ApiResponse<any>> {
   const res = await fetch(`${BASE_URL}/api/spec/add`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, title, areaCode, description, withWorkflow: true, tasks })
+    body: JSON.stringify({
+      repoPath,
+      title,
+      areaCode,
+      description,
+      withWorkflow: true,
+      tasks,
+      ...metadata
+    })
   });
   return res.json();
 }

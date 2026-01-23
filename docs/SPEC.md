@@ -165,6 +165,68 @@ Configure repos and preferences.
   - [x] Feedback: user reviews and approves UX
   - [x] Implement: connect real backend logic
   - [x] Polish: error states, edge cases, performance
+- [ ] **SD.21 AI Prompt Studio - View, edit, version, and test all LLM prompts** - As a user, I want to see and edit all AI prompts used in chkd so that I can customize how the AI generates content and have full transparency and control. Based on Strateo's proven AI Studio architecture with version control, testing, and audit trails.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+- [ ] **SD.22 World-Class User Guide - Searchable, production-ready documentation for all user levels** - Complete overhaul of the chkd guide to be world-class, searchable, and production-ready for public launch.
+  - [x] Research: Best practices for developer documentation and user guides
+  - [x] Research: Review all spec docs, research docs, and codebase - build product knowledge doc
+  - [x] Design: Guide structure and information architecture
+  - [ ] Implement: Searchable documentation system
+  - [ ] Write: New user journey (install, first run, quick start)
+  - [ ] Write: Active user guide (daily workflows, features, customization)
+  - [ ] Write: Power user guide (multi-worker, MCP tools, advanced features)
+  - [ ] Write: Team/SaaS setup guide (team management, enterprise features)
+  - [ ] Polish: Troubleshooting, FAQ, and edge cases
+  - [ ] Review: Final quality check and user testing
+
+**User Journey Coverage:**
+- 🆕 New User: Installation, first run, core concepts, quick start
+- 👤 Active User: Daily workflows, features, customization, settings
+- ⚡ Power User: Multi-worker system, MCP tools, advanced features
+- 👥 Team Lead: SaaS setup, team management, enterprise features
+
+**Key Requirements:**
+1. Research best practices for developer documentation and user guides
+2. Review all spec docs, research docs, and codebase for complete product understanding
+3. Searchable documentation (consider Algolia, local search, or built-in)
+4. Production-ready for someone to pickup, install, and run
+5. Include SaaS setup as complete (verify at launch)
+6. Consider user evolution from beginner to expert
+
+**Deliverables:**
+- Comprehensive GUIDE.md or guide system
+- Quick start guide (5-minute setup)
+- Feature reference by user level
+- Troubleshooting section
+- SaaS/Team setup guide
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+- [x] **SD.23 Multi-Worker System Integration Testing** - As a developer, I want to validate the multi-worker system works end-to-end so that we can confidently use parallel workers for feature development.
+
+**Acceptance Criteria:**
+- [ ] Can spawn a worker from the dashboard
+- [ ] Worker Claude can claim the task
+- [ ] Worker sends heartbeats visible in UI
+- [ ] Worker completes and auto-merges (clean case)
+- [ ] Conflict resolution works when workers touch same files
+- [ ] Dead worker detection fires when worker stops sending heartbeats
+- [ ] Manager signals appear in UI for all events
+- [ ] Two workers can run in parallel without issues
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
 ---
 
 ## Frontend
@@ -439,6 +501,119 @@ Command-line interface with workflow documentation.
   - [ ] Feedback: user reviews and approves UX
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
+- [ ] **BE.18 upgrade the stoy create by including projct context** - Enhance the story creation process to include relevant project context information, making stories more informed and contextually aware.
+
+> As a developer, I want story creation to include project context so that generated stories are more relevant and actionable.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+- [ ] **BE.19 Add testing into the workflow research  https://github.com/kenryu42/claude-code-safety-net** - starting point for reseaching how  https://github.com/kenryu42/claude-code-safety-net
+
+
+> As a developer, I want integrated testing in the workflow so that I can catch bugs early and maintain code quality.
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+- [x] **BE.20 Workflow Step Sub-Items** - Make `chkd add` generate nested checkboxes with required fields
+
+> When user adds a feature, SPEC.md output changes from flat tasks to nested tasks with children, and includes required metadata.
+
+**What we're building:**
+```markdown
+# BEFORE (current - flat, minimal metadata)
+- [ ] **SD.5 My Feature** - Description
+  - [ ] Explore: research problem
+  - [ ] Design: plan approach
+
+# AFTER (nested checkboxes, required fields)
+- [ ] **SD.5 My Feature** - Description
+
+> User story goes here
+
+**Key requirements:**
+- Validation feedback when missing fields
+- Backwards compatible with existing specs
+- Safe structure building
+
+**Files to change:**
+- file1.ts, file2.ts
+
+**Testing:**
+- Test case 1
+- Test case 2
+
+  - [ ] Explore: research problem
+    - [ ] Research: investigate codebase
+    - [ ] Share: inform user before continuing
+  - [ ] Design: plan approach
+    - [ ] Draft: create initial design
+    - [ ] Review: show user, iterate
+```
+
+**Required fields when creating a feature:**
+- Title (required)
+- Description (required)
+- User story (required)
+- Key requirements (required) - safety, validation, backwards compat considerations
+- Files to change (required) - which files will be modified
+- Testing (required) - how to verify it works
+- Area (required) - SD, FE, BE, FUT
+
+**Implementation requirements:**
+- Phases are fixed (Explore, Design, Prototype, Feedback, Implement, Polish, Document, Commit)
+- Sub-tasks are fixed per phase (Research/Share, Draft/Review, Build/Verify, etc.)
+- Phase description can be custom or default
+- Validate: give agent feedback if submitting with missing required fields
+- Backwards compat: API accepts string[] (flat) or structured format
+
+**Files to change:**
+- `src/lib/types.ts` - add WorkflowPhase type, FeatureSpec type
+- `src/lib/server/spec/writer.ts` - update DEFAULT_WORKFLOW_STEPS + buildItemLines()
+- `src/lib/components/FeatureCapture.svelte` - update DEFAULT_TASKS, add required field validation
+- `src/routes/api/spec/add/+server.ts` - validate required fields, return helpful errors
+
+**Testing:**
+- `chkd add` without required fields → helpful error message
+- `chkd add "Test Feature" --area BE` with all fields → SPEC.md has full structure
+- UI wizard enforces required fields before proceeding
+- Existing flat specs still parse correctly
+
+  - [x] Explore: understand current feature creation flow
+    - [x] Research: read FeatureCapture.svelte wizard, API endpoint, writer.ts
+    - [x] Share: confirm current fields and where validation happens
+  - [x] Design: define required fields and validation
+    - [x] Draft: FeatureSpec type with all required fields, validation error messages
+    - [x] Review: confirm fields list and error messages are helpful
+  - [x] Implement: update writer.ts for new output format
+    - [x] Build: buildItemLines() outputs key requirements, files, testing sections
+    - [x] Verify: markdown output matches "AFTER" example above
+  - [x] Implement: update FeatureCapture.svelte with required fields
+    - [x] Build: add key requirements, files, testing, fileLink inputs; pass metadata to API
+    - [x] Verify: fields display in review step and summary; defaults to TBC if empty
+  - [x] Implement: update API validation
+    - [x] Build: /api/spec/add validates required fields, returns helpful hints
+    - [x] Verify: missing fields return clear error messages (already comprehensive)
+  - [x] Implement: update CLI to show task context
+    - [x] Build: `chkd start` shows story, requirements, files, testing
+    - [x] Build: `chkd progress` shows task context above sub-items
+    - [x] Build: `chkd working` shows task context when starting sub-item
+    - [x] Verify: context displays correctly (already implemented)
+  - [x] Implement: add phase hints for Document and Commit
+    - [x] Build: Document hint - already in working() function
+    - [x] Build: Commit hint - already in working() function
+    - [x] Verify: hints show when working on Document/Commit phases
+  - [x] Polish: end-to-end testing
+    - [x] Build: test CLI and UI paths, test backwards compat
+    - [x] Verify: all paths work, existing specs unaffected
+  - [x] Document: update templates
+    - [x] Write: update SPEC.md.template with new structure
+    - [x] Review: templates match implementation
 
 ---
 
@@ -613,14 +788,16 @@ Command-line interface with workflow documentation.
 
 ### Workflow Template
 
-Every feature added gets these steps:
+Every feature added gets these 8 steps:
 ```
-- [ ] Explore: understand problem, search existing functions
-- [ ] Design: flow diagram if needed
-- [ ] Prototype: backend with test data + frontend calling it
-- [ ] Feedback: user reviews prototype
-- [ ] Implement: replace test data with real logic
-- [ ] Polish: iterate based on usage
+- [ ] Explore: research problem, check existing code/patterns
+- [ ] Design: plan approach + define endpoint contracts
+- [ ] Prototype: build UI with mock data, stub backend
+- [ ] Feedback: user reviews and approves UX
+- [ ] Implement: connect real backend logic
+- [ ] Polish: error states, edge cases, performance
+- [ ] Document: update docs, guides, and CLAUDE.md if needed
+- [ ] Commit: commit code to git with clear message + assumptions
 ```
 
 ### Spec Format Rules
