@@ -4,30 +4,36 @@
   "description": "Development quality control - spec-driven workflow",
   "type": "module",
   "scripts": {
-    "dev": "node dev-server.js",
-    "dev:vite": "vite dev --port 3847",
+    "dev": "vite dev --port 3847",
+    "dev:terminal": "node dev-server.js",
     "build": "vite build",
     "start": "node server.js",
     "preview": "vite preview --port 3847",
     "stable:build": "vite build && rm -rf build-stable && cp -r build build-stable",
     "stable": "HOST=0.0.0.0 PORT=3848 BUILD_DIR=build-stable node server.js",
     "start:terminal": "vite build && PORT=3848 node server.js",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "mcp": "tsx src/mcp/server-http.ts"
   },
   "bin": {
-    "chkd": "./src/cli/index.ts"
+    "chkd": "./src/cli/index.ts",
+    "chkd-mcp": "./src/mcp/server-http.ts"
   },
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "@xterm/addon-fit": "^0.11.0",
     "better-sqlite3": "^11.0.0",
+    "flexsearch": "^0.8.212",
     "marked": "^17.0.1",
     "node-pty": "^1.1.0",
+    "playwright": "^1.58.0",
     "simple-git": "^3.22.0",
     "tsx": "^4.21.0",
     "ws": "^8.19.0",
-    "xterm": "^5.3.0"
+    "xterm": "^5.3.0",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.2.0",

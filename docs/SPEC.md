@@ -71,7 +71,7 @@ Configure repos and preferences.
 - [x] **Track and display time spent on each checklist item - store duration when ticked, show in UI**
   - [x] Explore: check existing checklist data structure + timing patterns
   - [x] Design: duration storage schema + UI display mockups
-  - [~] Prototype: timer UI + mock duration data display
+  - [x] Prototype: timer UI + mock duration data display
   - [ ] Feedback: user tests timing UX and display format
   - [ ] Implement: real duration tracking + database storage
   - [ ] Polish: pause/resume states + duration formatting
@@ -151,6 +151,81 @@ Configure repos and preferences.
   - [ ] Feedback: user reviews and approves UX
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
+- [ ] **SD.24 Mobile Capture repo setup** #mobile-capture-app - Create mobile-capture-app repo with Expo template, same stack as budget_project (expo-router, TypeScript, React 19)
+
+**Key requirements:**
+- Create new repo `mobile-capture-app` with Expo template
+- Match budget_project stack: expo-router, TypeScript, React 19
+- Basic folder structure for future feature expansion
+- Git initialized with initial commit
+
+**Files to change:**
+- New repo: mobile-capture-app/
+- package.json with Expo dependencies
+- tsconfig.json for TypeScript
+- app/ directory for expo-router
+
+**Testing:**
+- `npx expo start` runs without errors
+- Basic navigation between screens works
+- TypeScript compilation passes
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [~] **SD.25 Review service project setup** #stateless-review-service - Create review service in chkd with Playwright dependency and API endpoint
+
+**Key requirements:**
+- Stateless design: spawn, process, return, exit (no persistent state)
+- Playwright with Chromium for headless screenshots
+- API endpoint at POST /api/review-build
+- Support wireframe as image (.png/.jpg) OR HTML file
+- Types for ReviewRequest and ReviewResult
+
+**Files to change:**
+- src/lib/server/review/types.ts - Request/Result interfaces
+- src/lib/server/review/index.ts - Main review function (stub for BE.27/BE.28)
+- src/routes/api/review-build/+server.ts - HTTP endpoint
+- package.json - Playwright dependency
+
+**Testing:**
+- `curl -X POST /api/review-build` with url+scope returns proper error (not implemented yet)
+- Validation: missing url/scope returns 400 with clear error message
+- Playwright installed: `npx playwright --version` works
+
+  - [x] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [x] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [x] Explore > Share: inform user of findings before continuing
+  - [x] Design > Draft: create initial design/approach
+  - [x] Design > Review: show user, iterate if needed
+  - [x] Prototype > Build: create the prototype
+  - [x] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [x] Feedback > Demo: show user the prototype
+  - [x] Feedback > Iterate: make changes based on feedback
+  - [x] Implement > Build: implement real logic
+  - [x] Implement > Verify: test functionality works
+  - [x] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [x] Polish > Review: open browser, visually check UI renders correctly
+  - [x] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [x] Document > Write: update relevant documentation
+  - [x] Document > Review: confirm docs match implementation
+  - [~] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
 ---
 
 ## Frontend
@@ -229,13 +304,212 @@ Add new features to the spec.
 - [ ] **FE.10 Epic view in UI - filter items by epic tag** - Add toggle in dashboard to switch between area view (current) and epic view. Epic view groups all items with same epic tag together, showing progress across areas. Makes it easy to see "everything for Auth System" instead of hunting through SD/FE/BE sections.
 
 **Key requirements:**
-- TBC
+- Toggle button in dashboard header to switch area/epic view
+- Epic view groups items by their #epic-tag across all areas
+- Show epic progress (X/Y complete) for each group
+- Clicking epic name links to docs/epics/{name}.md
 
 **Files to change:**
-- TBC
+- src/routes/+page.svelte - Add view toggle, epic grouping logic
+- src/lib/components/ - May need EpicGroup.svelte component
+- src/lib/api.ts - May need endpoint for epic aggregation
 
 **Testing:**
-- TBC
+- Toggle switches between area and epic views
+- Items with same epic tag appear grouped together
+- Progress shows correctly across areas
+- Empty state when no epics exist
+
+  - [x] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [x] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [x] Explore > Share: inform user of findings before continuing
+  - [x] Design > Draft: create initial design/approach
+  - [x] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **FE.11 App shell & navigation** #mobile-capture-app - Expo setup with expo-router, basic screen structure (Chat, History, Settings)
+
+**Key requirements:**
+- expo-router file-based navigation
+- Bottom tab bar with 3 tabs: Chat (default), History, Settings
+- Consistent header styling across screens
+- TypeScript throughout
+
+**Files to change:**
+- app/_layout.tsx - Root layout with tab navigation
+- app/(tabs)/index.tsx - Chat screen (default)
+- app/(tabs)/history.tsx - History screen
+- app/(tabs)/settings.tsx - Settings screen
+
+**Testing:**
+- App launches to Chat tab
+- Bottom tabs navigate between screens
+- Back navigation works correctly
+- No TypeScript errors
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **FE.12 Chat interface** #mobile-capture-app - Conversation UI - message bubbles, text input, send button, loading states. Connect to /api/capture/chat
+
+**Key requirements:**
+- Message bubbles (user right, AI left) with timestamps
+- Text input with send button at bottom
+- Loading indicator while AI responds
+- Auto-scroll to latest message
+- Keyboard handling (input moves above keyboard)
+
+**Files to change:**
+- app/(tabs)/index.tsx - Chat screen with message list
+- components/MessageBubble.tsx - Individual message component
+- components/ChatInput.tsx - Text input with send button
+- hooks/useChat.ts - Chat state and API calls
+
+**Testing:**
+- Messages display correctly (user vs AI styling)
+- Send button triggers API call
+- Loading state shows during response
+- Keyboard doesn't obscure input
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **FE.13 Object preview & confirm** #mobile-capture-app - Show structured object (story/epic) before pushing, let user edit title/description, confirm to push
+
+**Key requirements:**
+- Modal/sheet showing extracted object (type, title, description, area)
+- Editable fields for title and description
+- Area code selector (SD/FE/BE/FUT)
+- Confirm and Cancel buttons
+- Shows which chkd repo it will push to
+
+**Files to change:**
+- components/ObjectPreview.tsx - Preview modal component
+- components/AreaPicker.tsx - Area code selector
+- app/(tabs)/index.tsx - Trigger preview from chat
+
+**Testing:**
+- Preview shows correct extracted data
+- Fields are editable
+- Confirm triggers push to chkd
+- Cancel returns to chat without pushing
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **FE.14 Settings screen** #mobile-capture-app - Configure chkd server URL (default localhost:3847), test connection button
+
+**Key requirements:**
+- Server URL input (default: http://localhost:3847)
+- Test Connection button with success/failure feedback
+- Persist settings to device storage
+- Show current connection status
+
+**Files to change:**
+- app/(tabs)/settings.tsx - Settings screen UI
+- lib/storage.ts - AsyncStorage wrapper for settings
+- lib/api.ts - API client with configurable base URL
+
+**Testing:**
+- URL persists after app restart
+- Test Connection shows success for valid server
+- Test Connection shows error for invalid/offline server
+- API calls use configured URL
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **FE.15 Capture history** #mobile-capture-app - List of recently captured ideas with push status, tap to view details
+
+**Key requirements:**
+- List of captured objects with title, type, timestamp
+- Status indicator (pushed, pending, failed)
+- Tap to view full details
+- Pull-to-refresh to sync status
+- Persist locally even when offline
+
+**Files to change:**
+- app/(tabs)/history.tsx - History list screen
+- components/HistoryItem.tsx - Individual history row
+- lib/storage.ts - Local history storage
+- components/HistoryDetail.tsx - Detail view modal
+
+**Testing:**
+- New captures appear in history
+- Status updates after push succeeds/fails
+- Tap opens detail view
+- History persists after app restart
 
   - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
   - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
@@ -544,13 +818,22 @@ Command-line interface with workflow documentation.
 - [ ] **BE.22 Mind Reader discovery mode** - Add --mind-reader flag to chkd add. Claude asks itself 30 product/UX/technical questions, answers based on context, writes to docs/mind-reader/{ID}-{title}.md. Helps create better specs upfront. Explore step references discovery docs, Polish > Confirm verifies against assumptions.
 
 **Key requirements:**
-- TBC
+- --mind-reader flag on chkd add MCP tool
+- Generate 30 questions across product/UX/technical domains
+- AI answers based on codebase context
+- Output to docs/mind-reader/{ID}-{title}.md
+- Link discovery doc in spec item
 
 **Files to change:**
-- TBC
+- src/mcp/server.ts - Add --mind-reader param to chkd_add
+- src/lib/server/mindreader/ - New module for question generation
+- docs/mind-reader/ - Output directory for discovery docs
 
 **Testing:**
-- TBC
+- chkd_add with mind-reader creates discovery doc
+- Doc contains 30+ Q&A pairs
+- Doc is linked in created spec item
+- Explore phase can reference the doc
 
   - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
   - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
@@ -573,13 +856,287 @@ Command-line interface with workflow documentation.
 - [~] **BE.23 Epic management for large features** - Add epic system for big features that span multiple spec items. Epic lives in docs/epics/{name}.md with overview, tag, and scope. Items link via tag. UI can filter by epic to see all related items together. Includes overhaul checklist when all items complete - end-to-end test, integration check, final sign-off. Commands: chkd epic "name" (create), chkd add --epic (link item).
 
 **Key requirements:**
-- TBC
+- chkd_epic MCP tool creates docs/epics/{slug}.md
+- Auto-generate tag from epic name (e.g., "Auth System" → "auth-system")
+- chkd_add accepts epic param to link items via #tag
+- chkd_epics lists all epics with progress
+- Epic doc includes overhaul checklist template
 
 **Files to change:**
-- TBC
+- src/mcp/server.ts - chkd_epic, chkd_epics, chkd_add epic param
+- docs/epics/ - Epic documents directory
+- src/lib/server/spec/parser.ts - Parse epic tags from items
 
 **Testing:**
-- TBC
+- chkd_epic creates doc with correct structure
+- chkd_add --epic links item with tag
+- chkd_epics shows progress across linked items
+- Tag is auto-generated correctly from name
+
+  - [x] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.24 Chat API endpoint** #mobile-capture-app - Add /api/capture/chat endpoint to chkd - conversation with AI, maintains context across messages
+
+**Key requirements:**
+- POST /api/capture/chat accepts {message, sessionId}
+- Maintains conversation history per session
+- Returns AI response with session context
+- Session timeout after inactivity (configurable)
+- System prompt guides toward idea extraction
+
+**Files to change:**
+- src/routes/api/capture/chat/+server.ts - Chat endpoint
+- src/lib/server/capture/session.ts - Session management
+- src/lib/server/capture/prompts.ts - System prompts for capture mode
+
+**Testing:**
+- New session creates conversation context
+- Follow-up messages include history
+- Session persists across multiple requests
+- System prompt steers toward structured capture
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.25 Object extraction from chat** #mobile-capture-app - AI determines when idea is ready, extracts structured object (story/epic/bug/win) with title, description, area code
+
+**Key requirements:**
+- AI detects when idea is sufficiently refined
+- Extracts: type (story/epic/bug/win), title, description, area code
+- Returns structured JSON alongside conversational response
+- Confidence score for extraction quality
+- Allows user to continue refining if not ready
+
+**Files to change:**
+- src/lib/server/capture/extractor.ts - Object extraction logic
+- src/lib/server/capture/prompts.ts - Extraction prompts
+- src/routes/api/capture/chat/+server.ts - Include extraction in response
+
+**Testing:**
+- Clear ideas extract correctly
+- Vague ideas prompt for clarification
+- All object types supported (story, epic, bug, win)
+- Area code inferred from context
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.26 Push to chkd integration** #mobile-capture-app - Connect extracted object to existing chkd APIs - create story via spec/add, epic via epic endpoint, etc.
+
+**Key requirements:**
+- POST /api/capture/push accepts extracted object
+- Routes to correct API: spec/add for stories, epic endpoint for epics
+- Returns created item ID and confirmation
+- Handles duplicate detection
+- Validates object before pushing
+
+**Files to change:**
+- src/routes/api/capture/push/+server.ts - Push endpoint
+- src/lib/server/capture/router.ts - Route objects to correct APIs
+
+**Testing:**
+- Story pushes to spec/add correctly
+- Epic creates via epic endpoint
+- Bug creates via bug endpoint
+- Win creates via quickwin endpoint
+- Duplicates are detected and rejected
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.27 Screenshot capture** #stateless-review-service - Playwright headless browser - launch, navigate to URL, capture full-page screenshot, close browser
+
+**Key requirements:**
+- Launch Chromium headless via Playwright
+- Navigate to provided URL, wait for network idle
+- Capture full-page screenshot as PNG buffer
+- If wireframePath is HTML, screenshot that too
+- Close browser after capture (stateless)
+- Configurable viewport size
+
+**Files to change:**
+- src/lib/server/review/screenshot.ts - Screenshot capture module
+- src/lib/server/review/index.ts - Call screenshot in review flow
+
+**Testing:**
+- Screenshots a localhost URL correctly
+- Handles external URLs
+- HTML wireframe screenshots work
+- Browser closes after each capture
+- Timeout handling for slow pages
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.28 Claude API visual analysis** #stateless-review-service - Send screenshot + wireframe + scope to Claude API, get structured review feedback (matches, gaps, suggestions)
+
+**Key requirements:**
+- Send images to Claude API with vision capability
+- Include scope/requirements in prompt
+- Parse response into ReviewResult structure
+- Handle cases: with wireframe, without wireframe
+- Score calculation based on matches vs gaps
+
+**Files to change:**
+- src/lib/server/review/analyze.ts - Claude API integration
+- src/lib/server/review/prompts.ts - Analysis prompts
+- src/lib/server/review/index.ts - Call analyze after screenshot
+
+**Testing:**
+- Analysis returns structured ReviewResult
+- Wireframe comparison identifies visual differences
+- Scope-only review checks against requirements
+- Score reflects match quality (0-100)
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.29 HTTP endpoint** #stateless-review-service - POST /api/review-build endpoint - accepts {url, wireframe, scope}, returns feedback, process exits after response
+
+**Key requirements:**
+- Endpoint already created in SD.25 setup
+- Wire up screenshot capture (BE.27) and analysis (BE.28)
+- Return ReviewResult with matches, gaps, suggestions, score
+- Error handling for invalid URLs, timeouts
+- Optional: return screenshot in response for debugging
+
+**Files to change:**
+- src/routes/api/review-build/+server.ts - Wire up full flow
+- src/lib/server/review/index.ts - Implement review() function
+
+**Testing:**
+- Full flow: URL → screenshot → analyze → response
+- Returns proper error for unreachable URLs
+- Wireframe path validation (exists, correct format)
+- Response time reasonable (<30s typical)
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.30 MCP tool integration** #stateless-review-service - Add chkd_review_build MCP tool - spawns review service as subprocess, waits for response, returns feedback to Claude
+
+**Key requirements:**
+- chkd_review_build MCP tool in server.ts
+- Calls /api/review-build endpoint internally
+- Returns formatted feedback for Claude consumption
+- Error messages helpful for debugging
+- Optional: include screenshot path in response
+
+**Files to change:**
+- src/mcp/server.ts - Add chkd_review_build tool
+- Tool schema: url (required), wireframePath (optional), scope (required)
+
+**Testing:**
+- MCP tool returns ReviewResult correctly
+- Error handling surfaces useful messages
+- Works with and without wireframe
+- Claude can use feedback to iterate on UI
 
   - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
   - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
