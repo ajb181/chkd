@@ -599,7 +599,27 @@ async function start(taskQuery: string) {
     console.log(`  📝 "${res.data.handoverNote.note}"`);
   }
 
-  console.log(`  💡 Run 'chkd progress' to see sub-items.`);
+  // Show task context
+  const ctx = res.data.context;
+  if (ctx) {
+    if (ctx.story) {
+      console.log(`\n  📖 Story: ${ctx.story}`);
+    }
+    if (ctx.keyRequirements?.length) {
+      console.log(`\n  📋 Key Requirements:`);
+      ctx.keyRequirements.forEach((r: string) => console.log(`     • ${r}`));
+    }
+    if (ctx.filesToChange?.length) {
+      console.log(`\n  📁 Files to Change:`);
+      ctx.filesToChange.forEach((f: string) => console.log(`     • ${f}`));
+    }
+    if (ctx.testing?.length) {
+      console.log(`\n  🧪 Testing:`);
+      ctx.testing.forEach((t: string) => console.log(`     • ${t}`));
+    }
+  }
+
+  console.log(`\n  💡 Run 'chkd progress' to see sub-items.`);
 
   await showQueueReminder();
   console.log('');
@@ -644,6 +664,32 @@ async function working(itemQuery: string) {
     console.log(`  ⚠️  ${res.data.warning}`);
   }
 
+  // Fetch parent task context if we're working on a sub-item
+  const specRes = await api(`/api/spec/full?repoPath=${encodeURIComponent(cwd)}`);
+  if (specRes.success && statusRes.data.session?.currentTask) {
+    const spec = specRes.data;
+    const taskId = statusRes.data.session.currentTask.id;
+
+    // Find the parent task
+    for (const area of spec.areas || spec.phases || []) {
+      for (const item of area.items || []) {
+        if (item.id === taskId || item.title === statusRes.data.session.currentTask.title) {
+          // Show condensed context
+          if (item.keyRequirements?.length || item.filesToChange?.length) {
+            console.log(`\n  📋 Context:`);
+            if (item.keyRequirements?.length) {
+              console.log(`     Reqs: ${item.keyRequirements.slice(0, 2).join(', ')}${item.keyRequirements.length > 2 ? '...' : ''}`);
+            }
+            if (item.filesToChange?.length) {
+              console.log(`     Files: ${item.filesToChange.slice(0, 3).join(', ')}${item.filesToChange.length > 3 ? '...' : ''}`);
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
   // Phase-specific nudges for chkd workflow keywords
   const itemLower = itemQuery.toLowerCase();
   if (itemLower.startsWith('explore')) {
@@ -656,15 +702,30 @@ async function working(itemQuery: string) {
   } else if (itemLower.startsWith('prototype')) {
     console.log(`  💡 Use mock/fake data. Real backend comes later.`);
   } else if (itemLower.startsWith('feedback')) {
-    console.log(`  💡 Stop. Show user. Get explicit approval.`);
+    console.log(`  🛑 STOP! This phase requires USER APPROVAL.`);
+    console.log(`     - Show your work to the user`);
+    console.log(`     - Wait for explicit "yes" or approval`);
+    console.log(`     - Only tick AFTER user confirms`);
     console.log(`  📋 Use 'chkd iterate' after each piece of work to stay anchored.`);
   } else if (itemLower.startsWith('implement')) {
     console.log(`  💡 Now build the real logic. Feedback was approved.`);
   } else if (itemLower.startsWith('polish')) {
     console.log(`  💡 Error states, edge cases, loading states.`);
+  } else if (itemLower.startsWith('document')) {
+    console.log(`  💡 Update docs, guides, CLAUDE.md if needed.`);
+  } else if (itemLower.startsWith('commit')) {
+    console.log(`  💡 Stage files, write clear message with assumptions.`);
   } else {
     console.log(`  💡 Run 'chkd tick' when done.`);
   }
+
+  // Tick reminder - don't batch!
+  console.log(`\n  ─────────────────────────────────────────────────────`);
+  console.log(`  ⚠️  DO THE WORK FIRST, then tick.`);
+  console.log(`     NEVER chain: chkd working && chkd tick`);
+  console.log(`     There's a 10-second minimum before tick is allowed.`);
+  console.log(`  ─────────────────────────────────────────────────────`);
+
   await showQueueReminder();
   console.log('');
 }
@@ -785,10 +846,24 @@ async function progress() {
     return;
   }
 
+  // Show task context
+  if (currentItem.story) {
+    console.log(`\n  📖 ${currentItem.story}`);
+  }
+  if (currentItem.keyRequirements?.length) {
+    console.log(`\n  📋 Requirements: ${currentItem.keyRequirements.join(', ')}`);
+  }
+  if (currentItem.filesToChange?.length) {
+    console.log(`  📁 Files: ${currentItem.filesToChange.join(', ')}`);
+  }
+  if (currentItem.testing?.length) {
+    console.log(`  🧪 Testing: ${currentItem.testing.join(', ')}`);
+  }
+
   // Show sub-items if any
   if (currentItem.children && currentItem.children.length > 0) {
     const completed = currentItem.children.filter((c: any) => c.completed).length;
-    console.log(`  Progress: ${completed}/${currentItem.children.length} sub-items\n`);
+    console.log(`\n  Progress: ${completed}/${currentItem.children.length} sub-items\n`);
 
     for (const child of currentItem.children) {
       const mark = child.completed ? '✓' : (child.inProgress ? '~' : ' ');
@@ -868,7 +943,8 @@ async function resolveBug(bugQuery: string) {
   });
 
   console.log(`\n  ✅ ${res.data.message}`);
-  console.log(`  📴 Debug session ended\n`);
+  console.log(`  📴 Debug session ended`);
+  console.log(`\n  💡 Don't forget to commit and push your changes!\n`);
 }
 
 async function startBugfix(query: string, options: { convert?: boolean } = {}) {
@@ -1409,14 +1485,18 @@ async function add(title: string, flags: Record<string, string | boolean>) {
 
 async function edit(itemId: string, flags: Record<string, string | boolean>) {
   if (!itemId) {
-    console.log(`\n  Usage: chkd edit "SD.1" [--story "text"] [--title "text"]`);
+    console.log(`\n  Usage: chkd edit "SD.1" [options]`);
     console.log(`\n  Options:`);
-    console.log(`    --story "text"    Update the story/description`);
-    console.log(`    --title "text"    Update the title`);
+    console.log(`    --story "text"         Update the story/description`);
+    console.log(`    --title "text"         Update the title`);
+    console.log(`    --requirements "a,b"   Set key requirements (comma-separated)`);
+    console.log(`    --files "a,b"          Set files to change (comma-separated)`);
+    console.log(`    --testing "a,b"        Set testing items (comma-separated)`);
     console.log(`\n  Examples:`);
     console.log(`    chkd edit "SD.1" --story "New description for this feature"`);
     console.log(`    chkd edit "FE.2" --title "Updated title"`);
-    console.log(`    chkd edit "BE.1" --title "New name" --story "With new story"\n`);
+    console.log(`    chkd edit "BE.1" --requirements "Must handle errors,Must validate input"`);
+    console.log(`    chkd edit "BE.1" --files "src/api.ts,src/types.ts" --testing "API returns 200,Errors return 4xx"\n`);
     return;
   }
 
@@ -1426,11 +1506,22 @@ async function edit(itemId: string, flags: Record<string, string | boolean>) {
   const newStory = typeof flags.story === 'string' ? flags.story :
                    typeof flags.desc === 'string' ? flags.desc : undefined;
 
-  if (!newTitle && !newStory) {
-    console.log(`\n  ❌ Provide --story or --title to update`);
+  // Parse comma-separated arrays
+  const parseArray = (flag: string | boolean | undefined): string[] | undefined => {
+    if (typeof flag !== 'string') return undefined;
+    return flag.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  };
+
+  const keyRequirements = parseArray(flags.requirements || flags.reqs);
+  const filesToChange = parseArray(flags.files);
+  const testing = parseArray(flags.testing || flags.tests);
+
+  if (!newTitle && !newStory && !keyRequirements && !filesToChange && !testing) {
+    console.log(`\n  ❌ Provide at least one option to update`);
     console.log(`\n  Examples:`);
     console.log(`    chkd edit "${itemId}" --story "New description"`);
-    console.log(`    chkd edit "${itemId}" --title "New title"\n`);
+    console.log(`    chkd edit "${itemId}" --title "New title"`);
+    console.log(`    chkd edit "${itemId}" --requirements "Must do X,Must handle Y"\n`);
     return;
   }
 
@@ -1441,6 +1532,9 @@ async function edit(itemId: string, flags: Record<string, string | boolean>) {
       itemId,
       title: newTitle,
       description: newStory,
+      keyRequirements,
+      filesToChange,
+      testing,
     }),
   });
 
@@ -1450,8 +1544,11 @@ async function edit(itemId: string, flags: Record<string, string | boolean>) {
   }
 
   console.log(`\n  ✓ Updated: ${itemId}`);
-  if (newTitle) console.log(`  Title: ${newTitle}`);
-  if (newStory) console.log(`  Story: ${newStory}`);
+  if (newTitle) console.log(`    Title: ${newTitle}`);
+  if (newStory) console.log(`    Story: ${newStory}`);
+  if (keyRequirements) console.log(`    Requirements: ${keyRequirements.length} items`);
+  if (filesToChange) console.log(`    Files: ${filesToChange.length} files`);
+  if (testing) console.log(`    Testing: ${testing.length} items`);
   console.log('');
 }
 

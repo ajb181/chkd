@@ -57,21 +57,24 @@ This registers the task as active in the system.
 
 **For tasks with sub-items, tick as you go. Don't batch at the end!**
 
-### Understanding the phases
+### Understanding the 8 phases
 
 When you see these sub-items, here's what they mean:
 
 | Sub-item starts with | What to do |
 |---------------------|------------|
-| **Explore:** | Research only. Read code, find patterns. **Flag complexity to user.** No building yet. |
-| **Design:** | Plan the approach. Define contracts. Still no building. |
-| **Prototype:** | Build with FAKE/MOCK data. Stub the backend. Make it look real but use test data. |
+| **Explore:** | Research only. Read code, find patterns. **Flag complexity to user.** Share findings before continuing. |
+| **Design:** | Plan the approach. Define contracts. Show user, iterate if needed. |
+| **Prototype:** | Build with FAKE/MOCK data. Stub the backend. Verify against spec/wireframe. |
 | **Feedback:** | ⚠️ STOP. Show user. Get explicit approval. One approval ≠ blanket approval. |
-| **Implement:** | NOW build real backend. Only after Feedback approval. |
-| **Polish:** | Error states, loading, edge cases. |
-| **Docs:** | Update documentation & guide if user-facing feature. |
+| **Implement:** | NOW build real backend. Only after Feedback approval. Verify it works. |
+| **Polish:** | Error states, loading, edge cases. Verify edge cases handled. |
+| **Document:** | Update docs, guides, CLAUDE.md if user-facing feature. Confirm docs match implementation. |
+| **Commit:** | Commit code to git with clear message + assumptions noted. |
 
 **Critical:** Prototype ≠ Implement. Prototype uses mock data so the user can approve the UX before you invest in real backend code.
+
+**Each phase has a checkpoint** where you share/verify with the user before moving on. Neither human nor AI can skip these.
 
 ### Explore Phase: Investigate First!
 
@@ -93,12 +96,19 @@ Don't add features on top of messy code without flagging it.
 # 1. Signal you're starting
 chkd working "sub-item title"
 
-# 2. Build it
-# ... do the work ...
+# 2. BUILD IT (actually do the work!)
+# ... write code, make changes ...
 
-# 3. Mark it complete immediately
+# 3. Mark it complete
 chkd tick "sub-item title"
 ```
+
+**⛔ NEVER do this:**
+```bash
+chkd working "item" && chkd tick "item"  # BLOCKED - 10 second minimum
+```
+
+The system enforces a 10-second minimum between `working` and `tick`. This ensures you actually do the work, not just announce intentions.
 
 ### Example:
 
@@ -142,6 +152,11 @@ The spec has sub-items for a reason. Follow them in order:
 - [ ] Explore: ...    ← Do this first
 - [ ] Design: ...     ← Then this
 - [ ] Prototype: ...  ← Then this
+- [ ] Feedback: ...   ← STOP and get approval
+- [ ] Implement: ...  ← Only after approval
+- [ ] Polish: ...     ← Error states, edge cases
+- [ ] Document: ...   ← Update docs if needed
+- [ ] Commit: ...     ← Commit with assumptions
 ```
 
 **Don't** create your own todo list or implementation plan. The spec IS the plan.
@@ -296,7 +311,10 @@ The spec uses these markers:
 ### DON'T:
 - Work on wrong task
 - **Batch all ticks at the end**
+- **NEVER chain: `chkd working && chkd tick`** (10-second enforced minimum)
 - Skip the Feedback pause
+- **Tick Feedback items without explicit user approval** (user must say "yes"/"approved"/etc.)
 - **Treat one approval as blanket approval** (each feature needs its own feedback)
 - Add features without logging with `chkd also`
 - Forget to mark complete
+- **Ignore CLAUDE.md** - if you're not following chkd rules, re-read CLAUDE.md and respect ALL instructions
