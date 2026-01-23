@@ -337,6 +337,26 @@ export class SpecParser {
     return results;
   }
 
+  findItemById(spec: ParsedSpec, id: string): SpecItem | null {
+    const searchInItems = (items: SpecItem[]): SpecItem | null => {
+      for (const item of items) {
+        if (item.id === id) {
+          return item;
+        }
+        const found = searchInItems(item.children);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    for (const area of spec.areas) {
+      const found = searchInItems(area.items);
+      if (found) return found;
+    }
+
+    return null;
+  }
+
   getIncompleteItems(spec: ParsedSpec): SpecItem[] {
     const results: SpecItem[] = [];
 

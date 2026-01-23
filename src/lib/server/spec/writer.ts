@@ -321,10 +321,24 @@ function searchItems(items: SpecItem[], itemId: string): SpecItem | null {
 /**
  * Find item by fuzzy matching on title, description, or ID
  * Returns single match or throws helpful error with suggestions
+ * @param scopeToParentId - If provided, only search within this parent's children
  */
-function findItemByQuery(spec: ParsedSpec, query: string): { item: SpecItem; area: SpecArea } {
+function findItemByQuery(spec: ParsedSpec, query: string, scopeToParentId?: string): { item: SpecItem; area: SpecArea } {
   const parser = new SpecParser();
-  const matches = parser.findItems(spec, query);
+  let matches = parser.findItems(spec, query);
+
+  // If scoped to a parent, filter to only children of that parent
+  if (scopeToParentId && matches.length > 1) {
+    const parent = parser.findItemById(spec, scopeToParentId);
+    if (parent && parent.children.length > 0) {
+      const childIds = new Set(parent.children.map(c => c.id));
+      const scopedMatches = matches.filter(m => childIds.has(m.id));
+      // Only use scoped matches if we found any
+      if (scopedMatches.length > 0) {
+        matches = scopedMatches;
+      }
+    }
+  }
 
   // No matches - helpful error
   if (matches.length === 0) {
@@ -597,14 +611,15 @@ function generateId(areaCode: string, title: string, parentId?: string | null): 
  * Mark an item as in-progress (changes [ ] to [~])
  * Used when Claude starts working on an item
  */
-export async function markItemInProgress(specPath: string, itemId: string): Promise<void> {
+export async function markItemInProgress(specPath: string, itemId: string, scopeToParentId?: string): Promise<void> {
   const content = await fs.readFile(specPath, 'utf-8');
   const lines = content.split('\n');
   const parser = new SpecParser();
   const spec = parser.parse(content);
 
   // Use fuzzy search - throws helpful error if not found or ambiguous
-  const itemInfo = findItemByQuery(spec, itemId);
+  // If scopeToParentId provided, only search within that parent's children
+  const itemInfo = findItemByQuery(spec, itemId, scopeToParentId);
 
   const lineIndex = itemInfo.item.line - 1;
   const currentLine = lines[lineIndex];

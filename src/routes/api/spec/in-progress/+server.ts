@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { markItemInProgress } from '$lib/server/spec/writer';
 import { SpecParser } from '$lib/server/spec/parser';
-import { getRepoByPath, updateSession, setAnchor } from '$lib/server/db/queries';
+import { getRepoByPath, getSession, updateSession, setAnchor } from '$lib/server/db/queries';
 import path from 'path';
 
 // POST /api/spec/in-progress - Mark item as in-progress
@@ -64,10 +64,19 @@ export const POST: RequestHandler = async ({ request }) => {
       if (foundItem) break;
     }
 
-    await markItemInProgress(specPath, itemQuery);
+    // Get current task ID to scope sub-item search
+    const repo = getRepoByPath(repoPath);
+    let scopeToParentId: string | undefined;
+    if (repo) {
+      const session = getSession(repo.id);
+      if (session.currentTask?.id) {
+        scopeToParentId = session.currentTask.id;
+      }
+    }
+
+    await markItemInProgress(specPath, itemQuery, scopeToParentId);
 
     // Update session with current task info so tick can find children
-    const repo = getRepoByPath(repoPath);
     if (repo && foundItem) {
       // If it's a parent item, set it as the current task and anchor
       if (foundItem.isParent) {
