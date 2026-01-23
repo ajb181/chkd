@@ -117,7 +117,7 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   },
   {
     task: 'Polish: error states, edge cases, second-order effects',
-    children: ['Build: add error handling, edge cases', 'Review: inspect work (FE: open browser, BE: trace scenarios)', 'Confirm: show user findings, get approval before commit']
+    children: ['Consider: wider impact, what else could this affect', 'Review: inspect the work thoroughly', 'Confirm: show user findings, get approval before commit']
   },
   {
     task: 'Document: update docs, guides, and CLAUDE.md if needed',
@@ -128,6 +128,24 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     children: ['Stage: review changes, stage files', 'Commit: write message with assumptions noted']
   }
 ];
+
+// Area-specific Polish steps
+const FE_POLISH_STEP: WorkflowStep = {
+  task: 'Polish: error states, edge cases, second-order effects',
+  children: ['Consider: wider impact - loading states, empty states, error displays', 'Review: open browser, visually check UI renders correctly', 'Confirm: show user findings, get approval before commit']
+};
+
+const BE_POLISH_STEP: WorkflowStep = {
+  task: 'Polish: error states, edge cases, second-order effects',
+  children: ['Consider: wider impact - error handling, input validation, edge cases', 'Review: trace through scenarios, check error paths work', 'Confirm: show user findings, get approval before commit']
+};
+
+/** Get area-appropriate Polish step */
+function getPolishStep(areaCode?: string): WorkflowStep {
+  if (areaCode === 'SD' || areaCode === 'FE') return FE_POLISH_STEP;
+  if (areaCode === 'BE') return BE_POLISH_STEP;
+  return DEFAULT_WORKFLOW_STEPS[5]; // Generic
+}
 
 // Type-specific workflows - reduced phases for different task types
 
@@ -177,15 +195,43 @@ export const DEBUG_WORKFLOW: WorkflowStep[] = [
 /** Valid workflow types */
 export type WorkflowType = 'remove' | 'backend' | 'refactor' | 'audit' | 'debug';
 
-/** Get workflow steps by type */
-export function getWorkflowByType(type?: string): WorkflowStep[] {
+/** Get workflow steps by type and area */
+export function getWorkflowByType(type?: string, areaCode?: string): WorkflowStep[] {
+  const polish = getPolishStep(areaCode);
+
   switch (type) {
     case 'remove': return REMOVE_WORKFLOW;
-    case 'backend': return BACKEND_WORKFLOW;
-    case 'refactor': return REFACTOR_WORKFLOW;
+    case 'backend':
+      // Backend always uses BE Polish
+      return [
+        DEFAULT_WORKFLOW_STEPS[0], // Explore
+        DEFAULT_WORKFLOW_STEPS[1], // Design
+        DEFAULT_WORKFLOW_STEPS[4], // Implement
+        BE_POLISH_STEP,
+        DEFAULT_WORKFLOW_STEPS[7], // Commit
+      ];
+    case 'refactor':
+      // Refactor uses area-aware Polish
+      return [
+        DEFAULT_WORKFLOW_STEPS[0], // Explore
+        DEFAULT_WORKFLOW_STEPS[4], // Implement
+        polish,
+        DEFAULT_WORKFLOW_STEPS[7], // Commit
+      ];
     case 'audit': return AUDIT_WORKFLOW;
     case 'debug': return DEBUG_WORKFLOW;
-    default: return DEFAULT_WORKFLOW_STEPS;
+    default:
+      // Default workflow with area-aware Polish
+      return [
+        DEFAULT_WORKFLOW_STEPS[0], // Explore
+        DEFAULT_WORKFLOW_STEPS[1], // Design
+        DEFAULT_WORKFLOW_STEPS[2], // Prototype
+        DEFAULT_WORKFLOW_STEPS[3], // Feedback
+        DEFAULT_WORKFLOW_STEPS[4], // Implement
+        polish,
+        DEFAULT_WORKFLOW_STEPS[6], // Document
+        DEFAULT_WORKFLOW_STEPS[7], // Commit
+      ];
   }
 }
 
@@ -217,7 +263,7 @@ export async function addItem(opts: AddItemOptions): Promise<AddItemResult> {
 
   // Determine workflow tasks
   const tasks = withWorkflow
-    ? (opts.tasks && opts.tasks.length > 0 ? opts.tasks : getWorkflowByType(opts.workflowType))
+    ? (opts.tasks && opts.tasks.length > 0 ? opts.tasks : getWorkflowByType(opts.workflowType, areaCode))
     : undefined;
 
   // Build the new item lines

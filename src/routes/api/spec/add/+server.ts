@@ -68,7 +68,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Determine which tasks will be added
     const tasksToAdd = withWorkflow
-      ? (tasks && tasks.length > 0 ? tasks : getWorkflowByType(workflowType))
+      ? (tasks && tasks.length > 0 ? tasks : getWorkflowByType(workflowType, areaCode))
       : [];
 
     // Check for large additions
