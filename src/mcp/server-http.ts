@@ -1395,7 +1395,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `✅ Quick win completed: ${query}\n\n💡 Nice! Keep knocking them out.`
+        text: `✅ Quick win completed: ${query}\n\n📦 Don't forget to commit+push the QUICKWINS.md change!\n\n💡 Nice! Keep knocking them out.`
       }]
     };
   }
