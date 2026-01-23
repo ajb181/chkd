@@ -556,7 +556,7 @@ async function done(force: boolean = false) {
   if (res.data.nextTask) {
     console.log(`\n  📋 Next up: ${res.data.nextTask}`);
   } else {
-    console.log(`\n  🎉 All tasks complete!`);
+    console.log(`\n  💬 Discuss with user what to work on next.`);
   }
 
   console.log(`\n  Session is now idle.\n`);

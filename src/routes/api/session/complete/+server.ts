@@ -77,20 +77,22 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Clear the session
+    // Check if user set an anchor before clearing session
+    const userAnchor = session.anchor;
+
     clearSession(repo.id);
 
-    // Find next task
+    // Determine next task message
     let nextTask: string | null = null;
-    try {
-      await fs.access(specPath);
-      const parser = new SpecParser();
-      const spec = await parser.parseFile(specPath);
-      const incomplete = parser.getIncompleteItems(spec);
-      if (incomplete.length > 0) {
-        nextTask = incomplete[0].title;
-      }
-    } catch {
-      // No spec or can't parse
+    let message: string;
+
+    if (userAnchor) {
+      // User explicitly set what's next
+      nextTask = userAnchor.title;
+      message = `Completed! Next up: ${nextTask}`;
+    } else {
+      // No user anchor - prompt discussion instead of auto-suggesting
+      message = 'Completed! Discuss with user what to work on next.';
     }
 
     return json({
@@ -99,7 +101,7 @@ export const POST: RequestHandler = async ({ request }) => {
         completedTask,
         completedId,
         nextTask,
-        message: nextTask ? `Completed! Next up: ${nextTask}` : 'All done! 🎉'
+        message
       }
     });
   } catch (error) {

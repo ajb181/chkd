@@ -116,8 +116,8 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     children: ['Build: implement real logic', 'Verify: test functionality works']
   },
   {
-    task: 'Polish: error states, edge cases, performance',
-    children: ['Build: add error handling, edge cases', 'Verify: confirm edge cases handled']
+    task: 'Polish: error states, edge cases, second-order effects',
+    children: ['Build: add error handling, edge cases', 'Review: inspect work (FE: open browser, BE: trace scenarios)', 'Confirm: show user findings, get approval before commit']
   },
   {
     task: 'Document: update docs, guides, and CLAUDE.md if needed',

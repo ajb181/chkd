@@ -7,25 +7,25 @@ import path from 'path';
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const body = await request.json();
-    const { repoPath, itemId } = body;
+    const { repoPath, itemQuery } = body;
 
     if (!repoPath) {
       return json({ success: false, error: 'repoPath is required' }, { status: 400 });
     }
 
-    if (!itemId) {
-      return json({ success: false, error: 'itemId is required' }, { status: 400 });
+    if (!itemQuery) {
+      return json({ success: false, error: 'itemQuery is required' }, { status: 400 });
     }
 
     const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    await markItemInProgress(specPath, itemId);
+    await markItemInProgress(specPath, itemQuery);
 
     return json({
       success: true,
       data: {
-        itemId,
+        itemQuery,
         status: 'in-progress',
-        message: `In progress: ${itemId}`
+        message: `In progress: ${itemQuery}`
       }
     });
   } catch (error) {
