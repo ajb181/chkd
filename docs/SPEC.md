@@ -139,7 +139,7 @@ Configure repos and preferences.
 **Acceptance Criteria:**
 - [ ] Can spawn a worker from the dashboard
 - [ ] Worker Claude can claim the task
-- [ ] Worker sends heartbeats visible in UI
+- [x] Worker sends heartbeats visible in UI
 - [ ] Worker completes and auto-merges (clean case)
 - [ ] Conflict resolution works when workers touch same files
 - [ ] Dead worker detection fires when worker stops sending heartbeats
@@ -224,8 +224,8 @@ Configure repos and preferences.
   - [x] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
   - [x] Document > Write: update relevant documentation
   - [x] Document > Review: confirm docs match implementation
-  - [~] Commit > Stage: review changes, stage files
-  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+  - [x] Commit > Stage: review changes, stage files
+  - [x] Commit > Commit: summary line (what), body (why + assumptions), push to remote
 ---
 
 ## Frontend
@@ -1005,7 +1005,7 @@ Command-line interface with workflow documentation.
   - [ ] Document > Review: confirm docs match implementation
   - [ ] Commit > Stage: review changes, stage files
   - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
-- [ ] **BE.27 Screenshot capture** #stateless-review-service - Playwright headless browser - launch, navigate to URL, capture full-page screenshot, close browser
+- [~] **BE.27 Screenshot capture** #stateless-review-service - Playwright headless browser - launch, navigate to URL, capture full-page screenshot, close browser
 
 **Key requirements:**
 - Launch Chromium headless via Playwright
@@ -1026,23 +1026,23 @@ Command-line interface with workflow documentation.
 - Browser closes after each capture
 - Timeout handling for slow pages
 
-  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
-  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
-  - [ ] Explore > Share: inform user of findings before continuing
-  - [ ] Design > Draft: create initial design/approach
-  - [ ] Design > Review: show user, iterate if needed
-  - [ ] Prototype > Build: create the prototype
-  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
-  - [ ] Feedback > Demo: show user the prototype
-  - [ ] Feedback > Iterate: make changes based on feedback
-  - [ ] Implement > Build: implement real logic
-  - [ ] Implement > Verify: test functionality works
-  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
-  - [ ] Polish > Review: trace through scenarios, check error paths work
-  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
-  - [ ] Document > Write: update relevant documentation
-  - [ ] Document > Review: confirm docs match implementation
-  - [ ] Commit > Stage: review changes, stage files
+  - [x] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [x] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [x] Explore > Share: inform user of findings before continuing
+  - [x] Design > Draft: create initial design/approach
+  - [x] Design > Review: show user, iterate if needed
+  - [x] Prototype > Build: create the prototype
+  - [x] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [x] Feedback > Demo: show user the prototype
+  - [x] Feedback > Iterate: make changes based on feedback
+  - [x] Implement > Build: implement real logic
+  - [x] Implement > Verify: test functionality works
+  - [x] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [x] Polish > Review: trace through scenarios, check error paths work
+  - [x] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [x] Document > Write: update relevant documentation
+  - [x] Document > Review: confirm docs match implementation
+  - [~] Commit > Stage: review changes, stage files
   - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
 - [ ] **BE.28 Claude API visual analysis** #stateless-review-service - Send screenshot + wireframe + scope to Claude API, get structured review feedback (matches, gaps, suggestions)
 
