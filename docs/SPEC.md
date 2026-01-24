@@ -1191,25 +1191,24 @@ Command-line interface with workflow documentation.
   - [ ] Document > Review: confirm docs match implementation
   - [ ] Commit > Stage: review changes, stage files
   - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
-- [ ] **BE.33 Integrate destructive command blocking** #workflow-quality-gates - Integrate safety-net style protection into chkd. Block destructive commands (git reset --hard, rm -rf, git push --force) during Polish/Verify phases. Could be MCP hook, skill guidance, or built-in checker. Research claude-code-safety-net approach.
+- [ ] **BE.33 Refactor workflow with test-first approach** #workflow-quality-gates - New story type for refactoring existing code. Philosophy: ship working code first, log smells, tackle refactors later with strong tests. Tests lock in behavior BEFORE refactoring to prevent regressions.
 
 **Key requirements:**
-- Block destructive git commands: reset --hard, push --force, checkout ., clean -f
-- Block recursive deletions: rm -rf on important paths
-- Detect wrapped commands (bash -c, sh -c)
-- Warning/confirmation before allowing if needed
-- Integration point: MCP hook or skill guidance
+- New workflow type: "refactor" in writer.ts
+- Steps: Explore → Test (write tests first!) → Refactor → Verify → Commit
+- chkd_add supports type="refactor" parameter
+- Refactor backlog: way to log "needs refactor" items during normal work
+- Quality checklist: complexity, duplication, function size, magic numbers
 
 **Files to change:**
-- src/lib/server/safety/ - New safety check module
-- Skills or MCP hooks - Integration point TBD after research
-- CLAUDE.md templates - Add safety guidance
+- src/lib/server/spec/writer.ts - Add REFACTOR_WORKFLOW
+- src/mcp/server.ts - Add type param to chkd_add
+- Possibly chkd_refactor command to log refactor items
 
 **Testing:**
-- Destructive git commands blocked or warned
-- rm -rf on project paths blocked
-- Wrapped commands detected
-- Legitimate commands still work
+- Refactor stories use test-first workflow
+- Tests run before and after refactoring
+- Quality checklist included in workflow
 
   - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
   - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
