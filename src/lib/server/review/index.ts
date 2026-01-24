@@ -7,9 +7,11 @@ import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import type { ReviewRequest, ReviewResult } from './types.js';
 import { captureScreenshot, captureWireframe, type ScreenshotOptions, type ViewportPreset } from './screenshot.js';
+import { analyzeScreenshot, isAnalysisAvailable } from './analyze.js';
 
 export type { ReviewRequest, ReviewResult };
 export { VIEWPORTS, type ViewportPreset, type ScreenshotOptions } from './screenshot.js';
+export { isAnalysisAvailable } from './analyze.js';
 
 /** Extended request with viewport option */
 export interface ReviewRequestWithOptions extends ReviewRequest {
@@ -70,17 +72,26 @@ export async function captureForReview(
  *
  * 1. Screenshot the URL with Playwright (BE.27 ✓)
  * 2. If wireframe is HTML, screenshot it too (BE.27 ✓)
- * 3. Send to Claude API for visual comparison (BE.28 TODO)
+ * 3. Send to Claude API for visual comparison (BE.28 ✓)
  * 4. Return structured feedback
  */
 export async function review(request: ReviewRequestWithOptions): Promise<ReviewResult> {
+  // Check API key first
+  if (!isAnalysisAvailable()) {
+    throw new Error(
+      'No API key configured. Set CHKD_API_KEY or ANTHROPIC_API_KEY environment variable.'
+    );
+  }
+
   // Step 1: Capture screenshots (BE.27)
   const screenshots = await captureForReview(request);
 
-  // Step 2: Analyze with Claude API (BE.28 - TODO)
-  // For now, return placeholder indicating screenshots were captured
-  throw new Error(
-    `Screenshots captured successfully (${screenshots.urlScreenshot.length} bytes). ` +
-    `Claude API analysis not yet implemented. See BE.28.`
-  );
+  // Step 2: Analyze with Claude API (BE.28)
+  const result = await analyzeScreenshot({
+    screenshot: screenshots.urlScreenshot,
+    wireframe: screenshots.wireframeImage,
+    scope: request.scope
+  });
+
+  return result;
 }
