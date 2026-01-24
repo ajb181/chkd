@@ -1026,7 +1026,7 @@ Command-line interface with workflow documentation.
 - Browser closes after each capture
 - Timeout handling for slow pages
 
-- [~] **BE.28 Claude API visual analysis** #stateless-review-service - Send screenshot + wireframe + scope to Claude API, get structured review feedback (matches, gaps, suggestions)
+- [x] **BE.28 Claude API visual analysis** #stateless-review-service - Send screenshot + wireframe + scope to Claude API, get structured review feedback (matches, gaps, suggestions)
 
 **Key requirements:**
 - Send images to Claude API with vision capability
@@ -1046,24 +1046,6 @@ Command-line interface with workflow documentation.
 - Scope-only review checks against requirements
 - Score reflects match quality (0-100)
 
-  - [x] Explore > Research: investigate codebase, problem space, and any discovery docs
-  - [x] Explore > Questions: consider if clarification needed - ask user if unclear
-  - [x] Explore > Share: inform user of findings before continuing
-  - [x] Design > Draft: create initial design/approach
-  - [x] Design > Review: show user, iterate if needed
-  - [x] Prototype > Build: create the prototype
-  - [x] Prototype > Verify: compare to spec/wireframe, iterate if gaps
-  - [x] Feedback > Demo: show user the prototype
-  - [x] Feedback > Iterate: make changes based on feedback
-  - [x] Implement > Build: implement real logic
-  - [x] Implement > Verify: test functionality works
-  - [x] Polish > Consider: wider impact - error handling, input validation, edge cases
-  - [x] Polish > Review: trace through scenarios, check error paths work
-  - [x] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
-  - [x] Document > Write: update relevant documentation
-  - [x] Document > Review: confirm docs match implementation
-  - [~] Commit > Stage: review changes, stage files
-  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
 - [ ] **BE.29 HTTP endpoint** #stateless-review-service - POST /api/review-build endpoint - accepts {url, wireframe, scope}, returns feedback, process exits after response
 
 **Key requirements:**
@@ -1119,6 +1101,115 @@ Command-line interface with workflow documentation.
 - Error handling surfaces useful messages
 - Works with and without wireframe
 - Claude can use feedback to iterate on UI
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.31 Add Test workflow step after Implement** #workflow-quality-gates - Add new workflow step 'Test: run unit tests, fix failures' between Implement and Polish. Update DEFAULT_WORKFLOW_STEPS in writer.ts. All workflow types should include this step.
+
+**Key requirements:**
+- New workflow step: "Test: run unit tests, fix failures"
+- Position: after Implement, before Polish
+- Sub-tasks: "Run: execute test suite", "Fix: address any failures"
+- Apply to all workflow types (default, backend, refactor, etc.)
+
+**Files to change:**
+- src/lib/server/spec/writer.ts - Add TEST_STEP to DEFAULT_WORKFLOW_STEPS
+- src/cli/llm.ts - Update workflow prompts if needed
+
+**Testing:**
+- New stories include Test step in workflow
+- Test step appears after Implement in spec output
+- All workflow variants include Test step
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.32 Require Unit tests field in spec items** #workflow-quality-gates - Add 'Unit tests:' as required field alongside 'Key requirements:', 'Files to change:', 'Testing:'. Block chkd_working if field is TBC (like other required fields). Update chkd_add to prompt for unit tests.
+
+**Key requirements:**
+- Add "Unit tests:" section to spec item template
+- Required field - cannot be TBC when starting work
+- chkd_working blocks if Unit tests is TBC
+- chkd_add MCP tool accepts unitTests parameter
+
+**Files to change:**
+- src/lib/server/spec/writer.ts - Add Unit tests to item template
+- src/mcp/server.ts - Add unitTests param to chkd_add
+- src/routes/api/spec/in-progress/+server.ts - Validate Unit tests not TBC
+
+**Testing:**
+- New items created with Unit tests section
+- chkd_working fails if Unit tests is TBC
+- chkd_add accepts and writes unitTests field
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.33 Integrate destructive command blocking** #workflow-quality-gates - Integrate safety-net style protection into chkd. Block destructive commands (git reset --hard, rm -rf, git push --force) during Polish/Verify phases. Could be MCP hook, skill guidance, or built-in checker. Research claude-code-safety-net approach.
+
+**Key requirements:**
+- Block destructive git commands: reset --hard, push --force, checkout ., clean -f
+- Block recursive deletions: rm -rf on important paths
+- Detect wrapped commands (bash -c, sh -c)
+- Warning/confirmation before allowing if needed
+- Integration point: MCP hook or skill guidance
+
+**Files to change:**
+- src/lib/server/safety/ - New safety check module
+- Skills or MCP hooks - Integration point TBD after research
+- CLAUDE.md templates - Add safety guidance
+
+**Testing:**
+- Destructive git commands blocked or warned
+- rm -rf on project paths blocked
+- Wrapped commands detected
+- Legitimate commands still work
 
   - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
   - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
