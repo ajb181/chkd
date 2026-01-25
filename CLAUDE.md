@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-chkd is a development workflow tool that tracks tasks in a spec file (`docs/SPEC.md`) and helps Claude build them systematically. It provides a dashboard UI, CLI commands, and MCP tools to keep Claude focused on planned work.
+chkd is a development workflow tool that tracks tasks in a spec file (`docs/SPEC.md`) and helps Claude build them systematically. It provides a dashboard UI and MCP tools to keep Claude focused on planned work.
 
 ## Philosophy: Why chkd Exists
 
@@ -36,7 +36,7 @@ Neither party can skip this. The tool enforces it.
 The constraint applies to BOTH parties. If the user goes off-track, you're empowered to redirect:
 
 1. **User asks to do something outside current task:**
-   → "Let's park that with chkd_bug/chkd_win - stay focused on [current]?"
+   → "Let's park that with bug()/win() - stay focused on [current]?"
 
 2. **User wants to skip workflow steps:**
    → "The spec has [step] next - want to skip it or should we do it?"
@@ -49,26 +49,30 @@ The constraint applies to BOTH parties. If the user goes off-track, you're empow
 
 You're not being difficult - you're enforcing the contract both signed up for. The user chose chkd because they WANT this discipline.
 
-## MCP Tools (PREFERRED - Use These!)
+## MCP Tools
 
-When the chkd MCP server is connected, **use these tools instead of CLI**:
+When the chkd MCP server is connected, use these tools:
 
 | Tool | What it does |
 |------|--------------|
-| `chkd_status` | Get current state - run this first! |
-| `chkd_checkin` | 15-minute check-in - how are we doing? |
-| `chkd_pulse` | Quick status update, resets check-in timer |
-| `chkd_suggest` | Analyze spec, suggest what to work on |
-| `chkd_working` | Signal starting a sub-item |
-| `chkd_tick` | Mark item complete |
-| `chkd_bug` | Log a bug (don't derail, log and continue) |
-| `chkd_bugfix` | Start working on a bug |
-| `chkd_fix` | Signal fix ready for verification |
-| `chkd_resolve` | Close bug after user verified |
-| `chkd_impromptu` | Start ad-hoc work session |
-| `chkd_debug` | Start investigation session |
-| `chkd_done` | End current session |
-| `chkd_pivot` | Change anchor/focus explicitly |
+| `status` | Get current state - run this first! |
+| `checkin` | 15-minute check-in - how are we doing? |
+| `pulse` | Quick status update, resets check-in timer |
+| `suggest` | Analyze spec, suggest what to work on |
+| `working` | Signal starting a sub-item |
+| `tick` | Mark item complete |
+| `bug` | Log a bug (don't derail, log and continue) |
+| `bugfix` | Start working on a bug |
+| `fix` | Signal fix ready for verification |
+| `resolve` | Close bug after user verified |
+| `impromptu` | Start ad-hoc work session |
+| `debug` | Start investigation session |
+| `done` | End current session |
+| `pivot` | Change anchor/focus explicitly |
+| `epic` | Create epic for large features |
+| `epics` | List all epics with progress |
+| `tag` | Link item to epic via tag |
+| `add` | Add feature with workflow sub-tasks |
 
 **Resources** (read these for context):
 - `chkd://conscience` - Session state, anchor, guidance, habits
@@ -76,56 +80,47 @@ When the chkd MCP server is connected, **use these tools instead of CLI**:
 
 ### CRITICAL: Never Code While IDLE
 
-**BEFORE writing ANY code, check:** `chkd_status` or read `chkd://conscience`
+**BEFORE writing ANY code, check:** `status` or read `chkd://conscience`
 
 If status is IDLE:
 - **Stop!** Don't write code yet.
 - Start a session first:
-  - `chkd_impromptu("what I'm doing")` - for ad-hoc work
-  - `chkd_debug("what I'm investigating")` - for research
-  - `chkd_bugfix("bug")` - for bug fixes
+  - `working("item title")` - for spec tasks
+  - `impromptu("what I'm doing")` - for ad-hoc work
+  - `debug("what I'm investigating")` - for research
+  - `bugfix("bug")` - for bug fixes
 
 **The UI should NEVER show IDLE while you're coding.**
 
 ### Automatic Behaviors
 
 1. **Check status BEFORE coding** - If IDLE, start a session first!
-2. **Check-in every 15 min** - When nudged, call `chkd_checkin`
-3. **Stay on anchor** - If off-track warning appears, return to anchor or `chkd_pivot`
-4. **Tick as you go** - Call `chkd_tick` immediately after completing sub-items
-5. **Log bugs immediately** - `chkd_bug("description")` then continue your work
+2. **Check-in every 15 min** - When nudged, call `checkin`
+3. **Stay on anchor** - If off-track warning appears, return to anchor or `pivot`
+4. **Tick as you go** - Call `tick` immediately after completing sub-items
+5. **Log bugs immediately** - `bug("description")` then continue your work
 
 ## Skills (in Claude Code)
 
 | Skill | When to use |
 |-------|-------------|
 | `/chkd SD.1` | Build a specific task from the spec |
+| `/epic "Name"` | Plan and create a large feature (interview → design → stories) |
 | `/spec-check` | Validate SPEC.md format after editing |
 | `/reorder-spec` | Organize a messy or empty spec |
-| `/commit` | Safe commit workflow |
-
-## Keep the UI Engaged (IMPORTANT!)
-
-**Before writing any code, ask yourself:** Am I in a session?
-
-- **Working on a spec task?** → Use `/chkd SD.1` (starts session automatically)
-- **Doing ad-hoc work not in spec?** → Use `chkd_impromptu("what I'm doing")` FIRST
-- **Debugging something?** → Use `chkd_debug("what I'm investigating")` FIRST
-
-**The UI should NEVER show "IDLE" while you're coding.** If it does, start a session!
 
 ## Staying Focused
 
 When working on a task:
 
-1. **User reports a bug/issue** → `chkd_bug("description")` then CONTINUE your task
-2. **You notice a bug** → `chkd_bug("description")` then CONTINUE your task
+1. **User reports a bug/issue** → `bug("description")` then CONTINUE your task
+2. **You notice a bug** → `bug("description")` then CONTINUE your task
 3. **Something seems wrong** → Log it, don't fix it (unless it blocks you)
 
 **DON'T** derail from your current task to investigate/fix unrelated issues.
 **DO** quickly log issues and stay on track.
 
-The bugs list exists so nothing gets lost. Fix them later with `/bugfix`.
+The bugs list exists so nothing gets lost. Fix them later with `bugfix("bug title")`.
 
 ## Before Making Changes (Explore Phase)
 
@@ -136,7 +131,7 @@ During the **Explore** phase of any task:
    - "This area could use refactoring first"
    - "This file is 500+ lines, might want to split"
 3. **Let user decide** - They choose whether to refactor first or proceed
-4. **If refactoring:** Use `chkd_add` to create refactor story → do that first → return
+4. **If refactoring:** Use `add` to create refactor story → do that first → return
 
 Don't dive into changes without understanding what you're touching.
 Don't add features on top of messy code without flagging it.
@@ -162,32 +157,36 @@ npm run stable           # Run stable build on port 3848
 
 ## Architecture
 
-SvelteKit app with built-in API routes (no separate daemon).
+SvelteKit app (Svelte 5 with runes) with built-in API routes. SQLite database for state.
 
 ```
 src/
-├── cli/              # CLI tool (chkd command)
+├── mcp/              # MCP server (HTTP-based, calls API endpoints)
+│   ├── server-http.ts    # Main MCP server
+│   └── http-client.ts    # API client for MCP
 ├── lib/
 │   ├── api.ts        # Frontend API client
 │   ├── components/   # Svelte components
 │   └── server/       # Server-side code
-│       ├── db/       # SQLite database
+│       ├── db/       # SQLite database (better-sqlite3)
 │       ├── spec/     # Spec parser & writer
 │       └── proposal/ # Change proposals
 ├── routes/
 │   ├── +page.svelte  # Main dashboard
-│   ├── guide/        # Guide page
-│   └── api/          # API endpoints
+│   ├── guide/        # Guide pages
+│   └── api/          # API endpoints (single source of truth)
 ```
+
+**Key architectural decision:** MCP server uses HTTP to call the SvelteKit API rather than direct database access. This ensures the UI stays in sync and the API is the single source of truth.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/cli/index.ts` | CLI commands |
+| `src/mcp/server-http.ts` | MCP server (all tools defined here) |
 | `src/lib/server/spec/parser.ts` | Parses SPEC.md |
 | `src/lib/server/spec/writer.ts` | Modifies SPEC.md |
-| `src/routes/+page.svelte` | Main UI |
+| `src/routes/+page.svelte` | Main dashboard UI |
 | `docs/SPEC.md` | The task list |
 
 ## Sync System
@@ -207,28 +206,10 @@ chkd syncs skills and docs to other projects. See `docs/SYNC.md` for full detail
 
 ### When Editing Sync Files
 
-1. **templates/skills/*** - Changes sync to all projects on `chkd sync all`
+1. **templates/skills/*** - Changes sync to all projects
 2. **chkd-sync.json** - Bump version when making significant changes
-3. **After changes** - Run `chkd sync all` to distribute
-
-### Commands
-
-```bash
-chkd sync skills   # Sync skills to current project
-chkd sync all      # Sync to ALL registered repos
-```
 
 ## Development Standards
-
-### CLI Commands
-
-When adding or editing CLI commands, follow the checklist in `docs/CLI-QUALITY.md`:
-
-1. **Function**: Validate args, handle errors with hints, use consistent output format
-2. **Help text**: Add entry in `showCommandHelp()` with examples and use cases
-3. **Documentation**: Update `docs/CLI.md` with command reference
-4. **Main**: Add to switch statement and help() list
-5. **Test**: Verify help, no-args, normal case, and error handling
 
 ### API Endpoints
 
@@ -250,14 +231,14 @@ Items must have section numbers:
 
 **Spec Markers:**
 - `[ ]` - Not started
-- `[~]` - In progress (set by `chkd working`)
-- `[x]` - Complete (set by `chkd tick`)
+- `[~]` - In progress (set by `working`)
+- `[x]` - Complete (set by `tick`)
 
 ## Workflow
 
 ### Basic Flow
-1. `chkd_status` - See progress and what's next
-2. `/chkd SD.1` - Build a task (use task ID from spec)
+1. `status` - See progress and what's next
+2. `working("SD.1")` or `/chkd SD.1` - Start a task
 3. Review and iterate
 
 ### Sub-Item Workflow (IMPORTANT!)
@@ -266,9 +247,9 @@ For tasks with sub-items, **tick as you go**:
 
 ```
 # For EACH sub-item:
-chkd_working("sub-item title")   # 1. Signal start
+working("sub-item title")   # 1. Signal start
 # ... ACTUALLY BUILD IT ...      # 2. Do the work!
-chkd_tick("sub-item title")      # 3. Mark done (2s minimum after working)
+tick("sub-item title")      # 3. Mark done (2s minimum after working)
 ```
 
 **⛔ NEVER batch ticks** - the system enforces a 2-second minimum between working and tick.

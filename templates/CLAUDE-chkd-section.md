@@ -18,7 +18,7 @@ At each checkpoint: AI shows what it did → Human confirms or redirects → Nex
 The constraint applies to BOTH parties. If the user goes off-track, you're empowered to redirect:
 
 1. **User asks to do something outside current task:**
-   → "Let's park that with chkd_bug/chkd_win - stay focused on [current]?"
+   → "Let's park that with bug/win - stay focused on [current]?"
 
 2. **User wants to skip workflow steps:**
    → "The spec has [step] next - want to skip it or should we do it?"
@@ -37,18 +37,21 @@ When the chkd MCP server is connected, use these tools:
 
 | Tool | What it does |
 |------|--------------|
-| `chkd_status` | Get current state - **run this first!** |
-| `chkd_working "item"` | Signal starting an item |
-| `chkd_tick "item"` | Mark item complete |
-| `chkd_bug "desc"` | Log a bug (don't derail, log and continue) |
-| `chkd_bugfix "bug"` | Start working on a bug |
-| `chkd_fix "bug"` | Signal fix ready for verification |
-| `chkd_resolve "bug"` | Close bug after user verified |
-| `chkd_win "title"` | Add a quick win |
-| `chkd_impromptu "desc"` | Start ad-hoc work session |
-| `chkd_debug "desc"` | Start investigation session |
-| `chkd_done` | End current session |
-| `chkd_pulse "status"` | Quick status update |
+| `status` | Get current state - **run this first!** |
+| `working "item"` | Signal starting an item |
+| `tick "item"` | Mark item complete |
+| `bug "desc"` | Log a bug (don't derail, log and continue) |
+| `bugfix "bug"` | Start working on a bug |
+| `fix "bug"` | Signal fix ready for verification |
+| `resolve "bug"` | Close bug after user verified |
+| `win "title"` | Add a quick win |
+| `impromptu "desc"` | Start ad-hoc work session |
+| `debug "desc"` | Start investigation session |
+| `done` | End current session |
+| `pulse "status"` | Quick status update |
+| `epic "name"` | Create epic for large features |
+| `epics` | List all epics with progress |
+| `tag "item" ["tag"]` | Link item to epic via tag |
 
 **Resources** (read for context):
 - `chkd://conscience` - Session state, guidance
@@ -56,35 +59,45 @@ When the chkd MCP server is connected, use these tools:
 
 ### CRITICAL: Never Code While IDLE
 
-**BEFORE writing ANY code:** Run `chkd_status`
+**BEFORE writing ANY code:** Run `status`
 
 If status is IDLE, start a session first:
-- `chkd_impromptu("what I'm doing")` - for ad-hoc work
-- `chkd_debug("what I'm investigating")` - for research
-- `chkd_bugfix("bug")` - for bug fixes
+- `impromptu("what I'm doing")` - for ad-hoc work
+- `debug("what I'm investigating")` - for research
+- `bugfix("bug")` - for bug fixes
 
 **The UI should NEVER show IDLE while you're coding.**
 
 ### Skills (in Claude Code)
 - `/chkd FE.1` - Build a specific task from the spec
+- `/epic "Name"` - Plan and create a large feature (interview → design → stories)
 - `/spec-check` - Validate SPEC.md format after editing
 - `/reorder-spec` - Organize a messy or empty spec
-- `/commit` - Safe commit workflow
 
 ### ⛔ NEVER Batch Tick Calls
 
 The system enforces a 2-second minimum between `working` and `tick`.
 
 **Correct flow:**
-1. `chkd_working("item")` - signal you're starting
+1. `working("item")` - signal you're starting
 2. **Actually do the work** (write code, make changes)
-3. `chkd_tick("item")` - mark complete
+3. `tick("item")` - mark complete
 
 **Feedback items require user approval:**
 - Wait for explicit "yes" or "approved" before ticking
 - One approval ≠ blanket approval for other items
 
 **If not following chkd rules:** Re-read this CLAUDE.md and respect ALL instructions.
+
+### Epics (Large Features)
+
+Use `/epic "Feature Name"` for large features spanning multiple spec items:
+1. **Interview** - Discuss the idea, clarify scope
+2. **Design** - Break down into stories, identify areas (FE/BE/SD)
+3. **Create epic** - `epic()` creates the doc
+4. **Create stories** - `add()` for each item, linked via epic tag
+
+Track progress: `epics` | Epic files: `docs/epics/`
 
 ### Source of Truth
 - `docs/SPEC.md` - Feature checklist

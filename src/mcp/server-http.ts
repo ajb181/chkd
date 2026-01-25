@@ -17,6 +17,7 @@ import * as api from './http-client.js';
 
 // Still need spec parser for local file reads
 import { SpecParser } from '../lib/server/spec/parser.js';
+import { checkItemTbc } from '../lib/server/spec/writer.js';
 
 // Get repo path from current working directory
 function getRepoPath(): string {
@@ -89,12 +90,12 @@ async function getContextualNudges(
     if (trackStatus.anchor) {
       nudges.push(`🎯 PENDING TASK: "${trackStatus.anchor.title}"`);
       nudges.push(`   User set this anchor - START IT NOW!`);
-      nudges.push(`   → chkd_impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")`);
+      nudges.push(`   → impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")`);
     } else {
       nudges.push(`🚨 IDLE: You're not in a session! Start one NOW:`);
-      nudges.push(`   → chkd_impromptu("what you're doing") for ad-hoc work`);
-      nudges.push(`   → chkd_debug("what you're investigating") for research`);
-      nudges.push(`   → chkd_bugfix("bug title") to fix a bug`);
+      nudges.push(`   → impromptu("what you're doing") for ad-hoc work`);
+      nudges.push(`   → debug("what you're investigating") for research`);
+      nudges.push(`   → bugfix("bug title") to fix a bug`);
     }
     return nudges;
   }
@@ -103,7 +104,7 @@ async function getContextualNudges(
   const timeSinceCheckIn = getTimeSinceCheckIn(repoPath);
   if (timeSinceCheckIn > CHECK_IN_INTERVAL) {
     const mins = Math.floor(timeSinceCheckIn / 60000);
-    nudges.push(`⏰ ${mins}+ min without check-in. Run chkd_checkin()`);
+    nudges.push(`⏰ ${mins}+ min without check-in. Run checkin()`);
   }
 
   // Off-track nudge
@@ -113,7 +114,7 @@ async function getContextualNudges(
 
   // Queue nudges
   if (queue.length > 0) {
-    nudges.push(`📬 ${queue.length} message(s) from user - check with chkd_pulse()`);
+    nudges.push(`📬 ${queue.length} message(s) from user - check with pulse()`);
   }
 
   // Mode-specific nudges
@@ -172,9 +173,9 @@ const server = new McpServer({
 // TOOLS
 // ============================================
 
-// chkd_status - Get current project status
+// status - Get current project status
 server.tool(
-  "chkd_status",
+  "status",
   "Get current chkd project status, progress, and active task. Run this first to understand where you are.",
   {},
   async () => {
@@ -226,10 +227,10 @@ server.tool(
       if (trackStatus?.anchor) {
         statusText += `Status: 🎯 PENDING - Task waiting\n`;
         statusText += `Task: ${trackStatus.anchor.title}\n`;
-        statusText += `💡 START THIS NOW → chkd_impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")\n`;
+        statusText += `💡 START THIS NOW → impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")\n`;
       } else {
         statusText += `Status: IDLE - No active task\n`;
-        statusText += `💡 Start with chkd_impromptu(), chkd_debug(), or chkd_bugfix()\n`;
+        statusText += `💡 Start with impromptu(), debug(), or bugfix()\n`;
       }
     } else {
       statusText += `Status: ${session.status.toUpperCase()}\n`;
@@ -259,9 +260,9 @@ server.tool(
   }
 );
 
-// chkd_impromptu - Start an impromptu session
+// impromptu - Start an impromptu session
 server.tool(
-  "chkd_impromptu",
+  "impromptu",
   "Start an impromptu work session for unplanned work not in the spec. Keeps you visible in UI even for ad-hoc tasks.",
   {
     description: z.string().describe("What you're working on (e.g., 'Quick script for data export')")
@@ -288,7 +289,7 @@ server.tool(
     text += `Working on: ${description}\n`;
     text += `───────────────────\n`;
     text += `This tracks ad-hoc work so nothing is forgotten.\n`;
-    text += `When done: chkd_done() to end session`;
+    text += `When done: done() to end session`;
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -306,9 +307,9 @@ server.tool(
   }
 );
 
-// chkd_debug - Start a debug session
+// debug - Start a debug session
 server.tool(
-  "chkd_debug",
+  "debug",
   "Start a debug/investigation session. Use when researching an issue or exploring code.",
   {
     description: z.string().describe("What you're investigating (e.g., 'Why login is slow')")
@@ -362,11 +363,11 @@ CHECKPOINTS (get user alignment):
 □ "I think I found the cause: [X]. Does that make sense?"
 
 WHEN YOU FIND SOMETHING:
-• Bug to fix? → chkd_bugfix("description")
+• Bug to fix? → bugfix("description")
 • Just learning? → Document in .debug-notes.md
-• Scope creep idea? → chkd_bug("idea") or chkd_win("idea")
+• Scope creep idea? → bug("idea") or win("idea")
 
-When done: chkd_done()`;
+When done: done()`;
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -384,9 +385,9 @@ When done: chkd_done()`;
   }
 );
 
-// chkd_done - End the current session
+// done - End the current session
 server.tool(
-  "chkd_done",
+  "done",
   "End the current session (impromptu, debug, or feature work). Clears the active state.",
   {},
   async () => {
@@ -413,15 +414,15 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `✅ Session ended: ${taskTitle}\n📊 Duration: ${duration}\n\n💭 What's next? Run chkd_status() to see options.`
+        text: `✅ Session ended: ${taskTitle}\n📊 Duration: ${duration}\n\n💭 What's next? Run status() to see options.`
       }]
     };
   }
 );
 
-// chkd_bug - Log a bug
+// bug - Log a bug
 server.tool(
-  "chkd_bug",
+  "bug",
   "Log a bug you noticed. Use this immediately when you see something wrong - don't wait!",
   {
     description: z.string().describe("What's broken or wrong"),
@@ -448,7 +449,7 @@ server.tool(
       text += `\n🎯 Continue with: ${session.currentTask.title}`;
       text += `\n   Don't derail - fix bugs later!`;
     } else {
-      text += `\n💭 Fix it later with chkd_bugfix()`;
+      text += `\n💭 Fix it later with bugfix()`;
     }
 
     const nudges = await getContextualNudges(session || { status: 'idle', elapsedMs: 0 }, queue, bugs, repoPath);
@@ -465,9 +466,9 @@ server.tool(
   }
 );
 
-// chkd_bugfix - Start working on a bug
+// bugfix - Start working on a bug
 server.tool(
-  "chkd_bugfix",
+  "bugfix",
   "Start working on a bug. This begins a debug session and prompts you to align with the user on what the bug means.",
   {
     query: z.string().describe("Bug title or ID to work on")
@@ -536,7 +537,7 @@ FIRST: SIZE THE BUG
 │ • Vague symptoms, no clear error    │
 │ • Multiple possible causes          │
 │ • Can't reliably reproduce          │
-│ → Use chkd_debug() instead          │
+│ → Use debug() instead          │
 └─────────────────────────────────────┘
 
 THE PROCESS:
@@ -554,7 +555,7 @@ THE PROCESS:
 • DON'T refactor "while you're in there"
 • DON'T add features or improvements
 • DON'T fix things that aren't broken
-• Capture ideas with chkd_bug() or chkd_win(), don't act
+• Capture ideas with bug() or win(), don't act
 
 CHECKPOINTS (get user alignment):
 □ "Here's my understanding of the bug... correct?"
@@ -572,8 +573,8 @@ IF USER GOES OFF TRACK (you can push back!):
 • User wants to add features → "Let's log that as a quick win"
 • User derails into tangent → "Should I note that and stay on the bug?"
 
-When fix is ready: chkd_fix("${bug.title}")
-After user verifies: chkd_resolve("${bug.title}")`;
+When fix is ready: fix("${bug.title}")
+After user verifies: resolve("${bug.title}")`;
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -591,9 +592,9 @@ After user verifies: chkd_resolve("${bug.title}")`;
   }
 );
 
-// chkd_fix - Signal fix is ready
+// fix - Signal fix is ready
 server.tool(
-  "chkd_fix",
+  "fix",
   "Signal that your fix is ready. This prompts you to verify with the user before closing.",
   {
     query: z.string().describe("Bug title or ID")
@@ -615,15 +616,15 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Review docs - update if behavior changed:\n      - CLAUDE.md, README.md, GUIDE.md\n      - CLI help text, API docs\n   2. Commit with descriptive message:\n      - Summary: what was fixed\n      - Body: root cause + how fixed\n   3. Push to remote\n   4. Then resolve\n─────────────────────────────────\n💡 Run chkd_resolve("${query}") after docs+commit+push and user confirms`
+        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Review docs - update if behavior changed:\n      - CLAUDE.md, README.md, GUIDE.md\n      - CLI help text, API docs\n   2. Commit with descriptive message:\n      - Summary: what was fixed\n      - Body: root cause + how fixed\n   3. Push to remote\n   4. Then resolve\n─────────────────────────────────\n💡 Run resolve("${query}") after docs+commit+push and user confirms`
       }]
     };
   }
 );
 
-// chkd_resolve - Close a verified bug
+// resolve - Close a verified bug
 server.tool(
-  "chkd_resolve",
+  "resolve",
   "Close a bug after user has verified the fix works. Only use this after getting user confirmation!",
   {
     query: z.string().describe("Bug title or ID")
@@ -653,9 +654,9 @@ server.tool(
   }
 );
 
-// chkd_checkin - Structured check-in
+// checkin - Structured check-in
 server.tool(
-  "chkd_checkin",
+  "checkin",
   "Do a structured check-in with the user. Use this when prompted about 15-min check-in. Asks how things are going.",
   {},
   async () => {
@@ -704,7 +705,7 @@ server.tool(
         if (trackStatus.current) {
           text += `  Actually on: ${trackStatus.current.title}\n`;
         }
-        text += `  → Return to anchor or call chkd_pivot()\n`;
+        text += `  → Return to anchor or call pivot()\n`;
       }
     }
 
@@ -739,9 +740,9 @@ server.tool(
   }
 );
 
-// chkd_pulse - Quick status update
+// pulse - Quick status update
 server.tool(
-  "chkd_pulse",
+  "pulse",
   "Check in with a status update. Use this every 15 min or when you make progress. Resets the check-in timer.",
   {
     status: z.string().describe("Brief status update - what are you working on?")
@@ -796,9 +797,9 @@ server.tool(
   }
 );
 
-// chkd_also - Log off-task work
+// also - Log off-task work
 server.tool(
-  "chkd_also",
+  "also",
   "Log something you did that wasn't part of the current task. Tracks off-plan work so nothing is forgotten.",
   {
     description: z.string().describe("What you did that was off-task")
@@ -818,9 +819,9 @@ server.tool(
   }
 );
 
-// chkd_tick - Mark item complete
+// tick - Mark item complete
 server.tool(
-  "chkd_tick",
+  "tick",
   "Mark a spec item as complete. Use the item title or ID.",
   {
     item: z.string().describe("Item title or ID to mark complete")
@@ -828,6 +829,21 @@ server.tool(
   async ({ item }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
+
+    // Get full title from spec for display (before marking complete)
+    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+    let fullTitle = item;
+    try {
+      const specContent = fs.readFileSync(specPath, 'utf-8');
+      const parser = new SpecParser();
+      const spec = parser.parse(specContent);
+      const matches = parser.findItems(spec, item);
+      if (matches.length > 0) {
+        fullTitle = matches[0].title;
+      }
+    } catch (e) {
+      // Use input if parsing fails
+    }
 
     const response = await api.tickItem(repoPath, item);
 
@@ -843,7 +859,7 @@ server.tool(
     const queueResponse = await api.getQueue(repoPath);
     const queue = queueResponse.data?.items || [];
 
-    let text = `✅ Completed: ${item}`;
+    let text = `✅ Completed: ${fullTitle}`;
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -863,9 +879,9 @@ server.tool(
   }
 );
 
-// chkd_working - Signal starting work on an item
+// working - Signal starting work on an item
 server.tool(
-  "chkd_working",
+  "working",
   "Signal you're starting work on a specific item. Updates the UI to show current focus.",
   {
     item: z.string().describe("Item title or ID you're starting")
@@ -873,6 +889,26 @@ server.tool(
   async ({ item }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
+
+    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+
+    // Check for TBC fields first - block work if not properly defined
+    try {
+      const tbcCheck = await checkItemTbc(specPath, item);
+      if (tbcCheck.hasTbc) {
+        return {
+          content: [{
+            type: "text",
+            text: `⚠️ Cannot start work on "${tbcCheck.itemTitle}"\n\n` +
+              `📋 These fields still have TBC (to be confirmed):\n` +
+              tbcCheck.tbcFields.map(f => `  • ${f}`).join('\n') + '\n\n' +
+              `💡 Fill in these fields first during Explore phase or ask user for details.`
+          }]
+        };
+      }
+    } catch (e) {
+      // If TBC check fails, continue anyway (might be a sub-item without metadata)
+    }
 
     const response = await api.markInProgress(repoPath, item);
 
@@ -885,10 +921,24 @@ server.tool(
       };
     }
 
+    // Get full title from spec for display
+    let fullTitle = item;
+    try {
+      const specContent = fs.readFileSync(specPath, 'utf-8');
+      const parser = new SpecParser();
+      const spec = parser.parse(specContent);
+      const matches = parser.findItems(spec, item);
+      if (matches.length > 0) {
+        fullTitle = matches[0].title;
+      }
+    } catch (e) {
+      // Use input if parsing fails
+    }
+
     const queueResponse = await api.getQueue(repoPath);
     const queue = queueResponse.data?.items || [];
 
-    let text = `🔨 Working on: ${item}`;
+    let text = `🔨 Working on: ${fullTitle}`;
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -899,7 +949,7 @@ server.tool(
 
     text += `\n\n⚠️ IMPORTANT: Tick each sub-item as you complete it.`;
     text += `\n   Do NOT batch ticks at the end - tick as you go!`;
-    text += `\n\n💭 When done, run chkd_tick("${item}")`;
+    text += `\n\n💭 When done, run tick() immediately.`;
 
     return {
       content: [{
@@ -910,9 +960,9 @@ server.tool(
   }
 );
 
-// chkd_suggest - Suggest what to work on
+// suggest - Suggest what to work on
 server.tool(
-  "chkd_suggest",
+  "suggest",
   "Analyze the spec and suggest what to work on next. Use this to help the user decide their next task.",
   {},
   async () => {
@@ -952,7 +1002,7 @@ server.tool(
         text += `   • ${b.title}\n`;
       });
       text += `\n→ Suggestion: Fix critical bugs before new features.\n`;
-      text += `  Use chkd_bugfix("${criticalBugs[0].title}")\n\n`;
+      text += `  Use bugfix("${criticalBugs[0].title}")\n\n`;
     }
 
     if (inProgress.length > 0) {
@@ -996,9 +1046,9 @@ server.tool(
   }
 );
 
-// chkd_pivot - Change anchor/focus
+// pivot - Change anchor/focus
 server.tool(
-  "chkd_pivot",
+  "pivot",
   "Explicitly change focus to a new task. Use when you need to work on something different from the anchor. This acknowledges the pivot rather than silently drifting.",
   {
     taskId: z.string().describe("ID of the new task (e.g., 'SD.3')"),
@@ -1034,9 +1084,9 @@ server.tool(
   }
 );
 
-// chkd_bugs - List open bugs
+// bugs - List open bugs
 server.tool(
-  "chkd_bugs",
+  "bugs",
   "List all open bugs in the project.",
   {},
   async () => {
@@ -1050,7 +1100,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `🐛 No open bugs\n\n💭 Notice something wrong? Log it with chkd_bug()`
+          text: `🐛 No open bugs\n\n💭 Notice something wrong? Log it with bug()`
         }]
       };
     }
@@ -1064,7 +1114,7 @@ server.tool(
       text += `${bug.id.slice(0,6)} ${sevIcon} ${bug.title}\n`;
     });
 
-    text += `\n💭 Fix bugs with chkd_bugfix("title or id")`;
+    text += `\n💭 Fix bugs with bugfix("title or id")`;
 
     return {
       content: [{
@@ -1075,9 +1125,9 @@ server.tool(
   }
 );
 
-// chkd_add - Add a feature to spec
+// add - Add a feature to spec
 server.tool(
-  "chkd_add",
+  "add",
   "Add a new feature or task to the spec. Creates item with workflow sub-tasks. Use 'epic' param to link to an epic.",
   {
     title: z.string().describe("Feature title (e.g., 'User authentication')"),
@@ -1120,7 +1170,7 @@ server.tool(
       }
     }
 
-    text += `\n💡 Use chkd_working("${specCode}") to start working on it`;
+    text += `\n💡 Use working("${specCode}") to start working on it`;
 
     return {
       content: [{
@@ -1131,9 +1181,9 @@ server.tool(
   }
 );
 
-// chkd_add_child - Add sub-task to existing item
+// add_child - Add sub-task to existing item
 server.tool(
-  "chkd_add_child",
+  "add_child",
   "Add a child task to an existing spec item. Use this to break down work into smaller steps.",
   {
     parentId: z.string().describe("Parent item ID (e.g., 'SD.1')"),
@@ -1157,7 +1207,7 @@ server.tool(
     let text = `✅ Added sub-task: ${title}\n`;
     text += `Parent: ${parentId}\n`;
     text += `Child ID: ${response.data.childId}\n`;
-    text += `\n💡 Use chkd_working("${title}") when ready to start`;
+    text += `\n💡 Use working("${title}") when ready to start`;
 
     return {
       content: [{
@@ -1168,9 +1218,9 @@ server.tool(
   }
 );
 
-// chkd_add_task - Add sub-task to current working item
+// add_task - Add sub-task to current working item
 server.tool(
-  "chkd_add_task",
+  "add_task",
   "Add a sub-task to the current working item (anchor). Convenience wrapper that doesn't require specifying parent ID.",
   {
     title: z.string().describe("Sub-task title")
@@ -1187,7 +1237,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: "❌ No active session. Start work on an item first with chkd_working() or chkd_impromptu()."
+          text: "❌ No active session. Start work on an item first with working() or impromptu()."
         }]
       };
     }
@@ -1199,7 +1249,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: "❌ No current working item. Use chkd_working('item') to set an anchor first, or use chkd_add_child('parentId', 'title') to specify parent directly."
+          text: "❌ No current working item. Use working('item') to set an anchor first, or use add_child('parentId', 'title') to specify parent directly."
         }]
       };
     }
@@ -1221,7 +1271,7 @@ server.tool(
     text += `📝 "${title}"\n`;
     text += `📍 Parent: ${parentId} (${session.anchor.title})\n`;
     text += `🆔 ID: ${response.data.childId}\n`;
-    text += `\n💡 Use chkd_tick("${title}") when done`;
+    text += `\n💡 Use tick("${title}") when done`;
 
     return {
       content: [{
@@ -1232,9 +1282,9 @@ server.tool(
   }
 );
 
-// chkd_tag - Set tags on a spec item
+// tag - Set tags on a spec item
 server.tool(
-  "chkd_tag",
+  "tag",
   "Set tags on a spec item for filtering and organization. Tags help group related items.",
   {
     itemId: z.string().describe("Item ID (e.g., 'FE.1')"),
@@ -1268,9 +1318,9 @@ server.tool(
   }
 );
 
-// chkd_upgrade_mcp - Check server version and get upgrade instructions
+// upgrade_mcp - Check server version and get upgrade instructions
 server.tool(
-  "chkd_upgrade_mcp",
+  "upgrade_mcp",
   "Check which MCP server version you're using and get upgrade instructions if needed.",
   {},
   async () => {
@@ -1312,9 +1362,9 @@ server.tool(
   }
 );
 
-// chkd_win - Add quick win
+// win - Add quick win
 server.tool(
-  "chkd_win",
+  "win",
   "Add a quick win - small improvement or task to do later. Stored in docs/QUICKWINS.md.",
   {
     title: z.string().describe("Quick win title (e.g., 'Add syntax highlighting to code blocks')")
@@ -1328,15 +1378,15 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `✅ Quick win added: ${title}\n\n💡 View all with chkd_wins()`
+        text: `✅ Quick win added: ${title}\n\n💡 View all with wins()`
       }]
     };
   }
 );
 
-// chkd_wins - List quick wins
+// wins - List quick wins
 server.tool(
-  "chkd_wins",
+  "wins",
   "List all quick wins from docs/QUICKWINS.md.",
   {},
   async () => {
@@ -1350,7 +1400,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `📝 No quick wins yet\n\n💡 Add one with chkd_win("title")`
+          text: `📝 No quick wins yet\n\n💡 Add one with win("title")`
         }]
       };
     }
@@ -1376,7 +1426,7 @@ server.tool(
       });
     }
 
-    text += `\n💡 Complete with chkd_won("title")`;
+    text += `\n💡 Complete with won("title")`;
 
     return {
       content: [{
@@ -1387,9 +1437,9 @@ server.tool(
   }
 );
 
-// chkd_won - Complete a quick win
+// won - Complete a quick win
 server.tool(
-  "chkd_won",
+  "won",
   "Mark a quick win as done (or reopen if already done). Use title or ID to find it.",
   {
     query: z.string().describe("Quick win title or ID")
@@ -1422,9 +1472,9 @@ server.tool(
 // Epic Tools
 // ============================================
 
-// chkd_epic - Create a new epic
+// epic - Create a new epic
 server.tool(
-  "chkd_epic",
+  "epic",
   "Create a new epic for a large feature spanning multiple spec items. Creates docs/epics/{name}.md with overview, tag, and overhaul checklist.",
   {
     name: z.string().describe("Epic name (e.g., 'Auth Overhaul', 'Performance Sprint')"),
@@ -1452,8 +1502,8 @@ server.tool(
     text += `📁 File: docs/epics/${epic.slug}.md\n`;
     text += `🏷️  Tag: ${epic.tag}\n\n`;
     text += `💡 Link items to this epic:\n`;
-    text += `   chkd_add("title", areaCode="FE", epic="${epic.tag}")\n`;
-    text += `   Or existing items: chkd_tag("FE.1", ["${epic.tag}"])`;
+    text += `   add("title", areaCode="FE", epic="${epic.tag}")\n`;
+    text += `   Or existing items: tag("FE.1", ["${epic.tag}"])`;
 
     return {
       content: [{
@@ -1464,9 +1514,9 @@ server.tool(
   }
 );
 
-// chkd_epics - List all epics
+// epics - List all epics
 server.tool(
-  "chkd_epics",
+  "epics",
   "List all epics in the project with their progress.",
   {},
   async () => {
@@ -1480,7 +1530,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `📦 No epics yet\n\n💡 Create one with chkd_epic("name", "description")`
+          text: `📦 No epics yet\n\n💡 Create one with epic("name", "description")`
         }]
       };
     }
@@ -1505,7 +1555,7 @@ server.tool(
       text += `   ${epic.description}\n\n`;
     }
 
-    text += `💡 Link items: chkd_tag("ITEM.ID", ["epic-tag"])`;
+    text += `💡 Link items: tag("ITEM.ID", ["epic-tag"])`;
 
     return {
       content: [{
@@ -1516,9 +1566,9 @@ server.tool(
   }
 );
 
-// chkd_attach - Attach a file to an item
+// attach - Attach a file to an item
 server.tool(
-  "chkd_attach",
+  "attach",
   "Attach a file (screenshot, log, etc.) to a bug, quick win, or spec item. Files are stored in docs/attachments/.",
   {
     itemType: z.enum(['bug', 'quickwin', 'item']).describe("Type of item to attach to: 'bug', 'quickwin', or 'item'"),
@@ -1543,15 +1593,15 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `📎 Attached: ${response.data.originalName}\n   To: ${itemType} ${itemId}\n   Path: ${response.data.path}\n\n💡 View attachments with chkd_attachments("${itemType}", "${itemId}")`
+        text: `📎 Attached: ${response.data.originalName}\n   To: ${itemType} ${itemId}\n   Path: ${response.data.path}\n\n💡 View attachments with attachments("${itemType}", "${itemId}")`
       }]
     };
   }
 );
 
-// chkd_attachments - List attachments for an item
+// attachments - List attachments for an item
 server.tool(
-  "chkd_attachments",
+  "attachments",
   "List attachments for a bug, quick win, or spec item.",
   {
     itemType: z.enum(['bug', 'quickwin', 'item']).optional().describe("Type of item: 'bug', 'quickwin', or 'item'. Omit to list all."),
@@ -1578,7 +1628,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `📎 No attachments found${itemType ? ` for ${itemType}${itemId ? ` ${itemId}` : ''}` : ''}\n\n💡 Attach files with chkd_attach("itemType", "itemId", "/path/to/file")`
+          text: `📎 No attachments found${itemType ? ` for ${itemType}${itemId ? ` ${itemId}` : ''}` : ''}\n\n💡 Attach files with attach("itemType", "itemId", "/path/to/file")`
         }]
       };
     }
@@ -1606,9 +1656,9 @@ server.tool(
 // WORKERS (Multi-Worker System)
 // ============================================
 
-// chkd_spawn_worker - Spawn a new worker
+// spawn_worker - Spawn a new worker
 server.tool(
-  "chkd_spawn_worker",
+  "spawn_worker",
   "Spawn a new worker Claude to work on a task in parallel. Creates a git worktree, feature branch, and returns the command to start the worker.",
   {
     taskId: z.string().describe("Task ID from spec (e.g., 'SD.3')"),
@@ -1645,7 +1695,7 @@ server.tool(
     text += `│                                       │\n`;
     text += `└───────────────────────────────────────┘\n\n`;
     text += `💡 The worker will connect automatically and start working.\n`;
-    text += `   Use chkd_workers() to monitor progress.`;
+    text += `   Use workers() to monitor progress.`;
 
     return {
       content: [{
@@ -1656,9 +1706,9 @@ server.tool(
   }
 );
 
-// chkd_workers - List active workers
+// workers - List active workers
 server.tool(
-  "chkd_workers",
+  "workers",
   "List all active workers for this project. Shows their status, current task, and progress.",
   {},
   async () => {
@@ -1682,7 +1732,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `👷 No active workers\n\n💡 Spawn one with chkd_spawn_worker("SD.1", "Task title")`
+          text: `👷 No active workers\n\n💡 Spawn one with spawn_worker("SD.1", "Task title")`
         }]
       };
     }
@@ -1717,7 +1767,7 @@ server.tool(
     }
 
     if (canSpawn) {
-      text += `💡 Slot available! Spawn with chkd_spawn_worker()`;
+      text += `💡 Slot available! Spawn with spawn_worker()`;
     } else {
       text += `⚠️ Max workers reached (${maxWorkers}). Wait for one to complete.`;
     }
@@ -1731,9 +1781,9 @@ server.tool(
   }
 );
 
-// chkd_pause_worker - Pause a worker
+// pause_worker - Pause a worker
 server.tool(
-  "chkd_pause_worker",
+  "pause_worker",
   "Pause a worker. The worker will stop at its next checkpoint.",
   {
     workerId: z.string().describe("Worker ID to pause")
@@ -1756,15 +1806,15 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `⏸️ Worker paused: ${workerId}\n\n💡 Resume with chkd_resume_worker("${workerId}")`
+        text: `⏸️ Worker paused: ${workerId}\n\n💡 Resume with resume_worker("${workerId}")`
       }]
     };
   }
 );
 
-// chkd_resume_worker - Resume a paused worker
+// resume_worker - Resume a paused worker
 server.tool(
-  "chkd_resume_worker",
+  "resume_worker",
   "Resume a paused worker.",
   {
     workerId: z.string().describe("Worker ID to resume")
@@ -1787,15 +1837,15 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `▶️ Worker resumed: ${workerId}\n\n💡 Monitor with chkd_workers()`
+        text: `▶️ Worker resumed: ${workerId}\n\n💡 Monitor with workers()`
       }]
     };
   }
 );
 
-// chkd_merge_worker - Merge a worker's branch
+// merge_worker - Merge a worker's branch
 server.tool(
-  "chkd_merge_worker",
+  "merge_worker",
   "Complete a worker's task and merge their branch to main. Checks for conflicts first.",
   {
     workerId: z.string().describe("Worker ID to merge"),
@@ -1826,7 +1876,7 @@ server.tool(
         text += `  • ${c.file} (${c.type})\n`;
       });
       text += `\n💡 Resolve conflicts manually, then try again.\n`;
-      text += `   Or use chkd_resolve_conflicts() for auto-resolution.`;
+      text += `   Or use resolve_conflicts() for auto-resolution.`;
 
       return {
         content: [{
@@ -1840,7 +1890,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `🔄 Ready to merge (awaiting approval)\n\n💡 Run chkd_merge_worker("${workerId}", true) to merge now.`
+          text: `🔄 Ready to merge (awaiting approval)\n\n💡 Run merge_worker("${workerId}", true) to merge now.`
         }]
       };
     }
@@ -1848,9 +1898,9 @@ server.tool(
     let text = `✅ Worker merged successfully!\n\n`;
     if (data.nextTask) {
       text += `📋 Next task ready: ${data.nextTask.taskId} - ${data.nextTask.taskTitle}\n`;
-      text += `💡 Spawn a new worker for it with chkd_spawn_worker()`;
+      text += `💡 Spawn a new worker for it with spawn_worker()`;
     } else {
-      text += `💡 Worker complete. Check chkd_workers() for other active workers.`;
+      text += `💡 Worker complete. Check workers() for other active workers.`;
     }
 
     return {
@@ -1862,9 +1912,9 @@ server.tool(
   }
 );
 
-// chkd_stop_worker - Stop and remove a worker
+// stop_worker - Stop and remove a worker
 server.tool(
-  "chkd_stop_worker",
+  "stop_worker",
   "Stop a worker and clean up its worktree. Use force=true for active workers.",
   {
     workerId: z.string().describe("Worker ID to stop"),
@@ -1895,9 +1945,9 @@ server.tool(
   }
 );
 
-// chkd_dead_workers - Check for dead workers
+// dead_workers - Check for dead workers
 server.tool(
-  "chkd_dead_workers",
+  "dead_workers",
   "Check for workers that haven't sent a heartbeat recently. Use this to detect and clean up stuck workers.",
   {
     thresholdMinutes: z.number().optional().describe("Minutes without heartbeat to consider dead (default: 2)")
@@ -1946,7 +1996,7 @@ server.tool(
 
     text += `───────────────────────────────────────\n`;
     text += `💡 Options:\n`;
-    text += `  • chkd_stop_worker("workerId", true) - Stop and cleanup\n`;
+    text += `  • stop_worker("workerId", true) - Stop and cleanup\n`;
     text += `  • Check if worker terminal is still running\n`;
     text += `  • Worker may have crashed - restart manually`;
 
@@ -1963,9 +2013,9 @@ server.tool(
 // WORKER TOOLS (Used by worker Claudes)
 // ============================================
 
-// chkd_worker_heartbeat - Worker reports status
+// worker_heartbeat - Worker reports status
 server.tool(
-  "chkd_worker_heartbeat",
+  "worker_heartbeat",
   "Send a heartbeat to report worker status. Workers should call this every 30 seconds to stay alive. Returns instructions if worker should pause/abort.",
   {
     workerId: z.string().describe("Your worker ID"),
@@ -1989,7 +2039,7 @@ server.tool(
 
     if (data.shouldPause) {
       text += `\n⏸️ PAUSE REQUESTED: Stop work and wait for resume signal.\n`;
-      text += `   Check again with chkd_worker_heartbeat() in 30 seconds.`;
+      text += `   Check again with worker_heartbeat() in 30 seconds.`;
     } else if (data.shouldAbort) {
       text += `\n🛑 ABORT REQUESTED: Stop work immediately.\n`;
       text += `   Your task has been cancelled.`;
@@ -2010,9 +2060,9 @@ server.tool(
   }
 );
 
-// chkd_worker_complete - Worker signals task completion
+// worker_complete - Worker signals task completion
 server.tool(
-  "chkd_worker_complete",
+  "worker_complete",
   "Signal that your task is complete and ready for merge. Master Claude will handle the merge process.",
   {
     workerId: z.string().describe("Your worker ID"),
@@ -2078,9 +2128,9 @@ server.tool(
   }
 );
 
-// chkd_worker_status - Worker checks its own status
+// worker_status - Worker checks its own status
 server.tool(
-  "chkd_worker_status",
+  "worker_status",
   "Check your worker status. Use this to see if you should pause, continue, or if new instructions are available.",
   {
     workerId: z.string().describe("Your worker ID")
@@ -2205,7 +2255,7 @@ server.resource(
           text += `│                                     │\n`;
           text += `│ ⚡ User set this anchor - START IT! │\n`;
           text += `│                                     │\n`;
-          text += `│ Run: chkd_impromptu("${anchor.id}")     │\n`;
+          text += `│ Run: impromptu("${anchor.id}")     │\n`;
           text += `└─────────────────────────────────────┘\n\n`;
         } else if (trackStatus?.onTrack) {
           text += `┌─ 🎯 ANCHOR ──────────────────────────┐\n`;
@@ -2229,9 +2279,9 @@ server.resource(
         text += `│                                     │\n`;
         text += `│ You're not in a session!            │\n`;
         text += `│ Start one before writing code:      │\n`;
-        text += `│  • chkd_status() - see what's next  │\n`;
-        text += `│  • chkd_impromptu("desc") - ad-hoc  │\n`;
-        text += `│  • chkd_debug("desc") - investigate │\n`;
+        text += `│  • status() - see what's next  │\n`;
+        text += `│  • impromptu("desc") - ad-hoc  │\n`;
+        text += `│  • debug("desc") - investigate │\n`;
         text += `└─────────────────────────────────────┘\n\n`;
       } else {
         const modeIcon = session.mode === 'debugging' ? '🔧' :
@@ -2270,10 +2320,10 @@ server.resource(
 
       // Habits
       text += `┌─ HABITS ────────────────────────────┐\n`;
-      text += `│ • See bug? → chkd_bug() then move on│\n`;
-      text += `│ • Off-task? → chkd_also() to log    │\n`;
-      text += `│ • Progress? → chkd_pulse() visible  │\n`;
-      text += `│ • Sub-item done? → chkd_tick() NOW  │\n`;
+      text += `│ • See bug? → bug() then move on│\n`;
+      text += `│ • Off-task? → also() to log    │\n`;
+      text += `│ • Progress? → pulse() visible  │\n`;
+      text += `│ • Sub-item done? → tick() NOW  │\n`;
       text += `└─────────────────────────────────────┘\n`;
 
       return {
@@ -2376,9 +2426,9 @@ server.resource(
 // MANAGER RESEARCH TOOLS (MW.10)
 // ============================================
 
-// chkd_research_codebase - Get codebase overview
+// research_codebase - Get codebase overview
 server.tool(
-  "chkd_research_codebase",
+  "research_codebase",
   "Get an overview of the codebase structure. Use this before planning work to understand what exists.",
   {
     focus: z.string().optional().describe("Focus area: 'all', 'src', 'api', 'components', 'tests' (default: all)")
@@ -2443,7 +2493,7 @@ server.tool(
     text += `🔑 Key files: ${existingKeys.join(', ')}\n\n`;
     text += `📁 Structure:\n`;
     text += structure.join('\n');
-    text += `\n\n💡 Use chkd_research_patterns to find specific patterns`;
+    text += `\n\n💡 Use research_patterns to find specific patterns`;
 
     return {
       content: [{
@@ -2454,9 +2504,9 @@ server.tool(
   }
 );
 
-// chkd_research_patterns - Find existing patterns
+// research_patterns - Find existing patterns
 server.tool(
-  "chkd_research_patterns",
+  "research_patterns",
   "Find existing implementation patterns in the codebase. Helps understand how things are done before adding new code.",
   {
     pattern: z.enum(['auth', 'database', 'api', 'components', 'forms', 'state', 'tests', 'custom']).describe("Pattern type to search for"),
@@ -2522,9 +2572,9 @@ server.tool(
   }
 );
 
-// chkd_research_dependencies - Analyze what a file touches
+// research_dependencies - Analyze what a file touches
 server.tool(
-  "chkd_research_dependencies",
+  "research_dependencies",
   "Analyze what files import or are imported by a given file. Helps understand impact of changes.",
   {
     file: z.string().describe("File path (relative to repo root) to analyze")
@@ -2599,9 +2649,9 @@ server.tool(
   }
 );
 
-// chkd_research_summary - Create research summary
+// research_summary - Create research summary
 server.tool(
-  "chkd_research_summary",
+  "research_summary",
   "Create a research summary to share with the user before starting work. Summarizes what you learned about the codebase.",
   {
     task: z.string().describe("The task or feature you're researching"),
@@ -2647,7 +2697,7 @@ server.tool(
 
     text += `\n💡 Recommendation:\n${recommendation}\n`;
     text += `\n───────────────────────────────────────\n`;
-    text += `Ready to proceed? Spawn workers with chkd_spawn_worker.`;
+    text += `Ready to proceed? Spawn workers with spawn_worker.`;
 
     return {
       content: [{
@@ -2662,9 +2712,9 @@ server.tool(
 // MANAGER STORY WRITING TOOLS (MW.11)
 // ============================================
 
-// chkd_story_create - Create a structured story from user request
+// story_create - Create a structured story from user request
 server.tool(
-  "chkd_story_create",
+  "story_create",
   "Create a structured user story from a feature request. Use this to turn vague requests into well-defined stories.",
   {
     request: z.string().describe("The user's feature request"),
@@ -2700,7 +2750,7 @@ server.tool(
     }
 
     text += `\n───────────────────────────────────────\n`;
-    text += `💡 Next: Use chkd_story_breakdown to create worker tasks`;
+    text += `💡 Next: Use story_breakdown to create worker tasks`;
 
     return {
       content: [{
@@ -2711,9 +2761,9 @@ server.tool(
   }
 );
 
-// chkd_story_breakdown - Break story into worker-assignable tasks
+// story_breakdown - Break story into worker-assignable tasks
 server.tool(
-  "chkd_story_breakdown",
+  "story_breakdown",
   "Break a user story into worker-assignable sub-tasks. Creates tasks that can be assigned to parallel workers.",
   {
     storyTitle: z.string().describe("The story title"),
@@ -2768,7 +2818,7 @@ server.tool(
       text += `   ${independent.length} tasks can run in parallel: ${independent.map(t => t.id).join(', ')}\n`;
     }
 
-    text += `\n💡 Next: Use chkd_story_present to show user for approval`;
+    text += `\n💡 Next: Use story_present to show user for approval`;
 
     return {
       content: [{
@@ -2779,9 +2829,9 @@ server.tool(
   }
 );
 
-// chkd_story_present - Present story for user approval
+// story_present - Present story for user approval
 server.tool(
-  "chkd_story_present",
+  "story_present",
   "Present a complete story and task breakdown for user approval before spawning workers.",
   {
     title: z.string().describe("Story title"),
@@ -2847,9 +2897,9 @@ server.tool(
 // MANAGER CODE REVIEW (MW.12)
 // ============================================
 
-// chkd_review_diff - Pull and diff worker branch
+// review_diff - Pull and diff worker branch
 server.tool(
-  "chkd_review_diff",
+  "review_diff",
   "Get a diff summary of changes made by a worker. Use this to review what a worker has implemented before merging.",
   {
     branchName: z.string().describe("The worker's branch name to diff"),
@@ -2881,8 +2931,8 @@ server.tool(
 
     text += `───────────────────────────────────────\n`;
     text += `💡 After reviewing, use:\n`;
-    text += `• chkd_review_quality - Check code quality\n`;
-    text += `• chkd_review_criteria - Verify acceptance criteria`;
+    text += `• review_quality - Check code quality\n`;
+    text += `• review_criteria - Verify acceptance criteria`;
 
     return {
       content: [{
@@ -2893,9 +2943,9 @@ server.tool(
   }
 );
 
-// chkd_review_quality - Check code quality
+// review_quality - Check code quality
 server.tool(
-  "chkd_review_quality",
+  "review_quality",
   "Evaluate code quality for a set of changes. Use this to document your code review findings.",
   {
     branchName: z.string().describe("Branch being reviewed"),
@@ -2985,9 +3035,9 @@ server.tool(
   }
 );
 
-// chkd_review_criteria - Verify acceptance criteria
+// review_criteria - Verify acceptance criteria
 server.tool(
-  "chkd_review_criteria",
+  "review_criteria",
   "Verify that acceptance criteria have been met by the worker's implementation. Use this to document criteria verification.",
   {
     storyTitle: z.string().describe("The story being verified"),
@@ -3055,9 +3105,9 @@ server.tool(
   }
 );
 
-// chkd_review_feedback - Send feedback to worker
+// review_feedback - Send feedback to worker
 server.tool(
-  "chkd_review_feedback",
+  "review_feedback",
   "Send review feedback to a worker. Use this when issues are found that need to be addressed before merge.",
   {
     workerId: z.string().describe("Worker ID to send feedback to"),
@@ -3111,7 +3161,7 @@ server.tool(
     text += `1. Receive this feedback\n`;
     text += `2. Make the requested changes\n`;
     text += `3. Signal back when ready for re-review\n\n`;
-    text += `Use chkd_review_diff to review changes when worker signals completion.`;
+    text += `Use review_diff to review changes when worker signals completion.`;
 
     return {
       content: [{
@@ -3122,9 +3172,9 @@ server.tool(
   }
 );
 
-// chkd_review_approve - Approve worker changes for merge
+// review_approve - Approve worker changes for merge
 server.tool(
-  "chkd_review_approve",
+  "review_approve",
   "Approve a worker's changes and authorize merge. Use this after review passes all checks.",
   {
     workerId: z.string().describe("Worker ID to approve"),
@@ -3187,9 +3237,9 @@ server.tool(
 // MANAGER DOCUMENTER (MW.13)
 // ============================================
 
-// chkd_docs_readme - Update README with new features
+// docs_readme - Update README with new features
 server.tool(
-  "chkd_docs_readme",
+  "docs_readme",
   "Generate README updates for new features. Use this to document what was added after work completes.",
   {
     featureTitle: z.string().describe("Title of the new feature"),
@@ -3250,9 +3300,9 @@ server.tool(
   }
 );
 
-// chkd_docs_changelog - Add CHANGELOG entry
+// docs_changelog - Add CHANGELOG entry
 server.tool(
-  "chkd_docs_changelog",
+  "docs_changelog",
   "Generate a CHANGELOG entry for completed work. Use this to document changes for releases.",
   {
     version: z.string().optional().describe("Version number (or 'Unreleased')"),
@@ -3309,9 +3359,9 @@ server.tool(
   }
 );
 
-// chkd_docs_api - Update API documentation
+// docs_api - Update API documentation
 server.tool(
-  "chkd_docs_api",
+  "docs_api",
   "Generate API documentation for new or changed endpoints. Use this when API routes are modified.",
   {
     endpoint: z.string().describe("API endpoint path (e.g., /api/workers)"),
@@ -3398,9 +3448,9 @@ server.tool(
   }
 );
 
-// chkd_docs_comments - Suggest inline code comments
+// docs_comments - Suggest inline code comments
 server.tool(
-  "chkd_docs_comments",
+  "docs_comments",
   "Generate inline code comment suggestions for new or complex code. Use this to document tricky logic.",
   {
     file: z.string().describe("File path that needs comments"),
@@ -3449,9 +3499,9 @@ server.tool(
   }
 );
 
-// chkd_docs_commit - Prepare docs commit
+// docs_commit - Prepare docs commit
 server.tool(
-  "chkd_docs_commit",
+  "docs_commit",
   "Generate a documentation commit message and prepare for merge. Use this after all doc updates are complete.",
   {
     featureRef: z.string().describe("Feature reference (e.g., MW.13 or SD.1)"),
@@ -3508,9 +3558,9 @@ server.tool(
 // EXTERNAL STORY SUBMISSION (MW.14)
 // ============================================
 
-// chkd_ideas_list - List submitted ideas
+// ideas_list - List submitted ideas
 server.tool(
-  "chkd_ideas_list",
+  "ideas_list",
   "List feature ideas submitted by stakeholders. Use this to see what ideas need review.",
   {
     status: z.enum(['all', 'submitted', 'reviewing', 'approved', 'rejected']).optional().default('all')
@@ -3576,7 +3626,7 @@ server.tool(
       }
 
       text += `───────────────────────────────────────\n`;
-      text += `💡 Use chkd_ideas_review to examine an idea in detail.`;
+      text += `💡 Use ideas_review to examine an idea in detail.`;
 
       return {
         content: [{ type: "text", text }]
@@ -3589,9 +3639,9 @@ server.tool(
   }
 );
 
-// chkd_ideas_review - Review a specific idea
+// ideas_review - Review a specific idea
 server.tool(
-  "chkd_ideas_review",
+  "ideas_review",
   "Review a specific idea in detail. Use this to understand what's being requested before approving/rejecting.",
   {
     query: z.string().describe("Idea ID or title to find")
@@ -3661,11 +3711,11 @@ server.tool(
       text += `───────────────────────────────────────\n`;
       text += `🎯 Actions:\n`;
       if (idea.status === 'submitted') {
-        text += `• chkd_ideas_start_review - Start reviewing this idea\n`;
+        text += `• ideas_start_review - Start reviewing this idea\n`;
       }
       if (idea.status === 'submitted' || idea.status === 'reviewing') {
-        text += `• chkd_ideas_approve - Approve and promote to spec\n`;
-        text += `• chkd_ideas_reject - Reject with feedback\n`;
+        text += `• ideas_approve - Approve and promote to spec\n`;
+        text += `• ideas_reject - Reject with feedback\n`;
       }
 
       return {
@@ -3679,9 +3729,9 @@ server.tool(
   }
 );
 
-// chkd_ideas_start_review - Move idea to reviewing status
+// ideas_start_review - Move idea to reviewing status
 server.tool(
-  "chkd_ideas_start_review",
+  "ideas_start_review",
   "Start reviewing a submitted idea. Moves it to 'reviewing' status.",
   {
     query: z.string().describe("Idea ID or title")
@@ -3725,9 +3775,9 @@ server.tool(
   }
 );
 
-// chkd_ideas_approve - Approve idea and promote to spec
+// ideas_approve - Approve idea and promote to spec
 server.tool(
-  "chkd_ideas_approve",
+  "ideas_approve",
   "Approve an idea and promote it to the spec. Creates a new spec item from the idea.",
   {
     query: z.string().describe("Idea ID or title"),
@@ -3821,9 +3871,9 @@ server.tool(
   }
 );
 
-// chkd_ideas_reject - Reject idea with feedback
+// ideas_reject - Reject idea with feedback
 server.tool(
-  "chkd_ideas_reject",
+  "ideas_reject",
   "Reject an idea with feedback explaining why. The submitter will see this feedback.",
   {
     query: z.string().describe("Idea ID or title"),
@@ -3876,9 +3926,9 @@ server.tool(
 // SPEC MAINTENANCE TOOLS
 // ============================================
 
-// chkd_transfer - Transfer an item to a different repo
+// transfer - Transfer an item to a different repo
 server.tool(
-  "chkd_transfer",
+  "transfer",
   "Transfer a spec item from the current repo to another repo. Use when an item was created in the wrong project.",
   {
     itemId: z.string().describe("Item ID or title to transfer (e.g., 'SD.1' or 'User auth')"),
@@ -3930,9 +3980,9 @@ server.tool(
   }
 );
 
-// chkd_spec_check - Validate SPEC.md format
+// spec_check - Validate SPEC.md format
 server.tool(
-  "chkd_spec_check",
+  "spec_check",
   "Validate SPEC.md format and find issues. Use --fix to auto-fix some problems.",
   {
     fix: z.boolean().optional().describe("Auto-fix fixable issues (default: false)")
@@ -3995,7 +4045,7 @@ server.tool(
       }
 
       if (!fix && issues.some((i: any) => i.fixable)) {
-        text += `💡 Run chkd_spec_check(fix: true) to auto-fix some issues`;
+        text += `💡 Run spec_check(fix: true) to auto-fix some issues`;
       }
 
       return {
@@ -4009,9 +4059,9 @@ server.tool(
   }
 );
 
-// chkd_spec_repair - Repair/reformat SPEC.md using AI
+// spec_repair - Repair/reformat SPEC.md using AI
 server.tool(
-  "chkd_spec_repair",
+  "spec_repair",
   "Reformat SPEC.md using AI to fix formatting issues. Creates a backup before modifying.",
   {},
   async () => {
