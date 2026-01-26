@@ -1235,14 +1235,26 @@ server.tool(
     title: z.string().describe("Feature title (e.g., 'User authentication')"),
     areaCode: z.string().describe("Area code: SD, FE, BE, or FUT"),
     description: z.string().optional().describe("Optional description or user story"),
+    keyRequirements: z.array(z.string()).optional().describe("Key requirements for this feature - REQUIRED, don't leave empty"),
+    filesToChange: z.array(z.string()).optional().describe("Files that will be modified - REQUIRED, don't leave empty"),
+    testing: z.array(z.string()).optional().describe("How to test this feature - REQUIRED, don't leave empty"),
     tasks: z.array(z.string()).optional().describe("Optional custom sub-tasks (defaults to standard workflow)"),
     epic: z.string().optional().describe("Epic tag to link this item to (e.g., 'auth-overhaul')")
   },
-  async ({ title, areaCode, description, tasks, epic }) => {
+  async ({ title, areaCode, description, keyRequirements, filesToChange, testing, tasks, epic }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    const response = await api.addFeature(repoPath, title, areaCode, description, tasks);
+    const response = await api.addFeatureWithMetadata(repoPath, {
+      title,
+      areaCode,
+      description,
+      keyRequirements,
+      filesToChange,
+      testing,
+      tasks,
+      withWorkflow: true
+    });
 
     if (!response.success) {
       return {
