@@ -1,8 +1,10 @@
-# CLAUDE.md - {{PROJECT_NAME}}
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-{{PROJECT_NAME}} is a [describe your project here].
+{{PROJECT_NAME}} - [describe your project here].
 
 ## Working with chkd
 
@@ -123,6 +125,7 @@ The system enforces a 2-second minimum between `working` and `tick`.
 
 - `docs/SPEC.md` - Feature checklist (SD.1, FE.1, BE.1 format)
 - `docs/GUIDE.md` - How to use chkd workflow
+- `docs/FILING.md` - Document organization rules (read before creating docs)
 - This file - Project-specific instructions for Claude
 
 ## Development Commands

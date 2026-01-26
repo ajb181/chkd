@@ -128,3 +128,4 @@ Track progress: `epics` | Epic files: `docs/epics/`
 ### Source of Truth
 - `docs/SPEC.md` - Feature checklist
 - `docs/GUIDE.md` - Workflow guide
+- `docs/FILING.md` - Document organization rules

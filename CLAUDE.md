@@ -217,6 +217,7 @@ Don't add features on top of messy code without flagging it.
 
 - `docs/SPEC.md` - Feature checklist (SD.1, FE.1, BE.1 format)
 - `docs/GUIDE.md` - How to use chkd workflow
+- `docs/FILING.md` - Document organization rules (read before creating docs)
 - This file - Instructions for Claude
 
 ## Development Commands
