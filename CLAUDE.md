@@ -60,9 +60,20 @@ You're enforcing the contract both signed up for.
 
 When working on chkd itself:
 
-- **Dev server:** `npm run dev` (port 3847)
-- **Stable build:** `npm run stable` (port 3848) - other projects use this
-- **MCP port:** Defaults to 3848 (stable). Set `CHKD_PORT=3847` to use dev.
+- **Dev server:** `npm run dev` (port 3847) - live source, use for testing changes
+- **Stable server:** `npm run stable` (port 3848) - other projects use this
+
+**MCP Setup (dual servers):**
+- `mcp__chkd__*` → stable (3848) - used by other projects
+- `mcp__chkd-dev__*` → dev (3847) - used when developing chkd itself
+
+To set up:
+```bash
+claude mcp add chkd -e CHKD_PORT=3848 -- node /Users/alex/chkd/build-stable/mcp/server-http.js
+claude mcp add chkd-dev -e CHKD_PORT=3847 -- npx tsx /Users/alex/chkd/src/mcp/server-http.ts
+```
+
+**Key files:**
 - **MCP server:** `src/mcp/server-http.ts`
 - **API:** `src/routes/api/` (single source of truth)
 
