@@ -117,22 +117,21 @@ cd ~/chkd && npm run dev
 
 Server runs at `http://localhost:3847`. Keep this terminal open.
 
-### 2. Configure MCP in Claude Code
+### 2. Register the MCP Server
 
-Add to your Claude Code MCP settings (`~/.claude/claude_desktop_config.json` or via Claude Code settings):
+Register chkd as a global MCP server so it's available in all projects:
 
-```json
-{
-  "mcpServers": {
-    "chkd": {
-      "command": "npx",
-      "args": ["tsx", "/Users/YOUR_USERNAME/chkd/src/mcp/server-http.ts"]
-    }
-  }
-}
+```bash
+claude mcp add --scope user chkd -- npx tsx ~/chkd/src/mcp/server-http.ts
 ```
 
-Restart Claude Code after adding.
+The `--scope user` flag makes chkd available in all projects, including git worktrees for parallel development.
+
+Verify it's working:
+
+```bash
+claude mcp list
+```
 
 ### 3. Add chkd to your project
 
