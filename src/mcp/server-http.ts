@@ -3681,7 +3681,7 @@ server.tool(
       .describe("Filter by status (default: all)")
   },
   async ({ status }) => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set. Cannot list ideas." }]
       };
@@ -3689,7 +3689,7 @@ server.tool(
 
     try {
       const filterParam = status === 'all' ? '' : `&status=${status}`;
-      const res = await fetch(`${HTTP_BASE}/api/ideas?repoPath=${encodeURIComponent(currentRepoPath)}${filterParam}`);
+      const res = await fetch(`${HTTP_BASE}/api/ideas?repoPath=${encodeURIComponent(repoPath)}${filterParam}`);
       const data = await res.json();
 
       if (!data.success) {
@@ -3761,14 +3761,14 @@ server.tool(
     query: z.string().describe("Idea ID or title to find")
   },
   async ({ query }) => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set. Cannot review idea." }]
       };
     }
 
     try {
-      const res = await fetch(`${HTTP_BASE}/api/ideas?repoPath=${encodeURIComponent(currentRepoPath)}`);
+      const res = await fetch(`${HTTP_BASE}/api/ideas?repoPath=${encodeURIComponent(repoPath)}`);
       const data = await res.json();
 
       if (!data.success) {
@@ -3851,7 +3851,7 @@ server.tool(
     query: z.string().describe("Idea ID or title")
   },
   async ({ query }) => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set." }]
       };
@@ -3862,7 +3862,7 @@ server.tool(
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          repoPath: currentRepoPath,
+          repoPath: repoPath,
           query,
           status: 'reviewing'
         })
@@ -3900,7 +3900,7 @@ server.tool(
     feedback: z.string().optional().describe("Optional feedback message for the submitter")
   },
   async ({ query, areaCode, title, feedback }) => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set." }]
       };
@@ -3908,7 +3908,7 @@ server.tool(
 
     try {
       // First, get the idea details
-      const listRes = await fetch(`${HTTP_BASE}/api/ideas?repoPath=${encodeURIComponent(currentRepoPath)}`);
+      const listRes = await fetch(`${HTTP_BASE}/api/ideas?repoPath=${encodeURIComponent(repoPath)}`);
       const listData = await listRes.json();
       const queryLower = query.toLowerCase();
       const idea = listData.data?.find((i: any) =>
@@ -3928,7 +3928,7 @@ server.tool(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          repoPath: currentRepoPath,
+          repoPath: repoPath,
           title: specTitle,
           areaCode,
           story: idea.description
@@ -3949,7 +3949,7 @@ server.tool(
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          repoPath: currentRepoPath,
+          repoPath: repoPath,
           query: idea.id,
           status: 'approved',
           feedback: feedback || 'Approved and added to development spec',
@@ -3994,7 +3994,7 @@ server.tool(
     feedback: z.string().describe("Feedback explaining why the idea was rejected")
   },
   async ({ query, feedback }) => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set." }]
       };
@@ -4005,7 +4005,7 @@ server.tool(
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          repoPath: currentRepoPath,
+          repoPath: repoPath,
           query,
           status: 'rejected',
           feedback
@@ -4050,7 +4050,7 @@ server.tool(
     targetAreaCode: z.string().describe("Target area code in destination repo (SD, FE, BE, FUT)")
   },
   async ({ itemId, targetRepoPath, targetAreaCode }) => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set." }]
       };
@@ -4061,7 +4061,7 @@ server.tool(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sourceRepoPath: currentRepoPath,
+          sourceRepoPath: repoPath,
           targetRepoPath,
           itemId,
           targetAreaCode
@@ -4102,14 +4102,14 @@ server.tool(
     fix: z.boolean().optional().describe("Auto-fix fixable issues (default: false)")
   },
   async ({ fix = false }) => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set." }]
       };
     }
 
     try {
-      const res = await fetch(`${HTTP_BASE}/api/spec/validate?repoPath=${encodeURIComponent(currentRepoPath)}&fix=${fix}`);
+      const res = await fetch(`${HTTP_BASE}/api/spec/validate?repoPath=${encodeURIComponent(repoPath)}&fix=${fix}`);
       const data = await res.json();
 
       if (!data.success) {
@@ -4179,7 +4179,7 @@ server.tool(
   "Reformat SPEC.md using AI to fix formatting issues. Creates a backup before modifying.",
   {},
   async () => {
-    if (!currentRepoPath) {
+    const repoPath = getRepoPath(); if (!repoPath) {
       return {
         content: [{ type: "text", text: "No repo path set." }]
       };
@@ -4189,7 +4189,7 @@ server.tool(
       const res = await fetch(`${HTTP_BASE}/api/spec/repair`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoPath: currentRepoPath })
+        body: JSON.stringify({ repoPath: repoPath })
       });
       const data = await res.json();
 
