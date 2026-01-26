@@ -610,9 +610,11 @@ The bugs/quick wins lists exist so nothing gets lost. Fix them later.
 |------|---------|
 | `docs/SPEC.md` | Feature checklist (source of truth) |
 | `docs/GUIDE.md` | This guide |
+| `docs/PHILOSOPHY.md` | Full chkd philosophy explanation |
+| `docs/instructions/` | Mode-specific guidance (build, bugfix, debug, etc.) |
 | `docs/QUICKWINS.md` | Small improvements to do later |
 | `docs/attachments/` | File attachments for bugs/items |
-| `CLAUDE.md` | Instructions for Claude |
+| `CLAUDE.md` | Core behaviors for Claude (short, focused) |
 | `.claude/skills/` | Build skills |
 
 ---
