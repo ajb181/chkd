@@ -576,6 +576,15 @@ export function getWorkerByTask(repoId: string, taskId: string): Worker | null {
   return row ? rowToWorker(row) : null;
 }
 
+export function getWorkerByWorktreePath(worktreePath: string): Worker | null {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT * FROM workers
+    WHERE worktree_path = ? AND status NOT IN ('merged', 'error')
+  `).get(worktreePath) as any;
+  return row ? rowToWorker(row) : null;
+}
+
 export function createWorker(data: {
   id: string;
   repoId: string;
@@ -699,6 +708,8 @@ export function updateWorkerHeartbeat(workerId: string, message?: string, progre
 
 export function deleteWorker(workerId: string): boolean {
   const db = getDb();
+  // Clear FK references in manager_signals first
+  db.prepare('UPDATE manager_signals SET worker_id = NULL WHERE worker_id = ?').run(workerId);
   const result = db.prepare('DELETE FROM workers WHERE id = ?').run(workerId);
   return result.changes > 0;
 }

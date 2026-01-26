@@ -312,6 +312,10 @@ export async function getWorker(workerId: string) {
   return request('GET', `/api/workers/${workerId}`);
 }
 
+export async function getWorkerByWorktreePath(worktreePath: string) {
+  return request('GET', '/api/workers', undefined, { worktreePath });
+}
+
 export async function updateWorker(
   workerId: string,
   updates: {

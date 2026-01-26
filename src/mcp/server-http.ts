@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 // HTTP client for API calls
 import * as api from './http-client.js';
@@ -19,9 +20,84 @@ import * as api from './http-client.js';
 import { SpecParser } from '../lib/server/spec/parser.js';
 import { checkItemTbc } from '../lib/server/spec/writer.js';
 
+// Cache the resolved repo path and worker context
+let cachedRepoPath: string | null = null;
+let cachedWorktreePath: string | null = null;
+let cachedIsWorker: boolean | null = null;
+let cachedWorkerInfo: any = undefined;  // undefined = not checked, null = checked but not a worker
+
+// Get the actual working directory (may be worktree)
+function getWorktreePath(): string {
+  if (cachedWorktreePath) return cachedWorktreePath;
+  cachedWorktreePath = process.cwd();
+  return cachedWorktreePath;
+}
+
+// Check if we're running in a worker worktree
+function isWorkerContext(): boolean {
+  if (cachedIsWorker !== null) return cachedIsWorker;
+
+  const cwd = process.cwd();
+  try {
+    const gitCommonDir = execSync('git rev-parse --git-common-dir', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim();
+    cachedIsWorker = gitCommonDir !== '.git';
+    return cachedIsWorker;
+  } catch {
+    cachedIsWorker = false;
+    return false;
+  }
+}
+
+// Get worker info if in worker context (cached)
+async function getWorkerContext(): Promise<any> {
+  if (!isWorkerContext()) return null;
+  if (cachedWorkerInfo !== undefined) return cachedWorkerInfo;
+
+  try {
+    const result = await api.getWorkerByWorktreePath(getWorktreePath());
+    cachedWorkerInfo = result?.data?.worker || null;
+    return cachedWorkerInfo;
+  } catch {
+    cachedWorkerInfo = null;
+    return null;
+  }
+}
+
 // Get repo path from current working directory
+// If in a git worktree, resolves to the main repo path
 function getRepoPath(): string {
-  return process.cwd();
+  if (cachedRepoPath) return cachedRepoPath;
+
+  const cwd = process.cwd();
+
+  try {
+    // Get the git common dir (same for main repo and all worktrees)
+    const gitCommonDir = execSync('git rev-parse --git-common-dir', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim();
+
+    // If it's just ".git", we're in the main repo
+    if (gitCommonDir === '.git') {
+      cachedRepoPath = cwd;
+      return cwd;
+    }
+
+    // Otherwise, gitCommonDir is the path to the main repo's .git folder
+    // e.g., /Users/alex/chkd/.git -> main repo is /Users/alex/chkd
+    const mainRepoPath = path.dirname(path.resolve(cwd, gitCommonDir));
+    cachedRepoPath = mainRepoPath;
+    return mainRepoPath;
+  } catch {
+    // Not a git repo, fall back to cwd
+    cachedRepoPath = cwd;
+    return cwd;
+  }
 }
 
 // Helper to get repo or throw
@@ -182,6 +258,9 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
+    // Check if we're a worker
+    const workerInfo = await getWorkerContext();
+
     // Get session from API
     const sessionResponse = await api.getSession(repoPath);
     const session = sessionResponse.data || { status: 'idle', elapsedMs: 0 };
@@ -207,54 +286,77 @@ server.tool(
     const bugsResponse = await api.getBugs(repoPath);
     const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
 
-    let statusText = `📁 ${path.basename(repoPath)}\n`;
-    statusText += `Progress: ${progress.percentage}% (${progress.completed}/${progress.total})\n`;
-    statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}\n\n`;
+    let statusText = '';
 
-    // Queue first
-    if (queue.length > 0) {
-      statusText += `📬 QUEUE (${queue.length} message${queue.length > 1 ? 's' : ''} from user):\n`;
-      queue.forEach((q: any) => {
-        statusText += `  • ${q.title}\n`;
-      });
-      statusText += `\n`;
-    }
-
-    // Status
-    if (session.status === 'idle') {
-      const anchorResponse = await api.getAnchor(repoPath);
-      const trackStatus = anchorResponse.data;
-      if (trackStatus?.anchor) {
-        statusText += `Status: 🎯 PENDING - Task waiting\n`;
-        statusText += `Task: ${trackStatus.anchor.title}\n`;
-        statusText += `💡 START THIS NOW → impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")\n`;
-      } else {
-        statusText += `Status: IDLE - No active task\n`;
-        statusText += `💡 Start with impromptu(), debug(), or bugfix()\n`;
+    // Worker header if in worker context
+    if (workerInfo) {
+      statusText += `👷 WORKER MODE\n`;
+      statusText += `═══════════════════════════════════════\n`;
+      statusText += `Task: ${workerInfo.taskId} - ${workerInfo.taskTitle}\n`;
+      statusText += `Branch: ${workerInfo.branchName}\n`;
+      statusText += `Status: ${workerInfo.status.toUpperCase()}\n`;
+      if (workerInfo.nextTaskId) {
+        statusText += `Next: ${workerInfo.nextTaskId} - ${workerInfo.nextTaskTitle}\n`;
       }
+      statusText += `───────────────────────────────────────\n\n`;
+      statusText += `📋 YOUR TASK:\n`;
+      statusText += `Build: ${workerInfo.taskTitle}\n\n`;
+      statusText += `When done: worker_complete() to signal ready for merge\n`;
+      statusText += `Need help: Check spec with suggest()\n`;
     } else {
-      statusText += `Status: ${session.status.toUpperCase()}\n`;
-      if (session.currentTask) {
-        statusText += `Task: ${session.currentTask.title}\n`;
-      }
-      if (session.currentItem) {
-        statusText += `Working on: ${session.currentItem.title}\n`;
-      }
-      statusText += `Duration: ${formatDuration(session.elapsedMs)}\n`;
+      statusText += `📁 ${path.basename(repoPath)}\n`;
+      statusText += `Progress: ${progress.percentage}% (${progress.completed}/${progress.total})\n`;
+      statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}\n\n`;
     }
 
-    // Summary
-    if (bugs.length > 0) {
-      statusText += `\n💭 Summary: ${bugs.length} bug${bugs.length > 1 ? 's' : ''}\n`;
-    }
+    // Main session info (not shown for workers)
+    if (!workerInfo) {
+      // Queue first
+      if (queue.length > 0) {
+        statusText += `📬 QUEUE (${queue.length} message${queue.length > 1 ? 's' : ''} from user):\n`;
+        queue.forEach((q: any) => {
+          statusText += `  • ${q.title}\n`;
+        });
+        statusText += `\n`;
+      }
 
-    // Get nudges
-    const nudges = await getContextualNudges(session, queue, bugs, repoPath);
+      // Status
+      if (session.status === 'idle') {
+        const anchorResponse = await api.getAnchor(repoPath);
+        const trackStatus = anchorResponse.data;
+        if (trackStatus?.anchor) {
+          statusText += `Status: 🎯 PENDING - Task waiting\n`;
+          statusText += `Task: ${trackStatus.anchor.title}\n`;
+          statusText += `💡 START THIS NOW → impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")\n`;
+        } else {
+          statusText += `Status: IDLE - No active task\n`;
+          statusText += `💡 Start with impromptu(), debug(), or bugfix()\n`;
+        }
+      } else {
+        statusText += `Status: ${session.status.toUpperCase()}\n`;
+        if (session.currentTask) {
+          statusText += `Task: ${session.currentTask.title}\n`;
+        }
+        if (session.currentItem) {
+          statusText += `Working on: ${session.currentItem.title}\n`;
+        }
+        statusText += `Duration: ${formatDuration(session.elapsedMs)}\n`;
+      }
+
+      // Summary
+      if (bugs.length > 0) {
+        statusText += `\n💭 Summary: ${bugs.length} bug${bugs.length > 1 ? 's' : ''}\n`;
+      }
+
+      // Get nudges
+      const nudges = await getContextualNudges(session, queue, bugs, repoPath);
+      statusText += formatNudges(nudges) + getStaleWarning();
+    }
 
     return {
       content: [{
         type: "text",
-        text: statusText + formatNudges(nudges) + getStaleWarning()
+        text: statusText
       }]
     };
   }
@@ -648,7 +750,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `✅ Bug resolved: ${bug.title}\n📴 Debug session ended\n\n💭 Nice work. What's next?`
+        text: `✅ Bug resolved: ${bug.title}\n📴 Debug session ended\n\n📦 Commit your fix:\n   git add -A && git commit -m "fix: ${bug.title.slice(0, 50)}"\n   git push\n\n💭 Nice work. What's next?`
       }]
     };
   }
