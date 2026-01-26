@@ -329,6 +329,267 @@ Shows all epics with linked item counts and completion status.
 
 ---
 
+## Multi-Worker System
+
+Run multiple Claude instances in parallel to build faster. One "Manager" Claude coordinates while "Worker" Claudes execute tasks on separate branches.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        MANAGER CLAUDE                            │
+│                     (your main terminal)                         │
+│                                                                  │
+│   Responsibilities:                                              │
+│   • Assign tasks to workers                                      │
+│   • Monitor progress via chkd_workers()                          │
+│   • Review completed work                                        │
+│   • Merge branches when ready                                    │
+│   • Resolve conflicts if any                                     │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+            ┌──────────────┼──────────────┐
+            │              │              │
+            ▼              ▼              ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │   WORKER 1   │ │   WORKER 2   │ │   WORKER 3   │
+    │              │ │              │ │              │
+    │ Task: FE.11  │ │ Task: BE.24  │ │ Task: SD.28  │
+    │ Branch:      │ │ Branch:      │ │ Branch:      │
+    │ feature/fe11 │ │ feature/be24 │ │ feature/sd28 │
+    │              │ │              │ │              │
+    │ Worktree:    │ │ Worktree:    │ │ Worktree:    │
+    │ ../proj-w1/  │ │ ../proj-w2/  │ │ ../proj-w3/  │
+    └──────────────┘ └──────────────┘ └──────────────┘
+```
+
+Each worker runs in its own **git worktree** - a separate directory with its own branch, sharing the same git history.
+
+### When to Use Workers
+
+**Good for:**
+- Independent tasks (FE while you do BE)
+- Parallel features that don't overlap
+- Speeding up large feature builds
+
+**Avoid when:**
+- Tasks modify the same files
+- Deep dependencies between tasks
+- You need tight coordination
+
+### First-Time Setup
+
+#### Step 1: Pick Independent Tasks
+
+Look at your spec and find 2-3 tasks that don't overlap:
+
+```
+Good pairing:
+  • FE.11 (App shell)     - touches src/routes/
+  • BE.24 (Chat API)      - touches src/lib/server/
+
+Bad pairing:
+  • FE.11 (App shell)     - touches src/routes/+page.svelte
+  • FE.12 (Chat UI)       - ALSO touches src/routes/+page.svelte
+```
+
+#### Step 2: Spawn Your First Worker
+
+In your main Claude session (the Manager), run:
+
+```
+chkd_spawn_worker(
+  taskId: "FE.11",
+  taskTitle: "App shell & navigation"
+)
+```
+
+You'll see output like:
+
+```
+✅ Worker spawned: worker-alex-fe11
+
+📂 Worktree: /Users/alex/project-worker-alex-fe11
+🌿 Branch: feature/fe11-app-shell-navigation
+
+To start the worker, run in a NEW terminal:
+────────────────────────────────────────
+cd /Users/alex/project-worker-alex-fe11 && claude
+────────────────────────────────────────
+```
+
+#### Step 3: Start the Worker
+
+Open a **new terminal window** and run the command:
+
+```bash
+cd /Users/alex/project-worker-alex-fe11 && claude
+```
+
+The worker Claude will automatically:
+1. Detect it's a worker (from `.chkd-worker.json`)
+2. Know its assigned task
+3. Start working with `chkd_working("FE.11")`
+
+#### Step 4: Monitor from Manager
+
+Back in your Manager terminal, check on workers:
+
+```
+chkd_workers()
+```
+
+Output:
+```
+🔨 Active Workers (1)
+─────────────────────
+worker-alex-fe11
+  Task: FE.11 App shell & navigation
+  Status: WORKING
+  Progress: 35%
+  Last heartbeat: 2 min ago
+```
+
+### Worker Lifecycle
+
+```
+┌──────────┐    spawn     ┌──────────┐    start    ┌──────────┐
+│ PENDING  │ ──────────▶  │ WORKING  │ ──────────▶ │ MERGING  │
+└──────────┘              └──────────┘              └──────────┘
+     │                         │                         │
+     │                         │                         │
+     ▼                         ▼                         ▼
+  Created,                  Actively                  Task done,
+  waiting                   building                  ready to
+  to start                  the task                  merge
+                                                         │
+                                                         ▼
+                                                   ┌──────────┐
+                                                   │   DONE   │
+                                                   └──────────┘
+                                                         │
+                                                         ▼
+                                                    Merged to
+                                                    main, worker
+                                                    cleaned up
+```
+
+### Manager Commands
+
+| Command | What it does |
+|---------|--------------|
+| `chkd_spawn_worker(taskId, taskTitle)` | Create new worker |
+| `chkd_workers()` | List all active workers |
+| `chkd_merge_worker(workerId)` | Merge worker's branch |
+| `chkd_pause_worker(workerId)` | Pause a worker |
+| `chkd_resume_worker(workerId)` | Resume paused worker |
+| `chkd_stop_worker(workerId)` | Cancel and cleanup |
+| `chkd_dead_workers()` | Find stuck workers |
+
+### Worker Commands
+
+Workers use these automatically, but for reference:
+
+| Command | What it does |
+|---------|--------------|
+| `chkd_worker_heartbeat(id, msg, %)` | Report progress |
+| `chkd_worker_complete(id, summary)` | Signal task done |
+| `chkd_worker_status(id)` | Check for instructions |
+
+### Merging Completed Work
+
+When a worker finishes:
+
+```
+chkd_merge_worker(workerId: "worker-alex-fe11")
+```
+
+**If no conflicts:**
+```
+✅ Merged successfully!
+Branch feature/fe11-app-shell-navigation merged to main.
+Worker cleaned up.
+```
+
+**If conflicts exist:**
+```
+⚠️ Conflicts detected in:
+  - src/routes/+page.svelte
+  - src/lib/api.ts
+
+Options:
+  1. Keep worker changes
+  2. Keep main changes
+  3. Manual resolution needed
+```
+
+### Example Session
+
+```
+YOU (Manager Claude):
+────────────────────────────────────────
+1. chkd_status()           # See what's available
+2. Pick FE.11 and BE.24    # Independent tasks
+
+3. chkd_spawn_worker(taskId: "FE.11", taskTitle: "App shell")
+   → Opens worker in new terminal
+
+4. chkd_spawn_worker(taskId: "BE.24", taskTitle: "Chat API")
+   → Opens worker in another terminal
+
+5. Work on something else, or coordinate
+
+6. chkd_workers()          # Check progress
+   → Worker 1: 80% done
+   → Worker 2: 45% done
+
+7. chkd_merge_worker("worker-alex-fe11")  # Merge first one
+   → ✅ Merged!
+
+8. Continue monitoring Worker 2...
+────────────────────────────────────────
+
+WORKER 1 (separate terminal):
+────────────────────────────────────────
+# Automatically starts with task context
+1. Builds FE.11 following the spec
+2. Sends heartbeats every few minutes
+3. When done: chkd_worker_complete()
+────────────────────────────────────────
+```
+
+### Troubleshooting Workers
+
+**Worker not responding:**
+```
+chkd_dead_workers()           # Find stuck workers
+chkd_stop_worker(id, force: true)  # Force cleanup
+```
+
+**Merge conflicts:**
+- Option 1: Resolve manually in the worktree directory
+- Option 2: Stop worker, cherry-pick specific commits
+- Option 3: Abort and reassign task
+
+**Worktree issues:**
+```bash
+# List all worktrees
+git worktree list
+
+# Remove orphaned worktree
+git worktree remove ../proj-worker-old --force
+```
+
+### Best Practices
+
+1. **Keep tasks small** - Easier to merge, less conflict risk
+2. **Different areas** - FE + BE is better than FE + FE
+3. **Merge often** - Don't let branches diverge too long
+4. **Monitor progress** - Check `chkd_workers()` regularly
+5. **One manager** - Don't run multiple manager sessions
+
+---
+
 ## Files chkd Creates
 
 | File | Purpose |
