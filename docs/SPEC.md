@@ -276,6 +276,363 @@ Configure repos and preferences.
   - [ ] Polish: error states, edge cases, performance
   - [ ] Document: update docs, guides, and CLAUDE.md if needed
   - [ ] Commit: commit code to git with clear message + assumptions
+- [ ] **SD.28 Reorder spec items by related groups** - Allow reordering spec items so related items are grouped together. Enables batch management of related workflows - e.g. all auth items together, all API items together.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.29 Simplify CLAUDE.md template - split chkd instructions into referenced files** - Current CLAUDE.md is too long/dense - Claude reads but doesn't follow instructions. Split into: 1) Short CLAUDE.md with project-specific content + prominent "read chkd://conscience first" instruction, 2) Detailed chkd workflow in separate referenced file. Goal: make the critical "use chkd" instruction impossible to miss.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.30 Bug batch - fix high priority bugs** - Work through open bugs, prioritizing high/critical severity
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.31 Quick win batch - clear pending improvements** - Work through quick wins list, focus on small impactful changes
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.32 Worker-Manager relay system - all worker comms through single terminal** - User stays in one terminal (Manager). Workers relay questions/status back to Manager who presents them to user. User directs all work from single session instead of context-switching between terminals. Manager intercepts worker AskUserQuestion calls, can approve/answer or escalate to user.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.33 User-customizable command response notes** - Allow users to add custom notes/guidance that appear in MCP command responses. System reminders (check-in nags, workflow rules) shown as read-only so users understand what's built-in vs custom. Gives users control over what Claude sees after each command without editing code.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.34 Claude Code Hooks for workflow protection** - Add Claude Code hooks for critical workflow protection. Philosophy: protect don't trap - hooks prevent dangerous operations but user can skip via UI toggle when needed.
+
+**Philosophy:**
+- Not rigid enforcement - intelligent protection
+- Block only dangerous operations (data loss, corruption)
+- Every blocking hook has UI skip toggle
+- Nudges for guidance, blocks for danger
+
+**3 Initial Hooks:**
+
+**1. Session reminder (nudge)**
+- Trigger: Write/Edit while session is IDLE
+- Action: Append reminder "You're IDLE - consider starting a session"
+- NOT blocking - just surfaces awareness
+- No skip needed (it's just a nudge)
+
+**2. Close task without commit (block, skippable)**
+- Trigger: tick/resolve MCP commands
+- Check: Are there uncommitted changes in git?
+- Block: "You have uncommitted changes - commit first?"
+- UI toggle: "Skip commit check" in dashboard
+- Prevents losing work that was never committed
+
+**3. Spec write protection (block, user-controlled)**
+- Trigger: Write/Edit targeting docs/SPEC.md
+- Check: Is spec protection enabled in UI?
+- Block: "Spec is protected - unlock in dashboard to edit"
+- UI toggle: "Protect SPEC.md" on/off in dashboard
+- Prevents accidental spec corruption
+
+**Technical approach:**
+- Hooks in .claude/settings.json (synced via chkd-sync)
+- Hooks call chkd API: http://localhost:3847/api/hooks/*
+- Exit codes: 0=allow, 2=block with message
+- API endpoints: /api/hooks/check-commit, /api/hooks/check-spec-protection, /api/hooks/session-status
+
+**UI additions:**
+- Hook control panel in settings/dashboard
+- Toggle for each blocking hook (skip/enable)
+- Spec protection toggle (prominent)
+- Visual indicator when protection active
+
+**Key requirements:**
+- Hooks must be fast (<100ms) to not slow down Claude
+- Skip toggles persist in database per repo
+- Clear messaging when hook blocks (what to do)
+- Graceful fallback if API unreachable (allow, don't block)
+
+**Files to change:**
+- templates/.claude/settings.json - hook definitions
+- src/routes/api/hooks/* - new API endpoints
+- src/routes/+page.svelte - hook toggles in UI
+- src/lib/server/db/schema - hook settings storage
+- docs/GUIDE.md - hook documentation
+
+**Testing:**
+- Hook blocks tick when uncommitted changes exist
+- Skip toggle allows tick to proceed
+- Spec protection blocks Write to SPEC.md
+- Spec unlock allows Write to proceed
+- Session nudge appears but doesn't block
+- Hooks don't break when API is down
+
+  - [ ] Research Claude Code hooks API (PreToolUse, exit codes, params)
+  - [ ] Design API endpoints for hook checks
+  - [ ] Add hook settings to database schema
+  - [ ] Implement /api/hooks/check-commit endpoint
+  - [ ] Implement /api/hooks/check-spec-protection endpoint
+  - [ ] Implement /api/hooks/session-status endpoint
+  - [ ] Create hook definitions in templates/.claude/settings.json
+  - [ ] Add hook toggle UI to dashboard
+  - [ ] Add spec protection toggle to dashboard
+  - [ ] Test hooks in real workflow
+  - [ ] Document hooks in GUIDE.md
+- [~] **SD.35 Simplify CLAUDE.md - split philosophy from implementation** - Restructure CLAUDE.md to improve instruction-following by reducing cognitive load. Research shows Claude's instruction-following degrades with instruction count - current CLAUDE.md has 50+ instructions competing for attention.
+
+**Philosophy:**
+- Keep CLAUDE.md short and focused on "why" and core behaviors
+- Move detailed "how" to linked reference files
+- Critical rules get full attention, details available when needed
+
+**New structure:**
+
+CLAUDE.md (~20 instructions max):
+- Project overview (2-3 lines)
+- Core philosophy (tick-verify-tick contract)
+- 5-6 critical behaviors (short, memorable)
+- Links to detail files
+
+docs/GUIDE.md (reference):
+- MCP tools with descriptions
+- Workflow steps and examples
+- Troubleshooting
+
+docs/WORKFLOW-RULES.md (detailed rules):
+- Session management rules
+- Git/commit conventions
+- Spec editing guidelines
+
+**Key requirements:**
+- CLAUDE.md stays under 20 distinct instructions
+- Critical behaviors front and center, not buried
+- Detail files linked, not duplicated
+- Works with chkd-sync (templates updated)
+
+**Files to change:**
+- CLAUDE.md - simplify to philosophy + core behaviors
+- templates/CLAUDE-chkd-section.md - match simplified structure
+- docs/GUIDE.md - absorb detailed MCP tool reference
+- docs/WORKFLOW-RULES.md - new file for detailed rules
+- chkd-sync.json - add new file to sync list
+
+**Testing:**
+- New user can read CLAUDE.md in <2 minutes
+- Claude follows core behaviors more consistently
+- Details still accessible when needed
+
+  - [x] Audit current CLAUDE.md - count instructions, identify critical vs detail
+  - [x] Draft simplified CLAUDE.md structure (philosophy + 5-6 behaviors)
+  - [x] Create docs/WORKFLOW-RULES.md for detailed rules
+  - [ ] Update docs/GUIDE.md to include MCP tool reference
+  - [x] Update templates to match new structure
+  - [ ] Test with fresh Claude session - does it follow better?
+  - [ ] Document the new structure in GUIDE.md
+- [ ] **SD.36 Upgrade MCP response messaging for expert guidance** - Improve MCP tool response messages to provide better guidance. Focus on reinforcing expert mindset, suggesting research when helpful, and making instructions clear and followable. Priority on bugfix and quickwin workflows where skipping is most common.
+
+**Philosophy:**
+- "You are the expert" - reinforce confidence and thoroughness
+- Suggest thought modes that help (systematic debugging, research-first)
+- Prompt to search internet/research when it would help
+- Clear, actionable instructions that are hard to skip
+- Not lecturing - empowering
+
+**Key areas to improve:**
+
+**1. Bugfix workflow responses:**
+- bugfix() → Reinforce expert debugger mindset, suggest web research
+- fix() → Remind to verify with user, check for related issues
+- resolve() → Prompt for good commit message, confirm pushed
+
+**2. Quick win workflow responses:**
+- win() → Acknowledge capture, suggest parking for later
+- won() → Remind to commit+push, celebrate completion
+- wins() → Help prioritize which to tackle
+
+**3. General patterns:**
+- Add "Consider researching: [topic]" when domain knowledge would help
+- Add "Expert tip:" for non-obvious best practices
+- Add "Before continuing:" for critical checkpoints
+- Keep messages concise but complete
+
+**4. Thought mode prompts:**
+- Debug mode: "Think systematically - reproduce, isolate, fix, verify"
+- Research mode: "Search first - someone likely solved this"
+- Build mode: "Tick as you go - show progress"
+
+**Key requirements:**
+- Messages must be concise (not walls of text)
+- Focus on actionable guidance, not rules
+- Reinforce expert confidence, not compliance
+- Include web search prompts where relevant
+- Test with real workflows to ensure not skipped
+
+**Files to change:**
+- src/mcp/server-http.ts - all tool response messages
+- Focus on: bugfix, fix, resolve, win, won, wins, tick, working, done
+
+**Testing:**
+- Run through bugfix workflow - are prompts followed?
+- Run through quickwin workflow - are prompts followed?
+- Messages feel empowering not nagging
+- Web research happens when suggested
+
+  - [ ] Audit current MCP response messages - identify weak/skipped ones
+  - [ ] Design expert-mode messaging patterns (templates)
+  - [ ] Rewrite bugfix() response with expert debugger framing
+  - [ ] Rewrite fix() response with verification prompts
+  - [ ] Rewrite resolve() response with commit reminder
+  - [ ] Rewrite quickwin responses (win, won, wins)
+  - [ ] Add research prompts to relevant tools
+  - [ ] Add thought-mode headers to workflow tools
+  - [ ] Test bugfix workflow end-to-end
+  - [ ] Test quickwin workflow end-to-end
 ---
 
 ## Frontend
@@ -560,6 +917,35 @@ Add new features to the spec.
 - Status updates after push succeeds/fails
 - Tap opens detail view
 - History persists after app restart
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **FE.16 Landing page redesign based on wireframe research** - Implement new landing page design based on docs/designs/LANDING-PAGE-WIREFRAME.md. Key changes: story-driven hero with real product screenshots, intellectual problem section, split-screen solution view, multi-worker showcase, simplified tools presentation. Based on research of Linear, Cursor, Vercel and 2026 SaaS trends.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
 
   - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
   - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
@@ -1259,6 +1645,35 @@ Command-line interface with workflow documentation.
 - Refactor stories use test-first workflow
 - Tests run before and after refactoring
 - Quality checklist included in workflow
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - error handling, input validation, edge cases
+  - [ ] Polish > Review: trace through scenarios, check error paths work
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **BE.34 Spec edit MCP tool - fill TBC fields** - Add MCP tool to edit spec item fields (Key requirements, Files, Testing) so Claude can fill TBC placeholders when user provides clarification during conversation.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
 
   - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
   - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
