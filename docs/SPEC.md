@@ -226,6 +226,56 @@ Configure repos and preferences.
   - [x] Document > Review: confirm docs match implementation
   - [x] Commit > Stage: review changes, stage files
   - [x] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.26 Redefine impromptu sessions** - Clarify what impromptu is FOR and when NOT to use it. Currently Claude batches work into impromptu when structured workflows exist (bugfix, working/tick). Need clear guidance: impromptu = truly ad-hoc single tasks, not batching multiple discrete items. Update conscience, CLAUDE.md, and potentially detect misuse patterns.
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore > Research: investigate codebase, problem space, and any discovery docs
+  - [ ] Explore > Questions: consider if clarification needed - ask user if unclear
+  - [ ] Explore > Share: inform user of findings before continuing
+  - [ ] Design > Draft: create initial design/approach
+  - [ ] Design > Review: show user, iterate if needed
+  - [ ] Prototype > Build: create the prototype
+  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [ ] Feedback > Demo: show user the prototype
+  - [ ] Feedback > Iterate: make changes based on feedback
+  - [ ] Implement > Build: implement real logic
+  - [ ] Implement > Verify: test functionality works
+  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [ ] Polish > Review: open browser, visually check UI renders correctly
+  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [ ] Document > Write: update relevant documentation
+  - [ ] Document > Review: confirm docs match implementation
+  - [ ] Commit > Stage: review changes, stage files
+  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+- [ ] **SD.27 Add Recent Activity to Status Messages and Standalone Display** - > I want the Agent to see and be able to access pass workflow. high level last 5 adds and done, and more rich with a standalong call. include bugs and Quickwins,
+
+> I want the Agent to see and be able to access pass workflow. high level last 5 adds and done, and more rich with a standalong call. include bugs and Quickwins,
+
+**Key requirements:**
+- TBC
+
+**Files to change:**
+- TBC
+
+**Testing:**
+- TBC
+
+  - [ ] Explore: research problem, check existing code/patterns
+  - [ ] Design: plan approach + define endpoint contracts
+  - [ ] Prototype: build UI with mock data, stub backend
+  - [ ] Feedback: user reviews and approves UX
+  - [ ] Implement: connect real backend logic
+  - [ ] Polish: error states, edge cases, performance
+  - [ ] Document: update docs, guides, and CLAUDE.md if needed
+  - [ ] Commit: commit code to git with clear message + assumptions
 ---
 
 ## Frontend
@@ -301,7 +351,7 @@ Add new features to the spec.
 - No terminal button visible
 - Ctrl+` shortcut removed
 
-- [ ] **FE.10 Epic view in UI - filter items by epic tag** - Add toggle in dashboard to switch between area view (current) and epic view. Epic view groups all items with same epic tag together, showing progress across areas. Makes it easy to see "everything for Auth System" instead of hunting through SD/FE/BE sections.
+- [x] **FE.10 Epic view in UI - filter items by epic tag** - Add toggle in dashboard to switch between area view (current) and epic view. Epic view groups all items with same epic tag together, showing progress across areas. Makes it easy to see "everything for Auth System" instead of hunting through SD/FE/BE sections.
 
 **Key requirements:**
 - Toggle button in dashboard header to switch area/epic view
@@ -325,19 +375,19 @@ Add new features to the spec.
   - [x] Explore > Share: inform user of findings before continuing
   - [x] Design > Draft: create initial design/approach
   - [x] Design > Review: show user, iterate if needed
-  - [ ] Prototype > Build: create the prototype
-  - [ ] Prototype > Verify: compare to spec/wireframe, iterate if gaps
-  - [ ] Feedback > Demo: show user the prototype
-  - [ ] Feedback > Iterate: make changes based on feedback
-  - [ ] Implement > Build: implement real logic
-  - [ ] Implement > Verify: test functionality works
-  - [ ] Polish > Consider: wider impact - loading states, empty states, error displays
-  - [ ] Polish > Review: open browser, visually check UI renders correctly
-  - [ ] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
-  - [ ] Document > Write: update relevant documentation
-  - [ ] Document > Review: confirm docs match implementation
-  - [ ] Commit > Stage: review changes, stage files
-  - [ ] Commit > Commit: summary line (what), body (why + assumptions), push to remote
+  - [x] Prototype > Build: create the prototype
+  - [x] Prototype > Verify: compare to spec/wireframe, iterate if gaps
+  - [x] Feedback > Demo: show user the prototype
+  - [x] Feedback > Iterate: make changes based on feedback
+  - [x] Implement > Build: implement real logic
+  - [x] Implement > Verify: test functionality works
+  - [x] Polish > Consider: wider impact - loading states, empty states, error displays
+  - [x] Polish > Review: open browser, visually check UI renders correctly
+  - [x] Polish > Confirm: verify against discovery assumptions if any, show user findings, get approval
+  - [x] Document > Write: update relevant documentation
+  - [x] Document > Review: confirm docs match implementation
+  - [x] Commit > Stage: review changes, stage files
+  - [x] Commit > Commit: summary line (what), body (why + assumptions), push to remote
 - [ ] **FE.11 App shell & navigation** #mobile-capture-app - Expo setup with expo-router, basic screen structure (Chat, History, Settings)
 
 **Key requirements:**
@@ -666,7 +716,7 @@ Command-line interface with workflow documentation.
   - [ ] Implement: connect real backend logic
   - [ ] Polish: error states, edge cases, performance
   - [ ] overall all user documentation and guides - be thougher
-- [x] **BE.16 send item to diffent repo - if user enters in wrong place. Transfur** - Allow users to move items that were created in the wrong repository to the correct one.
+- [ ] **BE.16 send item to diffent repo - if user enters in wrong place. Transfur** - Allow users to move items that were created in the wrong repository to the correct one.
 
 > As a user, I want to transfer items between repositories so that I can correct mistakes when I create content in the wrong place.
   - [ ] Explore: research problem, check existing code/patterns

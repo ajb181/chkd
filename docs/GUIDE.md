@@ -231,6 +231,40 @@ When the MCP server is connected, Claude has these tools:
 | `epics` | List all epics with progress |
 | `tag` | Link item to epic via tag |
 
+---
+
+## Dashboard UI
+
+Access the dashboard at `http://localhost:3847` when the server is running.
+
+### Views
+
+Toggle between three views using the buttons in the header:
+
+| View | Description |
+|------|-------------|
+| **Todo List** | Items grouped by priority (P1/P2/P3/Backlog) |
+| **By Area** | Items grouped by area (SD/FE/BE/FUT) |
+| **By Epic** | Items grouped by epic tag |
+
+### Epic View
+
+The epic view shows all epics with:
+- **Description** visible under the header
+- **Progress bar** showing completion (X/Y items)
+- **Status badge** (planning, in-progress, review, complete)
+- **Collapsible stories** section
+
+Items tagged with an epic appear grouped together. Epic tags are highlighted in coral across all views.
+
+Click the file path to open the epic doc in VS Code.
+
+### Filtering
+
+- **Search box** - Filter items by title
+- **Show completed** - Toggle to show/hide completed items
+- **Tag filter** - Click tags to filter by epic
+
 **Resources** (Claude reads these for context):
 - `chkd://conscience` - Session state, guidance, habits
 - `chkd://spec` - Current spec with progress
