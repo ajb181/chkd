@@ -38,6 +38,20 @@
       "description": "Document organization and naming rules"
     },
     {
+      "name": "philosophy",
+      "source": "templates/docs/PHILOSOPHY.md",
+      "destination": "docs/PHILOSOPHY.md",
+      "mode": "copy",
+      "description": "chkd philosophy - the collaboration contract"
+    },
+    {
+      "name": "instructions",
+      "source": "templates/docs/instructions",
+      "destination": "docs/instructions",
+      "mode": "copy",
+      "description": "Mode-specific guidance (build, bugfix, debug, etc.)"
+    },
+    {
       "name": "spec-template",
       "source": "templates/docs/SPEC.md.template",
       "destination": "docs/SPEC.md",
