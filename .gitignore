@@ -6,3 +6,7 @@ build/
 *.log
 .DS_Store
 build-stable/
+
+# Project-specific working files (not code)
+docs/SPEC.md
+docs/QUICKWINS.md
