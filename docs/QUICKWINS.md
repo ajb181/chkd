@@ -2,6 +2,22 @@
 
 Small improvements to make when you have time.
 
+- [ ] Clean up docs folder - archive historical docs, remove old versions, organize by purpose
+- [ ] add prompting to search the internet as well in the workflow research when approate
+- [ ] add prompt persona's to the messages - increased experties focus - not generalit
+- [ ] On pivot add prompt to document if addiotnal info will be helpful in the future
+- [x] Workers communicate through Manager - user stays in one terminal, Manager relays questions/status from workers, user directs all work from single session
+- [ ] Rename win() MCP tool to quickwin() for clarity
+- [ ] Update BRAND.md with landing page research insights - "show don't tell", specific CTAs, real UI vs abstract art, Linear-style simplicity messaging
+- [ ] Landing page font update - explore chunky block/ASCII art style like Claude Code terminal aesthetic
+- [ ] Add spec_edit MCP tool - allow Claude to fill TBC fields when user provides clarification
+- [ ] add delete story, epic access - faster clean up of spec.md if needed to the ui & mcp server commands
+- [ ] add whats still open to the failed to close if not already sent?
+- [ ] restyle debug and QW so that better handling overloaded and richer information enviroment.
+- [ ] add timestamp to recency activly
+- [ ] Auto-capture design changes during build - roll learnings back into epic/story docs so knowledge isn't lost
+- [x] Beautify MCP tool names - remove redundant chkd_ prefix (chkd_tick → tick, chkd_working → working)
+- [ ] Expand review service with interactive testing - click, scroll, form fill capabilities
 - [x] Remove CLI references from CLAUDE.md - MCP is primary, review skills for potential move to workflow design on add
 - [ ] Add audit-code-against-spec workflow - strong questions, area-aware checks (FE: use Chrome, BE: check database/logic), verify features match spec requirements
 - [ ] Add chkd_quickwin start command - shows guidance, tracks session, reminds to clarify before coding

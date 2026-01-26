@@ -570,10 +570,10 @@ docs/WORKFLOW-RULES.md (detailed rules):
   - [x] Audit current CLAUDE.md - count instructions, identify critical vs detail
   - [x] Draft simplified CLAUDE.md structure (philosophy + 5-6 behaviors)
   - [x] Create docs/WORKFLOW-RULES.md for detailed rules
-  - [ ] Update docs/GUIDE.md to include MCP tool reference
+  - [x] Update docs/GUIDE.md to include MCP tool reference
   - [x] Update templates to match new structure
   - [ ] Test with fresh Claude session - does it follow better?
-  - [ ] Document the new structure in GUIDE.md
+  - [x] Document the new structure in GUIDE.md
 - [ ] **SD.36 Upgrade MCP response messaging for expert guidance** - Improve MCP tool response messages to provide better guidance. Focus on reinforcing expert mindset, suggesting research when helpful, and making instructions clear and followable. Priority on bugfix and quickwin workflows where skipping is most common.
 
 **Philosophy:**
