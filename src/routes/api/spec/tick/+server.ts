@@ -49,13 +49,15 @@ export const POST: RequestHandler = async ({ request }) => {
       const numericMatch = itemQuery.match(/^(\d+)\.(\d+)$/);
       const queryLower = itemQuery.toLowerCase();
 
-      // FIRST: If query is an area code (BE.2, SD.1), match by area code ONLY
+      // FIRST: If query is an area code (BE.2, SD.1), match by title prefix
+      // NOTE: Don't use array index - item numbers aren't sequential (gaps from deleted items)
       if (areaMatch) {
         const areaCode = areaMatch[1].toUpperCase();
-        const itemNum = parseInt(areaMatch[2]);
+        const itemNumber = areaMatch[2];
+        const expectedPrefix = `${areaCode}.${itemNumber} `;
         for (const area of spec.areas) {
           if (area.code === areaCode) {
-            const item = area.items[itemNum - 1];
+            const item = area.items.find(i => i.title.startsWith(expectedPrefix));
             if (item) {
               targetId = item.id;
               targetTitle = item.title;
