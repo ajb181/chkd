@@ -68,9 +68,35 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// Epic types
+export interface Epic {
+  name: string;
+  slug: string;
+  description: string;
+  tag: string;
+  status: 'planning' | 'in-progress' | 'review' | 'complete';
+  scope: string[];
+  outOfScope: string[];
+  overhaul: { task: string; done: boolean }[];
+  filePath: string;
+  createdAt: string;
+}
+
+export interface EpicWithProgress extends Epic {
+  itemCount: number;
+  completedCount: number;
+  progress: number;
+}
+
 // Get the full spec
 export async function getSpec(repoPath: string): Promise<ApiResponse<ParsedSpec>> {
   const res = await fetch(`${BASE_URL}/api/spec/full?repoPath=${encodeURIComponent(repoPath)}`);
+  return res.json();
+}
+
+// Get all epics with progress
+export async function getEpics(repoPath: string): Promise<ApiResponse<EpicWithProgress[]>> {
+  const res = await fetch(`${BASE_URL}/api/epics?repoPath=${encodeURIComponent(repoPath)}`);
   return res.json();
 }
 

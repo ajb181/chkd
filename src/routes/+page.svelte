@@ -2,7 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
   import { marked } from 'marked';
-  import { getSpec, getSession, setSessionState, tickItem, skipItem as skipItemApi, editItem as editItemApi, deleteItem as deleteItemApi, addChildItem as addChildItemApi, moveItem as moveItemApi, setPriority as setPriorityApi, setTags as setTagsApi, getRepos, addRepo, getProposals, getQueue, addToQueue, removeFromQueue, getBugs, polishBug, getQuickWins, createQuickWin, completeQuickWin, deleteQuickWin, getItemDurations, getAnchor, setAnchor, clearAnchor, getAttachments, attachFile, deleteAttachment, uploadAttachment, getWorkers, getSignals, spawnWorker, deleteWorker, updateWorker, dismissSignal, resolveWorkerConflict } from '$lib/api';
+  import { getSpec, getSession, setSessionState, tickItem, skipItem as skipItemApi, editItem as editItemApi, deleteItem as deleteItemApi, addChildItem as addChildItemApi, moveItem as moveItemApi, setPriority as setPriorityApi, setTags as setTagsApi, getRepos, addRepo, getProposals, getQueue, addToQueue, removeFromQueue, getBugs, polishBug, getQuickWins, createQuickWin, completeQuickWin, deleteQuickWin, getItemDurations, getAnchor, setAnchor, clearAnchor, getAttachments, attachFile, deleteAttachment, uploadAttachment, getWorkers, getSignals, spawnWorker, deleteWorker, updateWorker, dismissSignal, resolveWorkerConflict, getEpics } from '$lib/api';
+  import type { EpicWithProgress } from '$lib/api';
   import type { Attachment, Worker, ManagerSignal, WorkerStatus } from '$lib/api';
   import type { ParsedSpec, SpecArea, SpecItem, Session, ItemStatus, Priority, Repository, QueueItem, Bug, HandoverNote, QuickWin, AnchorInfo } from '$lib/api';
   import FeatureCapture from '$lib/components/FeatureCapture.svelte';
@@ -149,8 +150,27 @@
   let error: string | null = null;
 
   // View mode
-  type ViewMode = 'areas' | 'todo';
+  type ViewMode = 'areas' | 'todo' | 'epic';
   let viewMode: ViewMode = 'todo';
+
+  // Epics
+  let epics: EpicWithProgress[] = [];
+  let collapsedEpics: Set<string> = new Set();
+
+  function toggleEpicCollapse(slug: string) {
+    if (collapsedEpics.has(slug)) {
+      collapsedEpics.delete(slug);
+    } else {
+      collapsedEpics.add(slug);
+    }
+    collapsedEpics = collapsedEpics; // trigger reactivity
+  }
+
+  // Open file in editor (uses vscode:// URL scheme)
+  function openFile(filePath: string) {
+    // Try VS Code URL scheme first
+    window.open(`vscode://file${filePath}`, '_blank');
+  }
 
   // Tag filtering
   let selectedTagFilter: string | null = null;
@@ -880,7 +900,7 @@
   async function loadData() {
     if (!repoPath) return;
     try {
-      const [specRes, sessionRes, proposalsRes, queueRes, bugsRes, quickWinsRes, durationsRes, anchorRes, workersRes, signalsRes, recentRes] = await Promise.all([
+      const [specRes, sessionRes, proposalsRes, queueRes, bugsRes, quickWinsRes, durationsRes, anchorRes, workersRes, signalsRes, recentRes, epicsRes] = await Promise.all([
         getSpec(repoPath),
         getSession(repoPath),
         getProposals(repoPath),
@@ -891,7 +911,8 @@
         getAnchor(repoPath),
         getWorkers(repoPath),
         getSignals(repoPath, true), // activeOnly
-        getRecentSpec(repoPath)
+        getRecentSpec(repoPath),
+        getEpics(repoPath)
       ]);
 
       if (proposalsRes.success) {
@@ -913,6 +934,10 @@
       if (recentRes.success && recentRes.data) {
         recentAdded = recentRes.data.recentAdded;
         recentCompleted = recentRes.data.recentCompleted;
+      }
+
+      if (epicsRes.success && epicsRes.data) {
+        epics = epicsRes.data;
       }
 
       if (durationsRes.success && durationsRes.data) {
@@ -1556,6 +1581,13 @@
       case 'blocked': return '!';
       default: return '○';
     }
+  }
+
+  // Get epic tags for an item (tags that match known epic tags)
+  function getItemEpicTags(item: SpecItem): string[] {
+    if (!item.tags || item.tags.length === 0) return [];
+    const epicTags = epics.map(e => e.tag);
+    return item.tags.filter(t => epicTags.includes(t));
   }
 
   function getStatusClass(status: ItemStatus): string {
@@ -2820,6 +2852,14 @@
           >
             By Area
           </button>
+          <button
+            class="toggle-btn"
+            class:active={viewMode === 'epic'}
+            on:click={() => viewMode = 'epic'}
+            title="View items grouped by epic"
+          >
+            By Epic
+          </button>
         </div>
       </div>
 
@@ -2831,10 +2871,18 @@
           placeholder="Search features..."
           class="filter-input"
         />
-        <label class="filter-toggle">
-          <input type="checkbox" bind:checked={showCompleted} />
+        <button
+          class="filter-toggle-btn"
+          class:active={showCompleted}
+          on:click={() => showCompleted = !showCompleted}
+        >
+          {#if showCompleted}
+            <span class="toggle-icon">✓</span>
+          {:else}
+            <span class="toggle-icon">○</span>
+          {/if}
           Show completed
-        </label>
+        </button>
       </div>
 
       <!-- Todo List View -->
@@ -2874,12 +2922,16 @@
                   {#each filteredItems as { item, area }}
                     {@const stats = getItemStats(item)}
                     {@const context = getContextText(item, area)}
+                    {@const itemEpicTags = getItemEpicTags(item)}
                     <div class="todo-item {getStatusClass(item.status)}" class:selected={selectedFeature?.item.id === item.id}>
                       <button class="todo-row" on:click={() => selectFeature(item, area)}>
                         <span class="todo-status">{getStatusIcon(item.status)}</span>
                         <div class="todo-content">
                           <div class="todo-title-row">
                             <span class="todo-title">{@html markedInline(item.title)}</span>
+                            {#each itemEpicTags as epicTag}
+                              <span class="item-epic-tag" title="Part of epic">#{epicTag}</span>
+                            {/each}
                             <span class="todo-area">{area.code}</span>
                           </div>
                           {#if context}
@@ -2958,6 +3010,7 @@
                     <ul class="items">
                       {#each filtered as item}
                         {@const itemHandover = getHandoverNote(item.id)}
+                        {@const itemEpicTags = getItemEpicTags(item)}
                         <li class="item {getStatusClass(item.status)}" class:has-handover={!!itemHandover}>
                           <button class="item-row" on:click={() => selectFeature(item, area)}>
                             <span class="item-status">{getStatusIcon(item.status)}</span>
@@ -2965,7 +3018,7 @@
                             {#if item.tags && item.tags.length > 0}
                               <span class="item-tags">
                                 {#each item.tags as tag}
-                                  <span class="item-tag">{tag}</span>
+                                  <span class="item-tag" class:epic-tag={itemEpicTags.includes(tag)}>#{tag}</span>
                                 {/each}
                               </span>
                             {/if}
@@ -2995,6 +3048,78 @@
             {/if}
           {/each}
         </div>
+      {/if}
+
+      <!-- Epic View -->
+      {#if viewMode === 'epic'}
+        {#if epics.length === 0}
+          <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <p>No epics yet</p>
+            <p class="empty-hint">Create an epic with <code>chkd epic "Epic Name"</code></p>
+          </div>
+        {:else}
+          <div class="epic-list">
+            {#each epics as epic}
+              {@const epicItems = spec?.areas.flatMap(a => a.items.filter(i => i.tags?.includes(epic.tag))) || []}
+              {@const filtered = filterItems(epicItems)}
+              {@const isCollapsed = collapsedEpics.has(epic.slug)}
+              <div class="epic-group" class:complete={epic.status === 'complete'}>
+                <div class="epic-header">
+                  <div class="epic-status-dot" class:planning={epic.status === 'planning'} class:in-progress={epic.status === 'in-progress'} class:review={epic.status === 'review'} class:complete={epic.status === 'complete'}></div>
+                  <h3 class="epic-name">{epic.name}</h3>
+                  <span class="epic-tag">#{epic.tag}</span>
+                  <div class="epic-progress">
+                    <span class="epic-count">{epic.completedCount}/{epic.itemCount}</span>
+                    <div class="epic-progress-bar">
+                      <div class="epic-progress-fill" style="width: {epic.progress}%"></div>
+                    </div>
+                  </div>
+                  <span class="epic-status-badge {epic.status}">{epic.status}</span>
+                </div>
+
+                {#if epic.description}
+                  <div class="epic-description">
+                    <p>{epic.description}</p>
+                    <button class="epic-file-link" on:click={() => openFile(epic.filePath)} title="Open in editor">
+                      <span class="file-icon">📄</span>
+                      <span class="file-path">{epic.filePath.split('/').slice(-3).join('/')}</span>
+                    </button>
+                  </div>
+                {/if}
+
+                <div class="epic-stories">
+                  <button class="epic-stories-header" on:click={() => toggleEpicCollapse(epic.slug)}>
+                    <span class="epic-toggle">{isCollapsed ? '▶' : '▼'}</span>
+                    <span class="epic-stories-label">Stories ({filtered.length})</span>
+                  </button>
+
+                  {#if !isCollapsed}
+                    {#if filtered.length > 0}
+                      <ul class="epic-items">
+                        {#each filtered as item}
+                          {@const area = spec?.areas.find(a => a.items.some(i => i.id === item.id))}
+                          <li class="epic-item {getStatusClass(item.status)}" title={item.id}>
+                            <button class="item-row" on:click={() => area && selectFeature(item, area)}>
+                              <span class="item-status">{getStatusIcon(item.status)}</span>
+                              <span class="item-title">{@html markedInline(item.title)}</span>
+                              {#if item.children.length > 0}
+                                {@const childCounts = countItems(item.children)}
+                                <span class="item-progress">{childCounts.done}/{childCounts.total}</span>
+                              {/if}
+                            </button>
+                          </li>
+                        {/each}
+                      </ul>
+                    {:else if !filterText}
+                      <p class="epic-empty">No items linked yet. Tag items with <code>#{epic.tag}</code></p>
+                    {/if}
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
       {/if}
     {/if}
   </main>
@@ -6416,14 +6541,35 @@
     background: var(--bg);
   }
 
-  .filter-toggle {
+  .filter-toggle-btn {
     display: flex;
     align-items: center;
-    gap: var(--space-xs);
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
     font-size: 13px;
+    font-family: inherit;
     color: var(--text-muted);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     cursor: pointer;
     white-space: nowrap;
+    transition: all 0.15s;
+  }
+
+  .filter-toggle-btn:hover {
+    border-color: var(--coral);
+    color: var(--text);
+  }
+
+  .filter-toggle-btn.active {
+    background: var(--coral-dim);
+    border-color: var(--coral);
+    color: var(--coral);
+  }
+
+  .filter-toggle-btn .toggle-icon {
+    font-size: 12px;
   }
 
   /* Todo List */
@@ -6438,6 +6584,26 @@
     padding: var(--space-2xl);
     color: var(--text-muted);
     font-size: 18px;
+  }
+
+  .empty-state .empty-icon {
+    font-size: 48px;
+    margin-bottom: var(--space-md);
+    opacity: 0.5;
+  }
+
+  .empty-state .empty-hint {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: var(--space-sm);
+  }
+
+  .empty-state code {
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    color: var(--coral);
   }
 
   /* Priority Groups */
@@ -6706,6 +6872,207 @@
     background: var(--primary-bg);
   }
 
+  /* Epic View */
+  .epic-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+  }
+
+  .epic-group {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .epic-group.complete {
+    border-color: var(--success);
+    opacity: 0.7;
+  }
+
+  .epic-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    background: var(--bg-tertiary);
+  }
+
+  .epic-description {
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .epic-description p {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin: 0 0 var(--space-sm);
+    line-height: 1.5;
+  }
+
+  .epic-file-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .epic-file-link:hover {
+    border-color: var(--coral);
+    color: var(--coral);
+  }
+
+  .epic-file-link .file-icon {
+    font-size: 12px;
+  }
+
+  .epic-stories {
+    border-top: 1px solid var(--border);
+  }
+
+  .epic-stories-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--bg-secondary);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+  }
+
+  .epic-stories-header:hover {
+    background: var(--bg-tertiary);
+  }
+
+  .epic-toggle {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 12px;
+  }
+
+  .epic-stories-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .epic-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .epic-status-dot.planning { background: var(--text-muted); }
+  .epic-status-dot.in-progress { background: var(--info); }
+  .epic-status-dot.review { background: var(--warning); }
+  .epic-status-dot.complete { background: var(--success); }
+
+  .epic-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+    flex: 1;
+  }
+
+  .epic-tag {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--coral);
+    background: var(--coral-dim);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+  }
+
+  .epic-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .epic-count {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .epic-progress-bar {
+    width: 80px;
+    height: 6px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .epic-progress-fill {
+    height: 100%;
+    background: var(--teal);
+    transition: width 0.3s ease;
+  }
+
+  .epic-status-badge {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+  }
+
+  .epic-status-badge.planning { color: var(--text-muted); }
+  .epic-status-badge.in-progress { color: var(--info); background: var(--info-bg); }
+  .epic-status-badge.review { color: var(--warning); background: var(--warning-bg); }
+  .epic-status-badge.complete { color: var(--success); background: var(--success-bg); }
+
+  .epic-items {
+    list-style: none;
+    padding: var(--space-md);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .epic-item {
+    display: flex;
+    align-items: center;
+  }
+
+  .epic-item .item-row {
+    flex: 1;
+  }
+
+
+  .epic-empty {
+    padding: var(--space-lg);
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  .epic-empty code {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    color: var(--coral);
+  }
+
   /* Items */
   .items {
     list-style: none;
@@ -6765,6 +7132,22 @@
     color: var(--text-muted);
     border-radius: 3px;
     text-transform: lowercase;
+  }
+
+  .item-tag.epic-tag {
+    background: var(--coral-dim);
+    color: var(--coral);
+    font-weight: 600;
+  }
+
+  .item-epic-tag {
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--coral-dim);
+    color: var(--coral);
+    border-radius: 3px;
+    font-family: var(--font-mono);
   }
 
   .item-progress {
