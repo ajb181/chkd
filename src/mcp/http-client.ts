@@ -3,10 +3,14 @@
  *
  * This replaces direct database access to avoid sync issues between processes.
  * The MCP server now acts as a client to the SvelteKit API.
+ *
+ * Port configuration:
+ * - Default: 3848 (stable) - keeps other projects working
+ * - Set CHKD_PORT=3847 when developing chkd itself
  */
 
-const DEFAULT_PORT = 3847;
-const BASE_URL = `http://localhost:${DEFAULT_PORT}`;
+const PORT = process.env.CHKD_PORT ? parseInt(process.env.CHKD_PORT, 10) : 3848;
+const BASE_URL = `http://localhost:${PORT}`;
 
 interface ApiResponse<T = any> {
   success: boolean;

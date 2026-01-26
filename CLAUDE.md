@@ -61,9 +61,9 @@ You're enforcing the contract both signed up for.
 When working on chkd itself:
 
 - **Dev server:** `npm run dev` (port 3847)
-- **Stable build:** `npm run stable` (port 3848) - use when developing chkd
+- **Stable build:** `npm run stable` (port 3848) - other projects use this
+- **MCP port:** Defaults to 3848 (stable). Set `CHKD_PORT=3847` to use dev.
 - **MCP server:** `src/mcp/server-http.ts`
 - **API:** `src/routes/api/` (single source of truth)
-- **Spec parser:** `src/lib/server/spec/`
 
 Architecture: SvelteKit + SQLite at `~/.chkd/chkd.db`

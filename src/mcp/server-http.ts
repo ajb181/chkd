@@ -4228,7 +4228,8 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("chkd MCP server (HTTP-based) running");
+  const port = process.env.CHKD_PORT || '3848';
+  console.error(`chkd MCP server running (connecting to port ${port})`);
 }
 
 main().catch(console.error);
