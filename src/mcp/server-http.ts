@@ -102,11 +102,16 @@ function getRepoPath(): string {
 
 // Helper to get repo or throw
 async function requireRepo(repoPath: string) {
-  const repo = await api.getRepoByPath(repoPath);
-  if (!repo) {
+  const response = await api.getRepoByPath(repoPath);
+  if (!response.success) {
+    // Server connection error
+    const hint = response.hint ? ` ${response.hint}` : '';
+    throw new Error(`${response.error}${hint}`);
+  }
+  if (!response.repo) {
     throw new Error(`Project not registered with chkd. Run 'chkd upgrade' first.`);
   }
-  return repo;
+  return response.repo;
 }
 
 // Format duration

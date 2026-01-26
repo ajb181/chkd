@@ -273,13 +273,18 @@ export async function deleteAttachment(repoPath: string, filename: string) {
 // Repository API
 // ============================================
 
-export async function getRepoByPath(repoPath: string) {
+export async function getRepoByPath(repoPath: string): Promise<ApiResponse & { repo?: any }> {
   const response = await request('GET', '/api/repos');
-  if (response.success && response.data) {
-    const repos = response.data as any[];
-    return repos.find(r => r.path === repoPath);
+  if (!response.success) {
+    // Return the error response (e.g., server not running)
+    return response;
   }
-  return null;
+  if (response.data) {
+    const repos = response.data as any[];
+    const repo = repos.find(r => r.path === repoPath);
+    return { success: true, repo };
+  }
+  return { success: true, repo: undefined };
 }
 
 // ============================================
