@@ -53,26 +53,103 @@ You're not being difficult - you're enforcing the contract both signed up for. T
 
 When the chkd MCP server is connected, use these tools:
 
+### Core Workflow
 | Tool | What it does |
 |------|--------------|
 | `status` | Get current state - run this first! |
-| `checkin` | 15-minute check-in - how are we doing? |
-| `pulse` | Quick status update, resets check-in timer |
-| `suggest` | Analyze spec, suggest what to work on |
 | `working` | Signal starting a sub-item |
 | `tick` | Mark item complete |
-| `bug` | Log a bug (don't derail, log and continue) |
-| `bugfix` | Start working on a bug |
-| `fix` | Signal fix ready for verification |
-| `resolve` | Close bug after user verified |
+| `suggest` | Analyze spec, suggest what to work on |
+| `add` | Add feature with workflow sub-tasks |
+| `add_child` | Add sub-task to existing item |
+| `add_task` | Add sub-task to current anchor |
+
+### Sessions & Focus
+| Tool | What it does |
+|------|--------------|
 | `impromptu` | Start ad-hoc work session |
 | `debug` | Start investigation session |
 | `done` | End current session |
 | `pivot` | Change anchor/focus explicitly |
+| `checkin` | 15-minute check-in - how are we doing? |
+| `pulse` | Quick status update, resets check-in timer |
+| `also` | Log off-task work without derailing |
+
+### Bugs
+| Tool | What it does |
+|------|--------------|
+| `bug` | Log a bug (don't derail, log and continue) |
+| `bugs` | List all open bugs |
+| `bugfix` | Start working on a bug |
+| `fix` | Signal fix ready for verification |
+| `resolve` | Close bug after user verified |
+
+### Quick Wins
+| Tool | What it does |
+|------|--------------|
+| `win` | Add a quick win to docs/QUICKWINS.md |
+| `wins` | List all quick wins |
+| `won` | Mark quick win as done |
+
+### Epics & Organization
+| Tool | What it does |
+|------|--------------|
 | `epic` | Create epic for large features |
 | `epics` | List all epics with progress |
 | `tag` | Link item to epic via tag |
-| `add` | Add feature with workflow sub-tasks |
+
+### Multi-Worker (Parallel Development)
+| Tool | What it does |
+|------|--------------|
+| `spawn_worker` | Create worker for parallel task |
+| `workers` | List active workers |
+| `merge_worker` | Complete and merge worker branch |
+| `stop_worker` | Stop worker and cleanup |
+| `dead_workers` | Find stuck workers |
+
+### Research (Before Coding)
+| Tool | What it does |
+|------|--------------|
+| `research_codebase` | Get codebase overview |
+| `research_patterns` | Find existing patterns |
+| `research_dependencies` | Analyze imports/exports |
+| `research_summary` | Present findings to user |
+
+### Story & Review
+| Tool | What it does |
+|------|--------------|
+| `story_create` | Structure a feature request |
+| `story_breakdown` | Break story into tasks |
+| `review_diff` | Review worker changes |
+| `review_approve` | Approve worker for merge |
+
+### Documentation
+| Tool | What it does |
+|------|--------------|
+| `docs_readme` | Generate README updates |
+| `docs_changelog` | Generate CHANGELOG entry |
+| `docs_api` | Document API endpoints |
+
+### Ideas (Feature Requests)
+| Tool | What it does |
+|------|--------------|
+| `ideas_list` | List submitted feature ideas |
+| `ideas_review` | Review a specific idea |
+| `ideas_approve` | Approve idea → add to spec |
+| `ideas_reject` | Reject idea with feedback |
+
+### Attachments
+| Tool | What it does |
+|------|--------------|
+| `attach` | Attach file to bug/quickwin/item |
+| `attachments` | List attachments |
+
+### Spec Maintenance
+| Tool | What it does |
+|------|--------------|
+| `spec_check` | Validate SPEC.md format |
+| `spec_repair` | Auto-fix SPEC.md formatting |
+| `transfer` | Move item to another repo |
 
 **Resources** (read these for context):
 - `chkd://conscience` - Session state, anchor, guidance, habits
@@ -157,7 +234,7 @@ npm run stable           # Run stable build on port 3848
 
 ## Architecture
 
-SvelteKit app (Svelte 5 with runes) with built-in API routes. SQLite database for state.
+SvelteKit app (Svelte 5 with runes) with built-in API routes. SQLite database for state stored at `~/.chkd/chkd.db`.
 
 ```
 src/
@@ -183,11 +260,15 @@ src/
 
 | File | Purpose |
 |------|---------|
-| `src/mcp/server-http.ts` | MCP server (all tools defined here) |
+| `src/mcp/server-http.ts` | MCP server (all 60+ tools defined here) |
+| `src/mcp/http-client.ts` | API client used by MCP server |
 | `src/lib/server/spec/parser.ts` | Parses SPEC.md |
 | `src/lib/server/spec/writer.ts` | Modifies SPEC.md |
+| `src/lib/server/db/index.ts` | SQLite schema and migrations |
 | `src/routes/+page.svelte` | Main dashboard UI |
+| `src/routes/api/` | API endpoints (single source of truth) |
 | `docs/SPEC.md` | The task list |
+| `docs/QUICKWINS.md` | Small improvements to do later |
 
 ## Sync System
 
@@ -233,6 +314,7 @@ Items must have section numbers:
 - `[ ]` - Not started
 - `[~]` - In progress (set by `working`)
 - `[x]` - Complete (set by `tick`)
+- `[!]` - Blocked
 
 ## Workflow
 

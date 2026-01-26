@@ -183,70 +183,57 @@ Claude reads your spec and builds the feature.
 
 ---
 
-## MCP Tools (Preferred)
+## MCP Tools
 
 When the MCP server is connected, Claude has these tools:
 
+**Core Workflow:**
 | Tool | What it does |
 |------|--------------|
 | `status` | See current state - **run this first!** |
-| `working "item"` | Signal starting work on an item |
-| `tick "item"` | Mark item complete |
+| `working` | Signal starting work on an item |
+| `tick` | Mark item complete |
 | `suggest` | Get suggestion for what to work on next |
-| `bug "desc"` | Log a bug without derailing |
-| `bugfix "bug"` | Start working on a bug |
-| `fix "bug"` | Signal fix ready for verification |
-| `resolve "bug"` | Close bug after user verified |
-| `win "title"` | Add a quick win |
-| `wins` | List quick wins |
-| `won "query"` | Mark quick win done |
-| `impromptu "desc"` | Start ad-hoc work session |
-| `debug "desc"` | Start investigation session |
+| `add` | Add feature with workflow sub-tasks |
+| `add_child` | Add sub-task to existing item |
+
+**Sessions & Focus:**
+| Tool | What it does |
+|------|--------------|
+| `impromptu` | Start ad-hoc work session |
+| `debug` | Start investigation session |
 | `done` | End current session |
-| `pulse "status"` | Quick status update |
+| `pivot` | Change anchor/focus explicitly |
 | `checkin` | 15-minute check-in |
-| `attach` | Attach file to bug/quickwin/item |
+| `pulse` | Quick status update |
+| `also` | Log off-task work without derailing |
+
+**Bugs:**
+| Tool | What it does |
+|------|--------------|
+| `bug` | Log a bug without derailing |
+| `bugs` | List all open bugs |
+| `bugfix` | Start working on a bug |
+| `fix` | Signal fix ready for verification |
+| `resolve` | Close bug after user verified |
+
+**Quick Wins:**
+| Tool | What it does |
+|------|--------------|
+| `win` | Add a quick win |
+| `wins` | List quick wins |
+| `won` | Mark quick win done |
+
+**Epics:**
+| Tool | What it does |
+|------|--------------|
+| `epic` | Create epic for large features |
+| `epics` | List all epics with progress |
+| `tag` | Link item to epic via tag |
 
 **Resources** (Claude reads these for context):
 - `chkd://conscience` - Session state, guidance, habits
 - `chkd://spec` - Current spec with progress
-
----
-
-## CLI Commands (Fallback)
-
-Use these when MCP isn't connected:
-
-```bash
-# Status
-chkd status              # See progress and current task
-chkd list                # List all spec items
-
-# Building
-chkd working "item"      # Signal starting work
-chkd tick "item"         # Mark complete
-
-# Features
-chkd add "title"         # Add feature with sub-tasks
-chkd add "title" --area BE --story "description"
-
-# Bugs
-chkd bug "description"   # Quick-create a bug
-chkd bugs                # List open bugs
-chkd bugfix "bug"        # Start bugfix
-chkd fix "bug"           # Signal fix ready
-chkd resolve "bug"       # Close after verified
-
-# Quick Wins
-chkd win "title"         # Add quick win
-chkd wins                # List quick wins
-chkd won "query"         # Mark done
-
-# Sessions
-chkd impromptu "desc"    # Start ad-hoc work
-chkd debug "desc"        # Start debug session
-chkd done                # End session
-```
 
 ---
 
@@ -321,11 +308,6 @@ The bugs/quick wins lists exist so nothing gets lost. Fix them later.
 
 ## Troubleshooting
 
-**"chkd: command not found"**
-```bash
-cd ~/chkd && sudo npm link
-```
-
 **"Cannot connect to chkd"**
 ```bash
 cd ~/chkd && npm run dev
@@ -344,6 +326,4 @@ cd ~/chkd && npm run dev
 
 ## Need Help?
 
-- `chkd help` - Command reference
-- `chkd help <command>` - Detailed help
 - UI: `http://localhost:3847`

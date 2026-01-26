@@ -31,27 +31,53 @@ The constraint applies to BOTH parties. If the user goes off-track, you're empow
 
 You're not being difficult - you're enforcing the contract both signed up for.
 
-### MCP Tools (Preferred)
+### MCP Tools
 
 When the chkd MCP server is connected, use these tools:
 
+**Core Workflow:**
 | Tool | What it does |
 |------|--------------|
 | `status` | Get current state - **run this first!** |
-| `working "item"` | Signal starting an item |
-| `tick "item"` | Mark item complete |
-| `bug "desc"` | Log a bug (don't derail, log and continue) |
-| `bugfix "bug"` | Start working on a bug |
-| `fix "bug"` | Signal fix ready for verification |
-| `resolve "bug"` | Close bug after user verified |
-| `win "title"` | Add a quick win |
-| `impromptu "desc"` | Start ad-hoc work session |
-| `debug "desc"` | Start investigation session |
+| `working` | Signal starting an item |
+| `tick` | Mark item complete |
+| `suggest` | Analyze spec, suggest what to work on |
+| `add` | Add feature with workflow sub-tasks |
+| `add_child` | Add sub-task to existing item |
+
+**Sessions & Focus:**
+| Tool | What it does |
+|------|--------------|
+| `impromptu` | Start ad-hoc work session |
+| `debug` | Start investigation session |
 | `done` | End current session |
-| `pulse "status"` | Quick status update |
-| `epic "name"` | Create epic for large features |
+| `pivot` | Change anchor/focus explicitly |
+| `checkin` | 15-minute check-in |
+| `pulse` | Quick status update |
+| `also` | Log off-task work without derailing |
+
+**Bugs:**
+| Tool | What it does |
+|------|--------------|
+| `bug` | Log a bug (don't derail, log and continue) |
+| `bugs` | List all open bugs |
+| `bugfix` | Start working on a bug |
+| `fix` | Signal fix ready for verification |
+| `resolve` | Close bug after user verified |
+
+**Quick Wins:**
+| Tool | What it does |
+|------|--------------|
+| `win` | Add a quick win |
+| `wins` | List quick wins |
+| `won` | Mark quick win done |
+
+**Epics:**
+| Tool | What it does |
+|------|--------------|
+| `epic` | Create epic for large features |
 | `epics` | List all epics with progress |
-| `tag "item" ["tag"]` | Link item to epic via tag |
+| `tag` | Link item to epic via tag |
 
 **Resources** (read for context):
 - `chkd://conscience` - Session state, guidance
