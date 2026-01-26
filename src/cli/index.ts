@@ -258,7 +258,7 @@ async function sync(action?: string) {
 
     let hasConflicts = false;
 
-    // Helper to backup file with timestamp
+    // Helper to backup file with timestamp (keeps only 2 most recent)
     async function backupBeforeSync(filePath: string): Promise<string | null> {
       const ext = path.extname(filePath);
       const base = filePath.slice(0, -ext.length);
@@ -266,6 +266,23 @@ async function sync(action?: string) {
       const backupPath = `${base}-${timestamp}${ext}`;
       try {
         await fs.copyFile(filePath, backupPath);
+
+        // Clean up old backups - keep only 2 most recent
+        const dir = path.dirname(filePath);
+        const baseName = path.basename(base);
+        const files = await fs.readdir(dir);
+        const backups = files
+          .filter(f => f.startsWith(baseName + '-') && f.endsWith(ext) && /\d{4}-\d{2}-\d{2}T\d{2}-\d{2}/.test(f))
+          .sort()
+          .reverse();
+
+        // Delete all but the 2 most recent
+        for (const oldBackup of backups.slice(2)) {
+          try {
+            await fs.unlink(path.join(dir, oldBackup));
+          } catch { /* ignore */ }
+        }
+
         return path.basename(backupPath);
       } catch {
         return null;
