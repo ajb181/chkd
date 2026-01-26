@@ -1,7 +1,14 @@
 {
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "chkd sync manifest - defines what gets synced to other projects",
   "assets": [
+    {
+      "name": "mcp-config",
+      "source": "templates/.mcp.json",
+      "destination": ".mcp.json",
+      "mode": "copy",
+      "description": "MCP server config for Claude Code"
+    },
     {
       "name": "skills",
       "source": "templates/skills",
