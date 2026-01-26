@@ -327,13 +327,22 @@ function findItemByQuery(spec: ParsedSpec, query: string, scopeToParentId?: stri
   const parser = new SpecParser();
   let matches = parser.findItems(spec, query);
 
-  // If scoped to a parent, filter to only children of that parent
-  if (scopeToParentId && matches.length > 1) {
+  // If scoped to a parent, PRIORITIZE children - search them first
+  if (scopeToParentId) {
     const parent = parser.findItemById(spec, scopeToParentId);
     if (parent && parent.children.length > 0) {
-      const childIds = new Set(parent.children.map(c => c.id));
-      const scopedMatches = matches.filter(m => childIds.has(m.id));
-      // Only use scoped matches if we found any
+      // Collect all descendant IDs (children, grandchildren, etc.)
+      const descendantIds = new Set<string>();
+      const collectDescendants = (items: SpecItem[]) => {
+        for (const item of items) {
+          descendantIds.add(item.id);
+          collectDescendants(item.children);
+        }
+      };
+      collectDescendants(parent.children);
+
+      const scopedMatches = matches.filter(m => descendantIds.has(m.id));
+      // Use scoped matches if found - don't fall back to global
       if (scopedMatches.length > 0) {
         matches = scopedMatches;
       }

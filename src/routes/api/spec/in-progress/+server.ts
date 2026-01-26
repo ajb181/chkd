@@ -28,49 +28,83 @@ export const POST: RequestHandler = async ({ request }) => {
     let foundItem: { id: string; title: string; isParent: boolean } | null = null;
     const queryLower = itemQuery.toLowerCase();
 
-    // Check for area code match (BE.23, SD.1)
-    const areaMatch = itemQuery.match(/^([A-Z]{2,3})\.(\d+)$/i);
-
-    for (const area of spec.areas) {
-      if (areaMatch) {
-        const areaCode = areaMatch[1].toUpperCase();
-        const itemNum = areaMatch[2];
-        const sectionCode = `${areaCode}.${itemNum}`;
-        // Search for item with matching section code in title
-        for (const item of area.items) {
-          if (item.title.startsWith(`${sectionCode} `)) {
-            foundItem = { id: item.id, title: item.title, isParent: true };
-            break;
-          }
-        }
-        if (foundItem) break;
-      } else {
-        // Search by title
-        for (const item of area.items) {
-          if (item.title.toLowerCase().includes(queryLower)) {
-            foundItem = { id: item.id, title: item.title, isParent: true };
-            break;
-          }
-          // Check children
-          for (const child of item.children || []) {
-            if (child.title.toLowerCase().includes(queryLower)) {
-              foundItem = { id: child.id, title: child.title, isParent: false };
-              break;
-            }
-          }
-          if (foundItem) break;
-        }
-      }
-      if (foundItem) break;
-    }
-
-    // Get current task ID to scope sub-item search
+    // Get current task ID to scope sub-item search FIRST
     const repo = getRepoByPath(repoPath);
     let scopeToParentId: string | undefined;
+    let currentParent: any = null;
     if (repo) {
       const session = getSession(repo.id);
       if (session.currentTask?.id) {
         scopeToParentId = session.currentTask.id;
+        // Find the parent item
+        for (const area of spec.areas) {
+          for (const item of area.items) {
+            if (item.id === scopeToParentId) {
+              currentParent = item;
+              break;
+            }
+          }
+          if (currentParent) break;
+        }
+      }
+    }
+
+    // Check for area code match (BE.23, SD.1)
+    const areaMatch = itemQuery.match(/^([A-Z]{2,3})\.(\d+)$/i);
+
+    // FIRST: If we have a current parent, search its children first
+    if (currentParent && currentParent.children && !areaMatch) {
+      const searchChildren = (children: any[]): { id: string; title: string } | null => {
+        for (const child of children) {
+          if (child.title.toLowerCase().includes(queryLower)) {
+            return { id: child.id, title: child.title };
+          }
+          if (child.children) {
+            const found = searchChildren(child.children);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const childMatch = searchChildren(currentParent.children);
+      if (childMatch) {
+        foundItem = { ...childMatch, isParent: false };
+      }
+    }
+
+    // SECOND: Search globally if no scoped match
+    if (!foundItem) {
+      for (const area of spec.areas) {
+        if (areaMatch) {
+          const areaCode = areaMatch[1].toUpperCase();
+          const itemNum = areaMatch[2];
+          const sectionCode = `${areaCode}.${itemNum}`;
+          // Search for item with matching section code in title
+          for (const item of area.items) {
+            if (item.title.startsWith(`${sectionCode} `)) {
+              foundItem = { id: item.id, title: item.title, isParent: true };
+              break;
+            }
+          }
+          if (foundItem) break;
+        } else {
+          // Search by title
+          for (const item of area.items) {
+            if (item.title.toLowerCase().includes(queryLower)) {
+              foundItem = { id: item.id, title: item.title, isParent: true };
+              break;
+            }
+            // Check children
+            for (const child of item.children || []) {
+              if (child.title.toLowerCase().includes(queryLower)) {
+                foundItem = { id: child.id, title: child.title, isParent: false };
+                break;
+              }
+            }
+            if (foundItem) break;
+          }
+        }
+        if (foundItem) break;
       }
     }
 
