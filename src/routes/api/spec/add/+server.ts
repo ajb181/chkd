@@ -1,7 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { SpecParser } from '$lib/server/spec/parser';
-import { addItem, DEFAULT_WORKFLOW_STEPS, getWorkflowByType } from '$lib/server/spec/writer';
+import { getWorkflowByType } from '$lib/server/spec/writer';
+import { getRepoByPath } from '$lib/server/db/queries';
+import { createItem, getNextSectionNumber, searchItems } from '$lib/server/db/items';
+import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 
 // Known parameters for validation
@@ -125,21 +128,56 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     }
 
-    // Add the item using unified function
-    const result = await addItem({
-      specPath,
-      title,
-      areaCode,
-      description,
-      story,
+    // Write to DB (no fallback)
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
+    }
+
+    // Create in DB
+    const sectionNumber = getNextSectionNumber(repo.id, areaCode as any);
+    const displayId = `${areaCode}.${sectionNumber}`;
+    const fullTitle = `${displayId} ${title}`;
+
+    const newItem = createItem({
+      repoId: repo.id,
+      displayId,
+      title: fullTitle,
+      description: description || undefined,
+      story: story || undefined,
       keyRequirements: Array.isArray(keyRequirements) ? keyRequirements : undefined,
       filesToChange: Array.isArray(filesToChange) ? filesToChange : undefined,
       testing: Array.isArray(testing) ? testing : undefined,
-      fileLink: typeof fileLink === 'string' ? fileLink : undefined,
-      tasks: Array.isArray(tasks) ? tasks : undefined,
-      withWorkflow,
-      workflowType: typeof workflowType === 'string' ? workflowType : undefined
+      areaCode: areaCode as any,
+      sectionNumber,
+      sortOrder: sectionNumber - 1,
+      status: 'open',
+      priority: 'medium'
     });
+
+    // Create workflow sub-tasks
+    if (tasksToAdd.length > 0) {
+      tasksToAdd.forEach((taskTitle, index) => {
+        createItem({
+          repoId: repo.id,
+          displayId: `${displayId}.${index + 1}`,
+          title: taskTitle,
+          areaCode: areaCode as any,
+          sectionNumber,
+          parentId: newItem.id,
+          sortOrder: index,
+          status: 'open',
+          priority: 'medium'
+        });
+      });
+    }
+
+    const result = {
+      itemId: newItem.id,
+      sectionId: displayId,
+      areaCode,
+      title: fullTitle
+    };
 
     return json({
       success: true,

@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { markItemInProgress } from '$lib/server/spec/writer';
 import { SpecParser } from '$lib/server/spec/parser';
 import { getRepoByPath, getSession, updateSession, setAnchor } from '$lib/server/db/queries';
+import { findItemByQuery, markItemInProgress as markItemInProgressDb } from '$lib/server/db/items';
 import path from 'path';
 
 // POST /api/spec/in-progress - Mark item as in-progress
@@ -108,7 +108,19 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    await markItemInProgress(specPath, itemQuery, scopeToParentId);
+    // Write to DB (no fallback)
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database' }, { status: 404 });
+    }
+
+    const dbItem = findItemByQuery(repo.id, itemQuery);
+    if (!dbItem) {
+      return json({ success: false, error: `Item "${itemQuery}" not found in database. Run migration first.` }, { status: 404 });
+    }
+
+    markItemInProgressDb(dbItem.id);
+    // Update foundItem with DB data
+    foundItem = { id: dbItem.id, title: dbItem.title, isParent: !dbItem.parentId };
 
     // Update session with current task info so tick can find children
     if (repo && foundItem) {

@@ -2,8 +2,14 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRepoByPath, getSession, saveItemDuration, updateSession, clearSession } from '$lib/server/db/queries';
 import { SpecParser } from '$lib/server/spec/parser';
-import { markItemComplete, removeCompletedChildren } from '$lib/server/spec/writer';
 import { clearQueue } from '$lib/server/proposal';
+import {
+  findItemByQuery,
+  getItem,
+  getChildren,
+  markItemDone,
+  deleteItem
+} from '$lib/server/db/items';
 import path from 'path';
 
 // POST /api/spec/tick - Mark an item complete
@@ -267,7 +273,28 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    await markItemComplete(specPath, targetId);
+    // Write to DB (no fallback)
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database' }, { status: 404 });
+    }
+
+    const dbItem = findItemByQuery(repo.id, targetId);
+    if (!dbItem) {
+      return json({ success: false, error: `Item "${targetId}" not found in database. Run migration first.` }, { status: 404 });
+    }
+
+    // Mark done in DB
+    markItemDone(dbItem.id);
+
+    // If this is a top-level item, delete completed children from DB
+    if (!dbItem.parentId) {
+      const children = getChildren(dbItem.id);
+      for (const child of children) {
+        if (child.status === 'done') {
+          deleteItem(child.id);
+        }
+      }
+    }
 
     // Save item duration if we were tracking this item
     if (repo && session?.currentItem?.startTime) {
@@ -283,12 +310,6 @@ export const POST: RequestHandler = async ({ request }) => {
     // If ticking a top-level item (no parent), clear the session
     if (repo && !parentId) {
       clearSession(repo.id);
-      // Clean up workflow scaffolding - remove completed children
-      try {
-        await removeCompletedChildren(specPath, targetId);
-      } catch {
-        // Non-fatal - item still completed even if cleanup fails
-      }
     }
 
     // Get and clear queued items (user added while Claude was working)
