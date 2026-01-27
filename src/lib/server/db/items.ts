@@ -432,3 +432,51 @@ export function markItemDone(id: string): SpecItem | null {
 export function markItemInProgress(id: string): SpecItem | null {
   return updateItemStatus(id, 'in-progress');
 }
+
+// ============================================
+// TBC Check (To Be Confirmed)
+// ============================================
+
+export interface TbcCheckResult {
+  hasTbc: boolean;
+  tbcFields: string[];
+  itemTitle: string;
+}
+
+/**
+ * Check if an item has TBC (to be confirmed) fields that need to be filled in.
+ * Returns array of field names that still have TBC.
+ */
+export function checkItemTbc(repoId: string, itemQuery: string): TbcCheckResult {
+  const item = findItemByQuery(repoId, itemQuery);
+
+  if (!item) {
+    return { hasTbc: false, tbcFields: [], itemTitle: itemQuery };
+  }
+
+  const tbcFields: string[] = [];
+
+  // Check keyRequirements
+  if (item.keyRequirements.length === 0 ||
+      (item.keyRequirements.length === 1 && item.keyRequirements[0].toLowerCase() === 'tbc')) {
+    tbcFields.push('Key requirements');
+  }
+
+  // Check filesToChange
+  if (item.filesToChange.length === 0 ||
+      (item.filesToChange.length === 1 && item.filesToChange[0].toLowerCase() === 'tbc')) {
+    tbcFields.push('Files to change');
+  }
+
+  // Check testing
+  if (item.testing.length === 0 ||
+      (item.testing.length === 1 && item.testing[0].toLowerCase() === 'tbc')) {
+    tbcFields.push('Testing');
+  }
+
+  return {
+    hasTbc: tbcFields.length > 0,
+    tbcFields,
+    itemTitle: item.title
+  };
+}

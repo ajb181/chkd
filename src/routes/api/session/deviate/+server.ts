@@ -1,9 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { addFeatureWithWorkflow } from '$lib/server/spec/writer';
+import { getWorkflowByType } from '$lib/server/spec/writer';
 import { addDeviation, addScopeChange } from '$lib/server/proposal';
-import { getSession, updateSession, getRepoByPath } from '$lib/server/db/queries';
-import path from 'path';
+import { updateSession, getRepoByPath } from '$lib/server/db/queries';
+import { createItem, getNextSectionNumber } from '$lib/server/db/items';
+import type { AreaCode } from '$lib/types';
 
 // POST /api/session/deviate - Quick add off-plan item to spec and log deviation
 export const POST: RequestHandler = async ({ request }) => {
@@ -21,18 +22,46 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'Repository not found' }, { status: 404 });
     }
 
-    // Add item to spec with workflow template
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-
     // Default to Frontend if no area specified
-    const targetArea = areaCode || 'FE';
+    const targetArea = (areaCode || 'FE') as AreaCode;
 
-    const result = await addFeatureWithWorkflow(specPath, targetArea, title, description);
+    // Create item in DB
+    const sectionNumber = getNextSectionNumber(repo.id, targetArea);
+    const displayId = `${targetArea}.${sectionNumber}`;
+    const fullTitle = `${displayId} ${title}`;
+
+    const newItem = createItem({
+      repoId: repo.id,
+      displayId,
+      title: fullTitle,
+      description: description || undefined,
+      areaCode: targetArea,
+      sectionNumber,
+      sortOrder: sectionNumber - 1,
+      status: 'open',
+      priority: 'medium'
+    });
+
+    // Add workflow sub-tasks
+    const tasks = getWorkflowByType(undefined, targetArea);
+    tasks.forEach((taskTitle: string, index: number) => {
+      createItem({
+        repoId: repo.id,
+        displayId: `${displayId}.${index + 1}`,
+        title: taskTitle,
+        areaCode: targetArea,
+        sectionNumber,
+        parentId: newItem.id,
+        sortOrder: index,
+        status: 'open',
+        priority: 'medium'
+      });
+    });
 
     // Log the scope change
     addScopeChange(repoPath, {
       type: 'added',
-      itemId: result.itemId,
+      itemId: newItem.id,
       title,
       timestamp: new Date(),
     });
@@ -47,7 +76,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // Optionally set as current task
     if (setAsCurrent) {
       updateSession(repo.id, {
-        currentTask: { id: result.itemId, title, phase: null },
+        currentTask: { id: newItem.id, title, phase: null },
         status: 'building',
         startTime: new Date().toISOString(),
       });
@@ -56,9 +85,9 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({
       success: true,
       data: {
-        itemId: result.itemId,
+        itemId: newItem.id,
+        sectionId: displayId,
         addedToArea: targetArea,
-        line: result.line,
         isCurrentTask: setAsCurrent || false,
         message: `Added "${title}" to ${targetArea}`,
       },

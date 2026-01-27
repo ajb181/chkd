@@ -16,8 +16,7 @@ import { execSync } from 'child_process';
 // HTTP client for API calls
 import * as api from './http-client.js';
 
-// Note: Parser removed - DB is source of truth
-import { checkItemTbc } from '../lib/server/spec/writer.js';
+// Note: Parser removed - DB is source of truth via HTTP API
 
 // Cache the resolved repo path and worker context
 let cachedRepoPath: string | null = null;
@@ -986,18 +985,16 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-
     // Check for TBC fields first - block work if not properly defined
     try {
-      const tbcCheck = await checkItemTbc(specPath, item);
-      if (tbcCheck.hasTbc) {
+      const tbcResponse = await api.checkItemTbc(repoPath, item);
+      if (tbcResponse.success && tbcResponse.data?.hasTbc) {
         return {
           content: [{
             type: "text",
-            text: `⚠️ Cannot start work on "${tbcCheck.itemTitle}"\n\n` +
+            text: `⚠️ Cannot start work on "${tbcResponse.data.itemTitle}"\n\n` +
               `📋 These fields still have TBC (to be confirmed):\n` +
-              tbcCheck.tbcFields.map(f => `  • ${f}`).join('\n') + '\n\n' +
+              tbcResponse.data.tbcFields.map((f: string) => `  • ${f}`).join('\n') + '\n\n' +
               `💡 Fill in these fields first during Explore phase or ask user for details.`
           }]
         };

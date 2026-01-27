@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { SpecParser } from '../spec/parser';
+import { getRepoByPath } from '../db/queries';
+import { getItemsByTag } from '../db/items';
 
 export interface Epic {
   name: string;
@@ -249,32 +250,21 @@ export async function getEpic(repoPath: string, query: string): Promise<Epic | n
 }
 
 /**
- * Get epic with progress from spec items
+ * Get epic with progress from spec items (DB version)
  */
 export async function getEpicWithProgress(
   repoPath: string,
   epic: Epic
 ): Promise<EpicWithProgress> {
-  const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-
   let itemCount = 0;
   let completedCount = 0;
 
-  try {
-    const parser = new SpecParser();
-    const spec = await parser.parseFile(specPath);
-
-    // Find items with matching tag
-    for (const area of spec.areas) {
-      for (const item of area.items) {
-        if (item.tags?.includes(epic.tag)) {
-          itemCount++;
-          if (item.completed) completedCount++;
-        }
-      }
-    }
-  } catch {
-    // Spec not found or parse error
+  const repo = getRepoByPath(repoPath);
+  if (repo) {
+    // Query items with matching tag from DB
+    const taggedItems = getItemsByTag(repo.id, epic.tag);
+    itemCount = taggedItems.length;
+    completedCount = taggedItems.filter(item => item.status === 'done').length;
   }
 
   return {

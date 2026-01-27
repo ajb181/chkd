@@ -233,6 +233,10 @@ export async function setTags(repoPath: string, itemId: string, tags: string[]) 
   return request('POST', '/api/spec/tags', { repoPath, itemId, tags });
 }
 
+export async function checkItemTbc(repoPath: string, item: string) {
+  return request('GET', '/api/spec/check-tbc', undefined, { repoPath, item });
+}
+
 // ============================================
 // Quick Wins API
 // ============================================

@@ -7,8 +7,10 @@ import {
   generateId,
   type FlaggedItem,
 } from '$lib/server/proposal';
-import { addFeatureWithWorkflow } from '$lib/server/spec/writer';
-import path from 'path';
+import { getWorkflowByType } from '$lib/server/spec/writer';
+import { getRepoByPath } from '$lib/server/db/queries';
+import { createItem, getNextSectionNumber } from '$lib/server/db/items';
+import type { AreaCode } from '$lib/types';
 
 // POST /api/session/respond-to-proposal - User responds to a proposal
 export const POST: RequestHandler = async ({ request }) => {
@@ -48,17 +50,50 @@ export const POST: RequestHandler = async ({ request }) => {
     if (response === 'approve') {
       proposal.status = 'approved';
 
-      // Add to spec if it's an 'add' type
-      let addedToSpec = false;
+      // Add to DB if it's an 'add' type
+      let addedToDb = false;
       if (proposal.type === 'add') {
-        const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-        const targetArea = proposal.areaCode || 'FE';
+        const repo = getRepoByPath(repoPath);
+        if (repo) {
+          const targetArea = (proposal.areaCode || 'FE') as AreaCode;
 
-        try {
-          await addFeatureWithWorkflow(specPath, targetArea, proposal.title, proposal.description);
-          addedToSpec = true;
-        } catch (err) {
-          console.error('Failed to add to spec:', err);
+          try {
+            const sectionNumber = getNextSectionNumber(repo.id, targetArea);
+            const displayId = `${targetArea}.${sectionNumber}`;
+            const fullTitle = `${displayId} ${proposal.title}`;
+
+            const newItem = createItem({
+              repoId: repo.id,
+              displayId,
+              title: fullTitle,
+              description: proposal.description || undefined,
+              areaCode: targetArea,
+              sectionNumber,
+              sortOrder: sectionNumber - 1,
+              status: 'open',
+              priority: 'medium'
+            });
+
+            // Add workflow sub-tasks
+            const tasks = getWorkflowByType(undefined, targetArea);
+            tasks.forEach((taskTitle: string, index: number) => {
+              createItem({
+                repoId: repo.id,
+                displayId: `${displayId}.${index + 1}`,
+                title: taskTitle,
+                areaCode: targetArea,
+                sectionNumber,
+                parentId: newItem.id,
+                sortOrder: index,
+                status: 'open',
+                priority: 'medium'
+              });
+            });
+
+            addedToDb = true;
+          } catch (err) {
+            console.error('Failed to add to DB:', err);
+          }
         }
       }
 
@@ -75,7 +110,7 @@ export const POST: RequestHandler = async ({ request }) => {
         data: {
           status: 'approved',
           message: 'Change approved. Claude can continue.',
-          addedToSpec,
+          addedToDb,
         },
       });
     }
