@@ -201,7 +201,7 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({
       success: false,
       error: String(error),
-      hint: 'Check that repoPath is valid and docs/SPEC.md exists'
+      hint: 'Check that repoPath is valid and the repository is registered in chkd'
     }, { status: 500 });
   }
 };

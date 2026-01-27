@@ -1,5 +1,3 @@
-import fs from 'fs/promises';
-
 export type ItemStatus = 'open' | 'in-progress' | 'done' | 'skipped' | 'blocked';
 export type Priority = 1 | 2 | 3 | null;  // P1=High, P2=Medium, P3=Low, null=Backlog
 
@@ -77,11 +75,6 @@ const AREA_CODES: Record<string, string> = {
 };
 
 export class SpecParser {
-  async parseFile(specPath: string): Promise<ParsedSpec> {
-    const content = await fs.readFile(specPath, 'utf-8');
-    return this.parse(content);
-  }
-
   parse(content: string): ParsedSpec {
     const lines = content.split('\n');
     const areas: SpecArea[] = [];

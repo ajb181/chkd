@@ -2,8 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
   import { marked } from 'marked';
-  import { getSpec, getSession, setSessionState, tickItem, skipItem as skipItemApi, editItem as editItemApi, deleteItem as deleteItemApi, addChildItem as addChildItemApi, moveItem as moveItemApi, setPriority as setPriorityApi, setTags as setTagsApi, getRepos, addRepo, getProposals, getQueue, addToQueue, removeFromQueue, getBugs, polishBug, getQuickWins, createQuickWin, completeQuickWin, deleteQuickWin, getItemDurations, getAnchor, setAnchor, clearAnchor, getAttachments, attachFile, deleteAttachment, uploadAttachment, getWorkers, getSignals, spawnWorker, deleteWorker, updateWorker, dismissSignal, resolveWorkerConflict, getEpics } from '$lib/api';
-  import type { EpicWithProgress } from '$lib/api';
+  import { getSpec, getSession, setSessionState, tickItem, skipItem as skipItemApi, editItem as editItemApi, deleteItem as deleteItemApi, addChildItem as addChildItemApi, moveItem as moveItemApi, setPriority as setPriorityApi, setTags as setTagsApi, getRepos, addRepo, getProposals, getQueue, addToQueue, removeFromQueue, getBugs, polishBug, getQuickWins, createQuickWin, completeQuickWin, deleteQuickWin, getItemDurations, getAnchor, setAnchor, clearAnchor, getAttachments, attachFile, deleteAttachment, uploadAttachment, getWorkers, getSignals, spawnWorker, deleteWorker, updateWorker, dismissSignal, resolveWorkerConflict, getEpics, getRecentActivity } from '$lib/api';
+  import type { EpicWithProgress, RecentItem } from '$lib/api';
   import type { Attachment, Worker, ManagerSignal, WorkerStatus } from '$lib/api';
   import type { ParsedSpec, SpecArea, SpecItem, Session, ItemStatus, Priority, Repository, QueueItem, Bug, HandoverNote, QuickWin, AnchorInfo } from '$lib/api';
   import FeatureCapture from '$lib/components/FeatureCapture.svelte';
@@ -304,20 +304,10 @@
 
   $: openQuickWins = quickWins.filter(w => w.status === 'open');
 
-  // Recent Activity
-  import { getRecentSpec, type RecentSpecItem } from '$lib/api';
-  let recentAdded: RecentSpecItem[] = [];
-  let recentCompleted: RecentSpecItem[] = [];
+  // Recent Activity (from database)
+  let recentAdded: RecentItem[] = [];
+  let recentCompleted: RecentItem[] = [];
   let recentExpanded = false;
-
-  async function loadRecentActivity() {
-    if (!repoPath) return;
-    const res = await getRecentSpec(repoPath);
-    if (res.success && res.data) {
-      recentAdded = res.data.recentAdded;
-      recentCompleted = res.data.recentCompleted;
-    }
-  }
 
   // Blocked/Roadblocked items
   let blockedExpanded = false;
@@ -900,7 +890,7 @@
   async function loadData() {
     if (!repoPath) return;
     try {
-      const [specRes, sessionRes, proposalsRes, queueRes, bugsRes, quickWinsRes, durationsRes, anchorRes, workersRes, signalsRes, recentRes, epicsRes] = await Promise.all([
+      const [specRes, sessionRes, proposalsRes, queueRes, bugsRes, quickWinsRes, durationsRes, anchorRes, workersRes, signalsRes, epicsRes, recentRes] = await Promise.all([
         getSpec(repoPath),
         getSession(repoPath),
         getProposals(repoPath),
@@ -911,8 +901,8 @@
         getAnchor(repoPath),
         getWorkers(repoPath),
         getSignals(repoPath, true), // activeOnly
-        getRecentSpec(repoPath),
-        getEpics(repoPath)
+        getEpics(repoPath),
+        getRecentActivity(repoPath)
       ]);
 
       if (proposalsRes.success) {
@@ -931,13 +921,13 @@
         quickWins = quickWinsRes.data;
       }
 
-      if (recentRes.success && recentRes.data) {
-        recentAdded = recentRes.data.recentAdded;
-        recentCompleted = recentRes.data.recentCompleted;
-      }
-
       if (epicsRes.success && epicsRes.data) {
         epics = epicsRes.data;
+      }
+
+      if (recentRes.success && recentRes.data) {
+        recentAdded = recentRes.data.added;
+        recentCompleted = recentRes.data.completed;
       }
 
       if (durationsRes.success && durationsRes.data) {
@@ -984,8 +974,8 @@
         }
 
         // Get active workers (not merged/cancelled)
-        const activeWorkers = (workersRes.success && Array.isArray(workersRes.data))
-          ? workersRes.data.filter((w: Worker) => !['merged', 'cancelled'].includes(w.status))
+        const activeWorkers = (workersRes.success && Array.isArray(workersRes.data?.workers))
+          ? workersRes.data.workers.filter((w: Worker) => !['merged', 'cancelled'].includes(w.status))
           : [];
 
         // Get active signals (not dismissed)

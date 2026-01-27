@@ -1422,7 +1422,7 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `🏷️ Tags set on ${itemId}: ${tagList}\n\n💡 Filter by tag in the UI or use #tag syntax in SPEC.md`
+        text: `🏷️ Tags set on ${itemId}: ${tagList}\n\n💡 Filter by tag in the UI`
       }]
     };
   }
@@ -2458,7 +2458,7 @@ server.resource(
 // Spec resource - read the current spec
 server.resource(
   "chkd://spec",
-  "The current SPEC.md contents - task list, areas, and progress. Read this to understand what needs to be done.",
+  "The current spec from the database - task list, areas, and progress. Read this to understand what needs to be done.",
   async () => {
     const repoPath = getRepoPath();
 
@@ -2588,7 +2588,7 @@ server.tool(
     const structure = await getDirectoryStructure(targetDir);
 
     // Check for key files
-    const keyFiles = ['package.json', 'tsconfig.json', 'svelte.config.js', 'vite.config.ts', 'docs/SPEC.md'];
+    const keyFiles = ['package.json', 'tsconfig.json', 'svelte.config.js', 'vite.config.ts', 'CLAUDE.md'];
     const existingKeys: string[] = [];
     for (const file of keyFiles) {
       try {
@@ -4078,128 +4078,6 @@ server.tool(
       text += `🆔 New ID: ${data.data.newItemId}\n`;
       text += `📍 Area: ${data.data.targetArea}\n\n`;
       text += `The item has been moved to the target repository.`;
-
-      return {
-        content: [{ type: "text", text }]
-      };
-    } catch (error) {
-      return {
-        content: [{ type: "text", text: `Error: ${error}` }]
-      };
-    }
-  }
-);
-
-// spec_check - Validate SPEC.md format
-server.tool(
-  "spec_check",
-  "Validate SPEC.md format and find issues. Use --fix to auto-fix some problems.",
-  {
-    fix: z.boolean().optional().describe("Auto-fix fixable issues (default: false)")
-  },
-  async ({ fix = false }) => {
-    const repoPath = getRepoPath(); if (!repoPath) {
-      return {
-        content: [{ type: "text", text: "No repo path set." }]
-      };
-    }
-
-    try {
-      const res = await fetch(`${HTTP_BASE}/api/spec/validate?repoPath=${encodeURIComponent(repoPath)}&fix=${fix}`);
-      const data = await res.json();
-
-      if (!data.success) {
-        return {
-          content: [{ type: "text", text: `Error: ${data.error}` }]
-        };
-      }
-
-      const { valid, issues, fixed } = data.data;
-
-      if (valid && issues.length === 0) {
-        return {
-          content: [{ type: "text", text: "✅ SPEC.md is valid - no issues found" }]
-        };
-      }
-
-      let text = `${valid ? '⚠️' : '❌'} SPEC.md Validation Results\n`;
-      text += `═══════════════════════════════════════\n\n`;
-
-      if (issues.length > 0) {
-        const errors = issues.filter((i: any) => i.type === 'error');
-        const warnings = issues.filter((i: any) => i.type === 'warning');
-
-        if (errors.length > 0) {
-          text += `**Errors (${errors.length}):**\n`;
-          for (const issue of errors) {
-            text += `  ❌ Line ${issue.line || '?'}: ${issue.message}\n`;
-          }
-          text += `\n`;
-        }
-
-        if (warnings.length > 0) {
-          text += `**Warnings (${warnings.length}):**\n`;
-          for (const issue of warnings) {
-            text += `  ⚠️ Line ${issue.line || '?'}: ${issue.message}\n`;
-          }
-          text += `\n`;
-        }
-      }
-
-      if (fixed && fixed.length > 0) {
-        text += `**Fixed (${fixed.length}):**\n`;
-        for (const f of fixed) {
-          text += `  ✓ ${f}\n`;
-        }
-        text += `\n`;
-      }
-
-      if (!fix && issues.some((i: any) => i.fixable)) {
-        text += `💡 Run spec_check(fix: true) to auto-fix some issues`;
-      }
-
-      return {
-        content: [{ type: "text", text }]
-      };
-    } catch (error) {
-      return {
-        content: [{ type: "text", text: `Error: ${error}` }]
-      };
-    }
-  }
-);
-
-// spec_repair - Repair/reformat SPEC.md using AI
-server.tool(
-  "spec_repair",
-  "Reformat SPEC.md using AI to fix formatting issues. Creates a backup before modifying.",
-  {},
-  async () => {
-    const repoPath = getRepoPath(); if (!repoPath) {
-      return {
-        content: [{ type: "text", text: "No repo path set." }]
-      };
-    }
-
-    try {
-      const res = await fetch(`${HTTP_BASE}/api/spec/repair`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoPath: repoPath })
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        return {
-          content: [{ type: "text", text: `Error: ${data.error}` }]
-        };
-      }
-
-      let text = `✅ SPEC.md Repaired\n`;
-      text += `═══════════════════════════════════════\n\n`;
-      text += `📁 Backup saved to: docs/SPEC-backup.md\n`;
-      text += `📊 Result: ${data.data.totalItems} items across ${data.data.areaCount} areas\n`;
-      text += `📈 Progress: ${data.data.progress}% complete`;
 
       return {
         content: [{ type: "text", text }]

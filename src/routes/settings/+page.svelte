@@ -433,7 +433,7 @@
         </button>
       </div>
       <p class="input-help">
-        Enter the full path to a git repository containing a docs/SPEC.md file.
+        Enter the full path to a git repository. Run <code>chkd init</code> in the repo first.
       </p>
     </div>
   </section>

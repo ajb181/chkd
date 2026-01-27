@@ -29,7 +29,7 @@
       <div class="feature-card">
         <div class="feature-icon">📋</div>
         <h3>Spec-Driven</h3>
-        <p>Define features in <code>docs/SPEC.md</code>. Claude reads the spec and builds systematically, ticking items as they're completed.</p>
+        <p>Define features with <code>chkd add</code>. Claude reads the spec and builds systematically, ticking items as they're completed.</p>
       </div>
 
       <div class="feature-card">
@@ -71,7 +71,7 @@
         <div class="step-number">1</div>
         <div class="step-content">
           <h3>Define your spec</h3>
-          <p>Write features in <code>docs/SPEC.md</code> with clear acceptance criteria and sub-tasks.</p>
+          <p>Add features with <code>chkd add</code> or via the MCP tools. Tasks are stored in the chkd database.</p>
         </div>
       </div>
 

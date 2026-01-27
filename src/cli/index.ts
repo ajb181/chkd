@@ -1089,61 +1089,6 @@ async function startBugfix(query: string, options: { convert?: boolean } = {}) {
   console.log('');
 }
 
-async function repair() {
-  const cwd = process.cwd();
-  const path = await import('path');
-  const fs = await import('fs/promises');
-
-  const specPath = path.join(cwd, 'docs', 'SPEC.md');
-
-  // Check if SPEC.md exists
-  let specContent: string;
-  try {
-    specContent = await fs.readFile(specPath, 'utf-8');
-  } catch {
-    console.log(`\n  ❌ No docs/SPEC.md found`);
-    console.log(`  Run 'chkd init' or 'chkd upgrade' first.\n`);
-    return;
-  }
-
-  // Check if LLM is available
-  const { isAvailable, repairSpec } = await import('./llm.js');
-
-  if (!isAvailable()) {
-    console.log(`\n  ❌ No API key configured`);
-    console.log(`  Set CHKD_API_KEY or ANTHROPIC_API_KEY environment variable.\n`);
-    return;
-  }
-
-  console.log(`\n  ⏳ Analyzing and reformatting SPEC.md...`);
-
-  try {
-    const repairedContent = await repairSpec(specContent);
-
-    // Create backup
-    const backupPath = path.join(cwd, 'docs', 'SPEC-backup.md');
-    await fs.writeFile(backupPath, specContent, 'utf-8');
-    console.log(`  ✓ Backed up to docs/SPEC-backup.md`);
-
-    // Write repaired content
-    await fs.writeFile(specPath, repairedContent, 'utf-8');
-    console.log(`  ✓ SPEC.md reformatted`);
-
-    // Validate by calling the API
-    const res = await api(`/api/spec?repoPath=${encodeURIComponent(cwd)}`);
-    if (res.success && res.data) {
-      console.log(`\n  📊 Result: ${res.data.totalItems} items across ${res.data.phases?.length || 0} areas`);
-      console.log(`  Progress: ${res.data.progress}% complete\n`);
-    } else {
-      console.log(`\n  ⚠ Warning: Could not validate. Check docs/SPEC.md manually.`);
-      console.log(`  Original saved to docs/SPEC-backup.md\n`);
-    }
-  } catch (err) {
-    console.log(`\n  ❌ Repair failed: ${err}`);
-    console.log(`  SPEC.md unchanged.\n`);
-  }
-}
-
 async function bug(description: string, flags: Record<string, string | boolean>) {
   if (!description) {
     console.log(`\n  Usage: chkd bug "description" [options]\n`);
@@ -1276,60 +1221,6 @@ async function also(description: string) {
 
   console.log(`\n  ✓ Logged: "${description}"`);
   await showContext();
-  console.log('');
-}
-
-async function check(flags: Record<string, string | boolean>) {
-  const cwd = process.cwd();
-  const fix = flags.fix === true;
-
-  const res = await api(`/api/spec/validate?repoPath=${encodeURIComponent(cwd)}&fix=${fix}`);
-
-  if (!res.success) {
-    console.log(`\n  ❌ ${res.error}\n`);
-    return;
-  }
-
-  const { valid, issues, fixed } = res.data;
-
-  if (valid && issues.length === 0) {
-    console.log(`\n  ✅ SPEC.md is valid\n`);
-    return;
-  }
-
-  console.log(`\n  ${valid ? '⚠️' : '❌'}  SPEC.md Validation Results`);
-  console.log(`  ─────────────────────────────────────────────────────────────`);
-
-  if (issues.length > 0) {
-    const errors = issues.filter((i: any) => i.type === 'error');
-    const warnings = issues.filter((i: any) => i.type === 'warning');
-
-    if (errors.length > 0) {
-      console.log(`\n  Errors (${errors.length}):`);
-      for (const issue of errors) {
-        console.log(`    ❌ Line ${issue.line || '?'}: ${issue.message}`);
-      }
-    }
-
-    if (warnings.length > 0) {
-      console.log(`\n  Warnings (${warnings.length}):`);
-      for (const issue of warnings) {
-        console.log(`    ⚠️  Line ${issue.line || '?'}: ${issue.message}`);
-      }
-    }
-  }
-
-  if (fixed && fixed.length > 0) {
-    console.log(`\n  Fixed (${fixed.length}):`);
-    for (const f of fixed) {
-      console.log(`    ✓ ${f}`);
-    }
-  }
-
-  if (!fix && issues.some((i: any) => i.fixable)) {
-    console.log(`\n  💡 Run 'chkd check --fix' to auto-fix some issues`);
-  }
-
   console.log('');
 }
 
@@ -2016,7 +1907,7 @@ async function list() {
 
   const spec = specRes.data;
   if (!spec || !spec.areas) {
-    console.log(`\n  No spec found. Create docs/SPEC.md first.\n`);
+    console.log(`\n  No tasks found. Add tasks with 'chkd add' or run 'chkd migrate' if you have a SPEC.md.\n`);
     return;
   }
 
@@ -2180,12 +2071,11 @@ function help(command?: string) {
     impromptu "desc"    Start ad-hoc work not in spec
     debug "desc"        Start debug/investigation session
 
-  SPEC
+  TASKS
 
     add "title"         Add feature (explicit control - pass title/tasks/story)
     create "request"    Create feature (AI processes raw input)
-    check [--fix]       Validate SPEC.md format (--fix to auto-fix)
-    repair              Reformat SPEC.md using AI (fixes formatting)
+    migrate             Import SPEC.md to database (one-time migration)
 
   BUILDING (use in Claude Code)
 
@@ -2200,8 +2090,8 @@ function help(command?: string) {
     chkd bug "Broken"   # Quick-add a bug
     chkd also "Fixed X" # Log off-plan work
     chkd bugs           # See open bugs
-    chkd repair         # Fix SPEC.md formatting
     chkd init           # Set up new project
+    chkd migrate        # Import SPEC.md to DB
 
   GETTING STARTED
 
@@ -2504,10 +2394,8 @@ function showCommandHelp(command: string) {
 
   REQUIRES:
     - Must be a git repository (run 'git init' first)
-    - No existing docs/SPEC.md (use 'upgrade' instead)
 
   CREATES:
-    docs/SPEC.md          Your feature checklist
     docs/GUIDE.md         How to use chkd
     CLAUDE.md             Instructions for Claude
     .claude/skills/       Build skills (/chkd, /bugfix, etc.)
@@ -2521,7 +2409,7 @@ function showCommandHelp(command: string) {
     chkd init "My App"       # Custom project name
 
   NEXT STEPS:
-    1. Edit docs/SPEC.md to add your features
+    1. Add tasks with 'chkd add "Feature name"'
     2. Start the chkd server: npm run dev (in chkd folder)
     3. Use /chkd <task_id> in Claude Code to build
 `,
@@ -2557,7 +2445,7 @@ function showCommandHelp(command: string) {
 
   NEXT STEPS:
     1. Review any *-old backup files
-    2. Edit docs/SPEC.md if needed
+    2. Run 'chkd migrate' if you have a docs/SPEC.md
     3. Run 'chkd status' to verify
 `,
     workflow: `
@@ -2597,7 +2485,7 @@ function showCommandHelp(command: string) {
   chkd tick ["item"]
   ─────────────────────────────────────────────────────────────
 
-  Mark an item as complete in SPEC.md.
+  Mark an item as complete.
 
   ARGUMENTS:
     [item]    Item title, ID, or task number (e.g., "SD.1", "Login page")
@@ -2670,7 +2558,7 @@ function showCommandHelp(command: string) {
     - Returns current task to queue (NOT marked complete)
     - Saves handover note (shown when task is started again)
     - Clears active session - UI shows idle
-    - Task stays incomplete in SPEC.md
+    - Task stays incomplete in database
 
   WHEN TO USE:
     - Need to switch to something else mid-task
@@ -2706,7 +2594,7 @@ function showCommandHelp(command: string) {
 
   WHAT IT DOES:
     - Checks all sub-items are complete (blocks if not)
-    - Marks current task as complete in SPEC.md
+    - Marks current task as complete
     - Clears the active session
     - Shows the next available task (if any)
     - UI updates to show idle state
@@ -2770,7 +2658,7 @@ function showCommandHelp(command: string) {
 
   WHAT IT DOES:
     - Updates session to show current item
-    - Marks item as [~] in-progress in SPEC.md
+    - Marks item as in-progress
     - Shows in chkd status output
 
   WHEN TO USE:
@@ -2876,7 +2764,7 @@ function showCommandHelp(command: string) {
     progress    Show current task's sub-items
     add         Add a feature to spec
     edit        Update an item's title/story
-    repair      Reformat SPEC.md using AI
+    migrate     Import SPEC.md to database
     init        Initialize chkd in new project
     upgrade     Add/update chkd in existing project
     workflow    Show development workflow
@@ -2885,13 +2773,13 @@ function showCommandHelp(command: string) {
     chkd help status       # How to use status
     chkd help list         # How to list items
     chkd help tick         # How to tick items
-    chkd help repair       # How to repair spec
+    chkd help migrate      # How to migrate from SPEC.md
 `,
     add: `
   chkd add "title" [--story "desc"] [--area SD|FE|BE] [--dry-run]
   ─────────────────────────────────────────────────────────────
 
-  Add a new feature/item to SPEC.md.
+  Add a new feature/item to the chkd database.
 
   ARGUMENTS:
     "title"    The feature title (required)
@@ -3118,47 +3006,29 @@ function showCommandHelp(command: string) {
     chkd win         # Add a quick win
     chkd wins        # List quick wins
 `,
-    repair: `
-  chkd repair
+    migrate: `
+  chkd migrate
   ─────────────────────────────────────────────────────────────
 
-  Reformat SPEC.md using AI to fix formatting issues.
+  Import tasks from docs/SPEC.md to the chkd database.
 
   WHAT IT DOES:
-    1. Reads your docs/SPEC.md
-    2. Uses AI to reformat to correct chkd format
-    3. Creates backup at docs/SPEC-backup.md
-    4. Writes reformatted content
-    5. Validates the result
-
-  REQUIRES:
-    - API key: CHKD_API_KEY or ANTHROPIC_API_KEY env var
-    - Existing docs/SPEC.md file
+    1. Reads your docs/SPEC.md file
+    2. Parses all items and sub-items
+    3. Imports them to the chkd database
+    4. Deletes SPEC.md on success
 
   WHEN TO USE:
-    - After manually editing SPEC.md
-    - When items are formatted incorrectly
-    - When area headers don't match expected format
-    - After dumping quick notes into the spec
+    - One-time migration from SPEC.md to database
+    - When switching from file-based to DB-based task management
 
-  WHAT IT FIXES:
-    - Item format: - [ ] **SD.1 Title** - Description
-    - Area headers: ## Area: SD (Site Design)
-    - Sequential numbering within areas
-    - Sub-item indentation
-    - Missing separators between areas
-
-  WHAT IT PRESERVES:
-    - All existing items (never removes content)
-    - Completion status: [ ], [x], [~]
-    - Item descriptions and meaning
-    - Custom area codes if used
+  NOTES:
+    - This is a one-time operation
+    - After migration, use 'chkd add' to create new tasks
+    - Completed items under done parents are not imported
 
   EXAMPLES:
-    chkd repair              # Reformat SPEC.md
-
-  SEE ALSO:
-    /reorder-spec - Claude Code skill for interactive reorganization
+    chkd migrate             # Import SPEC.md to database
 `,
     hosts: `
   chkd hosts [domain]
@@ -3205,8 +3075,50 @@ function showCommandHelp(command: string) {
 }
 
 // ============================================
-// Init & Upgrade
+// Init & Upgrade & Migrate
 // ============================================
+
+async function migrate() {
+  const cwd = process.cwd();
+  const path = await import('path');
+  const fs = await import('fs/promises');
+
+  const specPath = path.join(cwd, 'docs', 'SPEC.md');
+
+  // Check if SPEC.md exists
+  try {
+    await fs.access(specPath);
+  } catch {
+    console.log(`\n  ❌ No docs/SPEC.md found`);
+    console.log(`  Nothing to migrate. Use 'chkd add' to create tasks.\n`);
+    return;
+  }
+
+  console.log(`\n  ⏳ Migrating SPEC.md to database...`);
+
+  const res = await api('/api/migrate', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath: cwd }),
+  });
+
+  if (!res.success) {
+    console.log(`\n  ❌ ${res.error}\n`);
+    return;
+  }
+
+  const { itemsImported, itemsSkipped, itemsUpdated, specDeleted } = res.data;
+
+  console.log(`\n  ✅ Migration complete!`);
+  console.log(`  ─────────────────────────────────`);
+  console.log(`  Items imported: ${itemsImported}`);
+  if (itemsSkipped > 0) console.log(`  Items skipped (already exist): ${itemsSkipped}`);
+  if (itemsUpdated > 0) console.log(`  Items updated: ${itemsUpdated}`);
+  if (specDeleted) {
+    console.log(`\n  📁 docs/SPEC.md has been deleted.`);
+    console.log(`  Tasks now live in the chkd database.`);
+  }
+  console.log(`\n  Run 'chkd status' to see your tasks.\n`);
+}
 
 async function init(projectName?: string) {
   const cwd = process.cwd();
@@ -3222,10 +3134,10 @@ async function init(projectName?: string) {
     return;
   }
 
-  // Check if already initialized
+  // Check if already initialized (check for CLAUDE.md)
   try {
-    await fs.access(path.join(cwd, 'docs', 'SPEC.md'));
-    console.log(`\n  ⚠️  Already initialized: docs/SPEC.md exists`);
+    await fs.access(path.join(cwd, 'CLAUDE.md'));
+    console.log(`\n  ⚠️  Already initialized: CLAUDE.md exists`);
     console.log(`  Use 'chkd upgrade' to replace with fresh templates.\n`);
     return;
   } catch {
@@ -3274,13 +3186,6 @@ async function init(projectName?: string) {
 
   // Copy templates
   try {
-    await copyTemplate(
-      path.join(templatesDir, 'docs', 'SPEC.md.template'),
-      path.join(cwd, 'docs', 'SPEC.md'),
-      replacements
-    );
-    console.log(`  ✓ Created docs/SPEC.md`);
-
     await fs.copyFile(
       path.join(templatesDir, 'docs', 'GUIDE.md'),
       path.join(cwd, 'docs', 'GUIDE.md')
@@ -3330,9 +3235,11 @@ async function init(projectName?: string) {
   ✅ Project initialized!
 
   Next steps:
-    1. Edit docs/SPEC.md to add your features
-    2. Edit CLAUDE.md to describe your project
+    1. Edit CLAUDE.md to describe your project
+    2. Use 'chkd add' to create tasks
     3. Run 'chkd status' to see progress
+
+  Migrating from SPEC.md? Run 'chkd migrate'
 `);
 }
 
@@ -3387,7 +3294,8 @@ async function upgrade(projectName?: string) {
   async function isAlreadyChkd(filePath: string): Promise<boolean> {
     try {
       const content = await fs.readFile(path.join(cwd, filePath), 'utf-8');
-      return content.includes('docs/SPEC.md') && content.includes('chkd');
+      // Check for chkd-specific content in CLAUDE.md
+      return content.includes('chkd') && (content.includes('/chkd') || content.includes('chkd_'));
     } catch {
       return false;
     }
@@ -3435,8 +3343,8 @@ async function upgrade(projectName?: string) {
   }
 
   // Files to backup and replace (excluding CLAUDE.md - handled separately)
+  // Note: SPEC.md is no longer created - tasks live in the database
   const files = [
-    { path: 'docs/SPEC.md', template: 'docs/SPEC.md.template', hasReplacements: true },
     { path: 'docs/GUIDE.md', template: 'docs/GUIDE.md', hasReplacements: false },
     { path: 'docs/CLI.md', template: 'docs/CLI.md', hasReplacements: false },
   ];
@@ -3593,8 +3501,9 @@ async function upgrade(projectName?: string) {
   ✅ Upgraded to chkd!
 
   Next steps:
-    1. Edit docs/SPEC.md to add your features
-    2. Run 'chkd status' to see progress
+    1. Run 'chkd migrate' if you have a docs/SPEC.md
+    2. Add tasks with 'chkd add "Feature name"'
+    3. Run 'chkd status' to see progress
 
   Original backups preserved in *-old files.
 `);
@@ -3727,14 +3636,11 @@ async function main() {
     case 'edit':
       await edit(arg, flags);
       break;
-    case 'repair':
-      await repair();
-      break;
-    case 'check':
-      await check(flags);
-      break;
     case 'hosts':
       await setupHosts(arg);
+      break;
+    case 'migrate':
+      await migrate();
       break;
     case 'version':
     case '--version':

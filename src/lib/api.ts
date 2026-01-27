@@ -100,21 +100,6 @@ export async function getEpics(repoPath: string): Promise<ApiResponse<EpicWithPr
   return res.json();
 }
 
-// Recent spec item type
-export interface RecentSpecItem {
-  id: string;
-  title: string;
-  type: 'added' | 'completed';
-  date: string;
-  commitHash: string;
-}
-
-// Get recent spec changes (recently added and completed items)
-export async function getRecentSpec(repoPath: string): Promise<ApiResponse<{ recentAdded: RecentSpecItem[]; recentCompleted: RecentSpecItem[] }>> {
-  const res = await fetch(`${BASE_URL}/api/spec/recent?repoPath=${encodeURIComponent(repoPath)}`);
-  return res.json();
-}
-
 // Get current status (human-friendly)
 export async function getStatus(repoPath: string): Promise<ApiResponse<any>> {
   const res = await fetch(`${BASE_URL}/api/status?repoPath=${encodeURIComponent(repoPath)}`);
@@ -810,5 +795,26 @@ export async function dismissSignal(signalId: string): Promise<ApiResponse<void>
   const res = await fetch(`${BASE_URL}/api/signals/${encodeURIComponent(signalId)}`, {
     method: 'DELETE'
   });
+  return res.json();
+}
+
+// ============================================
+// Recent Activity
+// ============================================
+
+export interface RecentItem {
+  id: string;
+  title: string;
+  timestamp: string;
+  areaCode: string;
+}
+
+export interface RecentActivity {
+  added: RecentItem[];
+  completed: RecentItem[];
+}
+
+export async function getRecentActivity(repoPath: string, limit: number = 5): Promise<ApiResponse<RecentActivity>> {
+  const res = await fetch(`${BASE_URL}/api/spec/recent?repoPath=${encodeURIComponent(repoPath)}&limit=${limit}`);
   return res.json();
 }

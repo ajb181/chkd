@@ -9,6 +9,7 @@ import {
 } from './items.js';
 import type { ItemStatus, ItemPriority, AreaCode, CreateItemInput } from '$lib/types.js';
 import path from 'path';
+import fs from 'fs/promises';
 
 export interface MigrateResult {
   success: boolean;
@@ -17,6 +18,7 @@ export interface MigrateResult {
   itemsSkipped: number;
   itemsUpdated: number;
   errors: string[];
+  specDeleted?: boolean;
 }
 
 /**
@@ -234,8 +236,10 @@ export async function migrateSpec(repoPath: string): Promise<MigrateResult> {
   const parser = new SpecParser();
 
   let spec;
+  let specContent: string;
   try {
-    spec = await parser.parseFile(specPath);
+    specContent = await fs.readFile(specPath, 'utf-8');
+    spec = parser.parse(specContent);
   } catch (err) {
     result.errors.push(`Failed to parse SPEC.md: ${err}`);
     return result;
@@ -247,6 +251,18 @@ export async function migrateSpec(repoPath: string): Promise<MigrateResult> {
   }
 
   result.success = result.errors.length === 0;
+
+  // Delete SPEC.md on success
+  if (result.success && result.itemsImported > 0) {
+    try {
+      await fs.unlink(specPath);
+      result.specDeleted = true;
+    } catch (err) {
+      // Non-fatal: migration succeeded but couldn't delete file
+      result.errors.push(`Warning: Could not delete SPEC.md: ${err}`);
+    }
+  }
+
   return result;
 }
 
@@ -261,7 +277,8 @@ export async function getMigrationPreview(repoPath: string): Promise<{
 }> {
   const specPath = path.join(repoPath, 'docs', 'SPEC.md');
   const parser = new SpecParser();
-  const spec = await parser.parseFile(specPath);
+  const content = await fs.readFile(specPath, 'utf-8');
+  const spec = parser.parse(content);
 
   let totalItems = 0;
   let doneItems = 0;

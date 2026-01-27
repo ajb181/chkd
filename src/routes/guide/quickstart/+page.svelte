@@ -92,11 +92,11 @@ chkd upgrade</code></pre>
     </div>
     <p>This creates:</p>
     <ul>
-      <li><code>docs/SPEC.md</code> - Your feature checklist</li>
       <li><code>docs/GUIDE.md</code> - This guide</li>
       <li><code>CLAUDE.md</code> - Instructions for Claude</li>
       <li><code>.claude/skills/</code> - Build skills</li>
     </ul>
+    <p>Tasks are stored in the chkd database at <code>~/.chkd/chkd.db</code></p>
   </section>
 
   <section class="step">
@@ -105,13 +105,7 @@ chkd upgrade</code></pre>
       <h2>Add Your First Feature</h2>
       <span class="step-time">~30 sec</span>
     </div>
-    <p>Edit <code>docs/SPEC.md</code> to add a feature:</p>
-    <div class="code-block">
-      <pre><code>{`## Frontend
-
-- [ ] **FE.1 Login page** - Email/password form with validation`}</code></pre>
-    </div>
-    <p>Or use the CLI:</p>
+    <p>Use the CLI to add a feature:</p>
     <div class="code-block">
       <button class="copy-btn" on:click={() => copyCode('chkd add "Login page" --area FE --story "Email/password form with validation"', 5)}>
         {copiedIndex === 5 ? 'Copied!' : 'Copy'}

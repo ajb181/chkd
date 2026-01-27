@@ -770,13 +770,13 @@
       <h3>New Project (Greenfield)</h3>
       <div class="setup-box">
         <code class="setup-cmd">chkd init "My Project"</code>
-        <p>Creates all the files you need: SPEC.md, CLAUDE.md, Guide, and skills.</p>
+        <p>Creates CLAUDE.md, Guide, and skills. Tasks are stored in the chkd database.</p>
 
         <div class="setup-steps">
           <div class="step"><span class="step-num">1</span> <code>cd your-project</code></div>
           <div class="step"><span class="step-num">2</span> <code>git init</code> (if not already)</div>
           <div class="step"><span class="step-num">3</span> <code>chkd init "My Project"</code></div>
-          <div class="step"><span class="step-num">4</span> Edit <code>docs/SPEC.md</code> with your features</div>
+          <div class="step"><span class="step-num">4</span> Use <code>chkd add</code> to create your features</div>
           <div class="step"><span class="step-num">5</span> Edit <code>CLAUDE.md</code> to describe your project</div>
         </div>
       </div>
@@ -790,31 +790,33 @@
           <div class="step"><span class="step-num">1</span> <code>cd your-existing-project</code></div>
           <div class="step"><span class="step-num">2</span> <code>chkd upgrade</code></div>
           <div class="step"><span class="step-num">3</span> Review your backed up files (<code>*-old.md</code>)</div>
-          <div class="step"><span class="step-num">4</span> Edit <code>docs/SPEC.md</code> - add your features</div>
-          <div class="step"><span class="step-num">5</span> Mark existing features as [x] complete</div>
-          <div class="step"><span class="step-num">6</span> Use <code>/story</code> in Claude to refine specs</div>
+          <div class="step"><span class="step-num">4</span> Use <code>chkd add</code> to add your features</div>
+          <div class="step"><span class="step-num">5</span> Use <code>/story</code> in Claude to refine specs</div>
         </div>
 
         <div class="info-callout">
           <strong>What gets backed up:</strong>
           <ul>
-            <li><code>docs/SPEC.md</code> → <code>docs/SPEC-old.md</code></li>
             <li><code>CLAUDE.md</code> → <code>CLAUDE-old.md</code></li>
             <li><code>.claude/skills/</code> → <code>.claude/skills-old/</code></li>
           </ul>
         </div>
       </div>
 
-      <h3>After Brownfield Setup: Populate Your Spec</h3>
+      <h3>Migrating from SPEC.md</h3>
+      <div class="setup-box">
+        <code class="setup-cmd">chkd migrate</code>
+        <p>If you have an existing docs/SPEC.md file, run this to import tasks to the database.</p>
+        <p>The file will be deleted after successful migration.</p>
+      </div>
+
+      <h3>After Setup: Add Your Features</h3>
       <div class="discovery-flow">
-        <p>Edit <code>docs/SPEC.md</code> to list your existing features and what's new:</p>
+        <p>Use <code>chkd add</code> or MCP tools to add your features:</p>
 
         <div class="code-block">
-          <code># Mark existing features as complete</code><br/>
-          <code>- [x] **BE.1 User Authentication** - Login, logout, sessions</code><br/>
-          <code>- [x] **BE.2 Database Schema** - Users, posts, comments</code><br/><br/>
-          <code># Add new features to build</code><br/>
-          <code>- [ ] **BE.3 API Rate Limiting** - Protect endpoints</code>
+          <code>chkd add "User Authentication" --area BE</code><br/>
+          <code>chkd add "API Rate Limiting" --area BE</code>
         </div>
 
         <p>Use <code>/story</code> in Claude to help refine and expand your spec:</p>
@@ -885,9 +887,9 @@
         </div>
 
         <div class="trouble-item">
-          <h3>Task not found in spec</h3>
-          <p><strong>Cause:</strong> Task ID doesn't match spec format</p>
-          <p><strong>Fix:</strong> Check docs/SPEC.md for correct task IDs (e.g., SD.1, BE.2)</p>
+          <h3>Task not found</h3>
+          <p><strong>Cause:</strong> Task ID doesn't exist</p>
+          <p><strong>Fix:</strong> Run <code>chkd status</code> to see correct task IDs (e.g., SD.1, BE.2)</p>
         </div>
 
         <div class="trouble-item">
@@ -900,9 +902,9 @@
         </div>
 
         <div class="trouble-item">
-          <h3>Spec not loading in UI</h3>
-          <p><strong>Cause:</strong> Server cache or parsing error</p>
-          <p><strong>Fix:</strong> Restart dev server, check SPEC.md format</p>
+          <h3>Tasks not loading in UI</h3>
+          <p><strong>Cause:</strong> Server cache or database error</p>
+          <p><strong>Fix:</strong> Restart dev server, check <code>~/.chkd/chkd.db</code> exists</p>
         </div>
 
         <div class="trouble-item">
@@ -926,7 +928,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td><code>docs/SPEC.md</code></td><td>Source of truth for features</td></tr>
+          <tr><td><code>~/.chkd/chkd.db</code></td><td>Database with all tasks</td></tr>
           <tr><td><code>docs/GUIDE.md</code></td><td>How to use chkd (this guide)</td></tr>
           <tr><td><code>CLAUDE.md</code></td><td>Project instructions for Claude</td></tr>
           <tr><td><code>.claude/skills/</code></td><td>Skill definitions</td></tr>
