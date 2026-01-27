@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getWorkflowByType } from '$lib/server/spec/writer';
+import { getWorkflowByType } from '$lib/server/spec/workflow';
 import { getRepoByPath } from '$lib/server/db/queries';
 import { createItem, getNextSectionNumber, searchItems, getItemsByRepo } from '$lib/server/db/items';
 import type { AreaCode } from '$lib/types';

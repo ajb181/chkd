@@ -8,7 +8,7 @@
 
 chkd helps you build software with Claude Code without losing control:
 
-1. **Spec-driven** - Your features live in `docs/SPEC.md`
+1. **Spec-driven** - Your features are stored in a local database (viewable via UI/MCP)
 2. **Progress tracking** - See what's done, in progress, blocked
 3. **Keeps Claude focused** - Builds what you planned, logs surprises
 4. **MCP integration** - Claude gets context automatically
@@ -608,7 +608,7 @@ The bugs/quick wins lists exist so nothing gets lost. Fix them later.
 
 | File | Purpose |
 |------|---------|
-| `docs/SPEC.md` | Feature checklist (source of truth) |
+| `docs/SPEC.md` | Feature checklist (optional, can be imported to DB) |
 | `docs/GUIDE.md` | This guide |
 | `docs/PHILOSOPHY.md` | Full chkd philosophy explanation |
 | `docs/instructions/` | Mode-specific guidance (build, bugfix, debug, etc.) |

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getWorkflowByType } from '$lib/server/spec/writer';
+import { getWorkflowByType } from '$lib/server/spec/workflow';
 import { addDeviation, addScopeChange } from '$lib/server/proposal';
 import { updateSession, getRepoByPath } from '$lib/server/db/queries';
 import { createItem, getNextSectionNumber } from '$lib/server/db/items';

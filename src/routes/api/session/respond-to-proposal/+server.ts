@@ -7,7 +7,7 @@ import {
   generateId,
   type FlaggedItem,
 } from '$lib/server/proposal';
-import { getWorkflowByType } from '$lib/server/spec/writer';
+import { getWorkflowByType } from '$lib/server/spec/workflow';
 import { getRepoByPath } from '$lib/server/db/queries';
 import { createItem, getNextSectionNumber } from '$lib/server/db/items';
 import type { AreaCode } from '$lib/types';
