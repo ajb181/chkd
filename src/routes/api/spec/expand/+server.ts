@@ -1,8 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSetting } from '$lib/server/db/queries';
-import { SpecParser } from '$lib/server/spec/parser';
-import path from 'path';
+import { getSetting, getRepoByPath } from '$lib/server/db/queries';
+import { getItemsByArea } from '$lib/server/db/items';
+import type { AreaCode } from '$lib/types';
+
+// Area metadata
+const AREA_NAMES: Record<string, string> = {
+  'SD': 'Site Design',
+  'FE': 'Frontend',
+  'BE': 'Backend',
+  'FUT': 'Future Areas'
+};
 
 // POST /api/spec/expand - Use AI to expand a feature idea into a story
 export const POST: RequestHandler = async ({ request }) => {
@@ -34,15 +42,26 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     }
 
-    // Get existing spec context
+    // Get existing spec context from DB
     let specContext = '';
     if (repoPath) {
       try {
-        const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-        const parser = new SpecParser();
-        const spec = await parser.parseFile(specPath);
-        specContext = `\nExisting areas: ${spec.areas.map(a => a.name).join(', ')}`;
-        specContext += `\nRecent items: ${spec.areas.flatMap(a => a.items.slice(0, 3).map(i => i.title)).join(', ')}`;
+        const repo = getRepoByPath(repoPath);
+        if (repo) {
+          const areas: AreaCode[] = ['SD', 'FE', 'BE', 'FUT'];
+          const areaNames = areas.map(code => AREA_NAMES[code]).join(', ');
+          specContext = `\nExisting areas: ${areaNames}`;
+
+          // Get recent items from each area
+          const recentItems: string[] = [];
+          for (const code of areas) {
+            const items = getItemsByArea(repo.id, code);
+            recentItems.push(...items.slice(0, 3).map(i => i.title));
+          }
+          if (recentItems.length > 0) {
+            specContext += `\nRecent items: ${recentItems.slice(0, 9).join(', ')}`;
+          }
+        }
       } catch {
         // No spec yet
       }

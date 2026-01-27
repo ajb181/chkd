@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { skipItem, unskipItem } from '$lib/server/spec/writer';
-import path from 'path';
+import { getRepoByPath } from '$lib/server/db/queries';
+import { findItemByQuery, updateItem } from '$lib/server/db/items';
 
 // POST /api/spec/skip - Skip or unskip an item
 export const POST: RequestHandler = async ({ request }) => {
@@ -17,13 +17,18 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'itemId is required' }, { status: 400 });
     }
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-
-    if (skip) {
-      await skipItem(specPath, itemId);
-    } else {
-      await unskipItem(specPath, itemId);
+    // Write to DB (no fallback)
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
     }
+
+    const dbItem = findItemByQuery(repo.id, itemId);
+    if (!dbItem) {
+      return json({ success: false, error: `Item "${itemId}" not found in database.` }, { status: 404 });
+    }
+
+    updateItem(dbItem.id, { status: skip ? 'skipped' : 'open' });
 
     return json({
       success: true,

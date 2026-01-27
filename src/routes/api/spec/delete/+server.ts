@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { deleteItem } from '$lib/server/spec/writer';
-import path from 'path';
+import { getRepoByPath } from '$lib/server/db/queries';
+import { findItemByQuery, deleteItem } from '$lib/server/db/items';
 
 // POST /api/spec/delete - Delete an item
 export const POST: RequestHandler = async ({ request }) => {
@@ -17,8 +17,18 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'itemId is required' }, { status: 400 });
     }
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    await deleteItem(specPath, itemId);
+    // Write to DB (no fallback)
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
+    }
+
+    const dbItem = findItemByQuery(repo.id, itemId);
+    if (!dbItem) {
+      return json({ success: false, error: `Item "${itemId}" not found in database.` }, { status: 404 });
+    }
+
+    deleteItem(dbItem.id);
 
     return json({
       success: true,

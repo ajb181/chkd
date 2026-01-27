@@ -1,7 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { SpecParser, type SpecItem, type SpecArea } from '$lib/server/spec/parser';
-import path from 'path';
+import { getRepoByPath } from '$lib/server/db/queries';
+import { getItemsByRepo, getChildren } from '$lib/server/db/items';
+import type { SpecItem } from '$lib/types';
+
+// Area metadata
+const AREA_NAMES: Record<string, string> = {
+  'SD': 'Site Design',
+  'FE': 'Frontend',
+  'BE': 'Backend',
+  'FUT': 'Future Areas'
+};
 
 interface DuplicateMatch {
   item: {
@@ -28,11 +37,13 @@ export const GET: RequestHandler = async ({ url }) => {
       return json({ success: false, error: 'repoPath and title are required' }, { status: 400 });
     }
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    const parser = new SpecParser();
-    const spec = await parser.parseFile(specPath);
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
+    }
 
-    const matches = findDuplicates(title, spec.areas);
+    const allItems = getItemsByRepo(repo.id);
+    const matches = findDuplicates(title, allItems);
 
     return json({
       success: true,
@@ -47,32 +58,13 @@ export const GET: RequestHandler = async ({ url }) => {
   }
 };
 
-function findDuplicates(query: string, areas: SpecArea[]): DuplicateMatch[] {
+function findDuplicates(query: string, items: SpecItem[]): DuplicateMatch[] {
   const matches: DuplicateMatch[] = [];
   const queryLower = query.toLowerCase();
   const queryWords = extractKeywords(query);
 
-  for (const area of areas) {
-    checkItems(area.items, area, queryLower, queryWords, matches);
-  }
-
-  // Sort by similarity (highest first)
-  matches.sort((a, b) => b.similarity - a.similarity);
-
-  // Return top 5 matches above threshold
-  return matches.filter(m => m.similarity >= 0.3).slice(0, 5);
-}
-
-function checkItems(
-  items: SpecItem[],
-  area: SpecArea,
-  queryLower: string,
-  queryWords: string[],
-  matches: DuplicateMatch[]
-): void {
   for (const item of items) {
     const titleLower = item.title.toLowerCase();
-    const descLower = item.description.toLowerCase();
 
     let similarity = 0;
     let matchType: DuplicateMatch['matchType'] = 'keyword';
@@ -116,21 +108,24 @@ function checkItems(
         item: {
           id: item.id,
           title: item.title,
-          description: item.description,
+          description: item.description || '',
           status: item.status
         },
         area: {
-          code: area.code,
-          name: area.name
+          code: item.areaCode,
+          name: AREA_NAMES[item.areaCode] || item.areaCode
         },
         similarity,
         matchType
       });
     }
-
-    // Check children
-    checkItems(item.children, area, queryLower, queryWords, matches);
   }
+
+  // Sort by similarity (highest first)
+  matches.sort((a, b) => b.similarity - a.similarity);
+
+  // Return top 5 matches above threshold
+  return matches.filter(m => m.similarity >= 0.3).slice(0, 5);
 }
 
 function extractKeywords(text: string): string[] {
