@@ -16,8 +16,7 @@ import { execSync } from 'child_process';
 // HTTP client for API calls
 import * as api from './http-client.js';
 
-// Still need spec parser for local file reads
-import { SpecParser } from '../lib/server/spec/parser.js';
+// Note: Parser removed - DB is source of truth
 import { checkItemTbc } from '../lib/server/spec/writer.js';
 
 // Cache the resolved repo path and worker context
@@ -270,7 +269,7 @@ server.tool(
     const sessionResponse = await api.getSession(repoPath);
     const session = sessionResponse.data || { status: 'idle', elapsedMs: 0 };
 
-    // Get progress from DB (with fallback to parser)
+    // Get progress from DB (no fallback - DB is source of truth)
     let progress = { completed: 0, total: 0, percentage: 0 };
     const progressResponse = await api.getSpecProgress(repoPath);
     if (progressResponse.success && progressResponse.data?.progress) {
@@ -278,19 +277,8 @@ server.tool(
       progress.total = p.total;
       progress.completed = p.done;
       progress.percentage = p.percent;
-    } else {
-      // Fallback to parser for unmigrated projects
-      const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-      if (fs.existsSync(specPath)) {
-        const specContent = fs.readFileSync(specPath, 'utf-8');
-        const parser = new SpecParser();
-        const spec = parser.parse(specContent);
-        const allItems = spec.areas.flatMap(a => a.items);
-        progress.total = allItems.length;
-        progress.completed = allItems.filter(i => i.completed).length;
-        progress.percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
-      }
     }
+    // If DB has no data, progress stays at 0 - project needs migration
 
     // Get queue and bugs
     const queueResponse = await api.getQueue(repoPath);
@@ -945,26 +933,13 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    // Get full title from DB (with fallback to parser)
+    // Get full title from DB (no fallback - DB is source of truth)
     let fullTitle = item;
     const findResponse = await api.findSpecItem(repoPath, item);
     if (findResponse.success && findResponse.data?.items?.length > 0) {
       fullTitle = findResponse.data.items[0].title;
-    } else {
-      // Fallback to parser
-      const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-      try {
-        const specContent = fs.readFileSync(specPath, 'utf-8');
-        const parser = new SpecParser();
-        const spec = parser.parse(specContent);
-        const matches = parser.findItems(spec, item);
-        if (matches.length > 0) {
-          fullTitle = matches[0].title;
-        }
-      } catch (e) {
-        // Use input if parsing fails
-      }
     }
+    // If not found, use the input as-is - the tick API will error if invalid
 
     const response = await api.tickItem(repoPath, item);
 
@@ -1042,25 +1017,13 @@ server.tool(
       };
     }
 
-    // Get full title from DB (with fallback to parser)
+    // Get full title from DB (no fallback - DB is source of truth)
     let fullTitle = item;
     const findResponse = await api.findSpecItem(repoPath, item);
     if (findResponse.success && findResponse.data?.items?.length > 0) {
       fullTitle = findResponse.data.items[0].title;
-    } else {
-      // Fallback to parser
-      try {
-        const specContent = fs.readFileSync(specPath, 'utf-8');
-        const parser = new SpecParser();
-        const spec = parser.parse(specContent);
-        const matches = parser.findItems(spec, item);
-        if (matches.length > 0) {
-          fullTitle = matches[0].title;
-        }
-      } catch (e) {
-        // Use input if parsing fails
-      }
     }
+    // If not found, use the input as-is
 
     const queueResponse = await api.getQueue(repoPath);
     const queue = queueResponse.data?.items || [];
@@ -1101,38 +1064,21 @@ server.tool(
     const criticalBugs = bugs.filter((b: any) => b.severity === 'critical');
     const highBugs = bugs.filter((b: any) => b.severity === 'high');
 
-    // Try DB first, fall back to parser
-    let allItems: any[] = [];
-    let incomplete: any[] = [];
-    let inProgress: any[] = [];
-    let notStarted: any[] = [];
-
+    // Get items from DB (no fallback - DB is source of truth)
     const itemsResponse = await api.getSpecItems(repoPath, { topLevel: true, withProgress: true });
-    if (itemsResponse.success && itemsResponse.data?.items?.length > 0) {
-      // Use DB items
-      allItems = itemsResponse.data.items;
-      incomplete = allItems.filter((i: any) => i.status !== 'done' && i.status !== 'skipped');
-      inProgress = incomplete.filter((i: any) => i.status === 'in-progress');
-      notStarted = incomplete.filter((i: any) => i.status === 'open');
-    } else {
-      // Fall back to parser
-      const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-      if (!fs.existsSync(specPath)) {
-        return {
-          content: [{
-            type: "text",
-            text: `No SPEC.md found. Can't suggest tasks without a spec.\n\n💡 Create docs/SPEC.md with your task list.`
-          }]
-        };
-      }
-      const specContent = fs.readFileSync(specPath, 'utf-8');
-      const parser = new SpecParser();
-      const spec = parser.parse(specContent);
-      allItems = spec.areas.flatMap(a => a.items.map(i => ({ ...i, area: a.name })));
-      incomplete = allItems.filter(i => !i.completed);
-      inProgress = incomplete.filter(i => i.status === 'in-progress');
-      notStarted = incomplete.filter(i => i.status !== 'in-progress');
+    if (!itemsResponse.success || !itemsResponse.data?.items) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Repository not in database. Run migration first:\n\nnpm run migrate -- "${repoPath}"`
+        }]
+      };
     }
+
+    const allItems = itemsResponse.data.items;
+    const incomplete = allItems.filter((i: any) => i.status !== 'done' && i.status !== 'skipped');
+    const inProgress = incomplete.filter((i: any) => i.status === 'in-progress');
+    const notStarted = incomplete.filter((i: any) => i.status === 'open');
 
     let text = `📊 Suggestion Analysis\n`;
     text += `═══════════════════════════════════════\n\n`;
@@ -2564,52 +2510,10 @@ server.resource(
           text += `\n`;
         }
       } else {
-        // Fall back to parser
-        const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-        if (!fs.existsSync(specPath)) {
-          return {
-            contents: [{
-              uri: "chkd://spec",
-              mimeType: "text/plain",
-              text: `No SPEC.md found at ${specPath}\n\nCreate one with areas and tasks to track.`
-            }]
-          };
-        }
-
-        const specContent = fs.readFileSync(specPath, 'utf-8');
-        const parser = new SpecParser();
-        const spec = parser.parse(specContent);
-
-        const allItems = spec.areas.flatMap(a => a.items);
-        const completed = allItems.filter(i => i.completed).length;
-        const inProgress = allItems.filter(i => i.status === 'in-progress').length;
-        const total = allItems.length;
-        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-        text += `Progress: ${pct}% (${completed}/${total} complete`;
-        if (inProgress > 0) text += `, ${inProgress} in progress`;
-        text += `)\n\n`;
-
-        for (const area of spec.areas) {
-          const areaItems = area.items;
-          const areaCompleted = areaItems.filter(i => i.completed).length;
-          const areaTotal = areaItems.length;
-
-          text += `═══ ${area.name} (${areaCompleted}/${areaTotal}) ═══\n`;
-
-          for (const item of areaItems) {
-            const status = item.completed ? '✅' : item.status === 'in-progress' ? '🔨' : '⬜';
-            text += `${status} ${item.id} ${item.title}\n`;
-
-            if (item.children && item.children.length > 0) {
-              for (const sub of item.children) {
-                const subStatus = sub.completed ? '✅' : sub.status === 'in-progress' ? '🔨' : '  ';
-                text += `   ${subStatus} ${sub.title}\n`;
-              }
-            }
-          }
-          text += `\n`;
-        }
+        // No fallback - DB is source of truth
+        text += `Repository not in database.\n\n`;
+        text += `Run migration first:\n`;
+        text += `npm run migrate -- "${repoPath}"\n`;
       }
 
       return {
