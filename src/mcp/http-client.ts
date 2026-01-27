@@ -57,7 +57,7 @@ async function request<T = any>(
     if (error instanceof Error && error.message.includes('ECONNREFUSED')) {
       return {
         success: false,
-        error: `chkd web server not running on port ${DEFAULT_PORT}`,
+        error: `chkd web server not running on port ${PORT}`,
         hint: `Start it with: npm run dev`
       };
     }
@@ -396,4 +396,40 @@ export async function updateEpicStatus(
   status: 'planning' | 'in-progress' | 'review' | 'complete'
 ) {
   return request('PATCH', '/api/epics', { repoPath, query, status });
+}
+
+// ============================================
+// Spec Items API (DB-First)
+// ============================================
+
+export async function getSpecItems(repoPath: string, options?: {
+  status?: string;
+  area?: string;
+  query?: string;
+  topLevel?: boolean;
+  withProgress?: boolean;
+  withChildren?: boolean;
+}) {
+  const params: Record<string, string> = { repoPath };
+  if (options?.status) params.status = options.status;
+  if (options?.area) params.area = options.area;
+  if (options?.query) params.query = options.query;
+  if (options?.topLevel) params.topLevel = 'true';
+  if (options?.withProgress) params.withProgress = 'true';
+  if (options?.withChildren) params.withChildren = 'true';
+  return request('GET', '/api/spec/items', undefined, params);
+}
+
+export async function getSpecProgress(repoPath: string, area?: string) {
+  const params: Record<string, string> = { repoPath, withProgress: 'true' };
+  if (area) params.area = area;
+  return request('GET', '/api/spec/items', undefined, params);
+}
+
+export async function findSpecItem(repoPath: string, query: string) {
+  return request('GET', '/api/spec/items', undefined, {
+    repoPath,
+    query,
+    withChildren: 'true'
+  });
 }

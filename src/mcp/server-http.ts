@@ -270,18 +270,26 @@ server.tool(
     const sessionResponse = await api.getSession(repoPath);
     const session = sessionResponse.data || { status: 'idle', elapsedMs: 0 };
 
-    // Parse spec for progress
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+    // Get progress from DB (with fallback to parser)
     let progress = { completed: 0, total: 0, percentage: 0 };
-
-    if (fs.existsSync(specPath)) {
-      const specContent = fs.readFileSync(specPath, 'utf-8');
-      const parser = new SpecParser();
-      const spec = parser.parse(specContent);
-      const allItems = spec.areas.flatMap(a => a.items);
-      progress.total = allItems.length;
-      progress.completed = allItems.filter(i => i.completed).length;
-      progress.percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+    const progressResponse = await api.getSpecProgress(repoPath);
+    if (progressResponse.success && progressResponse.data?.progress) {
+      const p = progressResponse.data.progress;
+      progress.total = p.total;
+      progress.completed = p.done;
+      progress.percentage = p.percent;
+    } else {
+      // Fallback to parser for unmigrated projects
+      const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+      if (fs.existsSync(specPath)) {
+        const specContent = fs.readFileSync(specPath, 'utf-8');
+        const parser = new SpecParser();
+        const spec = parser.parse(specContent);
+        const allItems = spec.areas.flatMap(a => a.items);
+        progress.total = allItems.length;
+        progress.completed = allItems.filter(i => i.completed).length;
+        progress.percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+      }
     }
 
     // Get queue and bugs
@@ -937,19 +945,25 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    // Get full title from spec for display (before marking complete)
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+    // Get full title from DB (with fallback to parser)
     let fullTitle = item;
-    try {
-      const specContent = fs.readFileSync(specPath, 'utf-8');
-      const parser = new SpecParser();
-      const spec = parser.parse(specContent);
-      const matches = parser.findItems(spec, item);
-      if (matches.length > 0) {
-        fullTitle = matches[0].title;
+    const findResponse = await api.findSpecItem(repoPath, item);
+    if (findResponse.success && findResponse.data?.items?.length > 0) {
+      fullTitle = findResponse.data.items[0].title;
+    } else {
+      // Fallback to parser
+      const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+      try {
+        const specContent = fs.readFileSync(specPath, 'utf-8');
+        const parser = new SpecParser();
+        const spec = parser.parse(specContent);
+        const matches = parser.findItems(spec, item);
+        if (matches.length > 0) {
+          fullTitle = matches[0].title;
+        }
+      } catch (e) {
+        // Use input if parsing fails
       }
-    } catch (e) {
-      // Use input if parsing fails
     }
 
     const response = await api.tickItem(repoPath, item);
@@ -1028,18 +1042,24 @@ server.tool(
       };
     }
 
-    // Get full title from spec for display
+    // Get full title from DB (with fallback to parser)
     let fullTitle = item;
-    try {
-      const specContent = fs.readFileSync(specPath, 'utf-8');
-      const parser = new SpecParser();
-      const spec = parser.parse(specContent);
-      const matches = parser.findItems(spec, item);
-      if (matches.length > 0) {
-        fullTitle = matches[0].title;
+    const findResponse = await api.findSpecItem(repoPath, item);
+    if (findResponse.success && findResponse.data?.items?.length > 0) {
+      fullTitle = findResponse.data.items[0].title;
+    } else {
+      // Fallback to parser
+      try {
+        const specContent = fs.readFileSync(specPath, 'utf-8');
+        const parser = new SpecParser();
+        const spec = parser.parse(specContent);
+        const matches = parser.findItems(spec, item);
+        if (matches.length > 0) {
+          fullTitle = matches[0].title;
+        }
+      } catch (e) {
+        // Use input if parsing fails
       }
-    } catch (e) {
-      // Use input if parsing fails
     }
 
     const queueResponse = await api.getQueue(repoPath);
@@ -1076,29 +1096,43 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    if (!fs.existsSync(specPath)) {
-      return {
-        content: [{
-          type: "text",
-          text: `No SPEC.md found. Can't suggest tasks without a spec.\n\n💡 Create docs/SPEC.md with your task list.`
-        }]
-      };
-    }
-
-    const specContent = fs.readFileSync(specPath, 'utf-8');
-    const parser = new SpecParser();
-    const spec = parser.parse(specContent);
-
     const bugsResponse = await api.getBugs(repoPath);
     const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
     const criticalBugs = bugs.filter((b: any) => b.severity === 'critical');
     const highBugs = bugs.filter((b: any) => b.severity === 'high');
 
-    const allItems = spec.areas.flatMap(a => a.items.map(i => ({ ...i, area: a.name })));
-    const incomplete = allItems.filter(i => !i.completed);
-    const inProgress = incomplete.filter(i => i.status === 'in-progress');
-    const notStarted = incomplete.filter(i => i.status !== 'in-progress');
+    // Try DB first, fall back to parser
+    let allItems: any[] = [];
+    let incomplete: any[] = [];
+    let inProgress: any[] = [];
+    let notStarted: any[] = [];
+
+    const itemsResponse = await api.getSpecItems(repoPath, { topLevel: true, withProgress: true });
+    if (itemsResponse.success && itemsResponse.data?.items?.length > 0) {
+      // Use DB items
+      allItems = itemsResponse.data.items;
+      incomplete = allItems.filter((i: any) => i.status !== 'done' && i.status !== 'skipped');
+      inProgress = incomplete.filter((i: any) => i.status === 'in-progress');
+      notStarted = incomplete.filter((i: any) => i.status === 'open');
+    } else {
+      // Fall back to parser
+      const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+      if (!fs.existsSync(specPath)) {
+        return {
+          content: [{
+            type: "text",
+            text: `No SPEC.md found. Can't suggest tasks without a spec.\n\n💡 Create docs/SPEC.md with your task list.`
+          }]
+        };
+      }
+      const specContent = fs.readFileSync(specPath, 'utf-8');
+      const parser = new SpecParser();
+      const spec = parser.parse(specContent);
+      allItems = spec.areas.flatMap(a => a.items.map(i => ({ ...i, area: a.name })));
+      incomplete = allItems.filter(i => !i.completed);
+      inProgress = incomplete.filter(i => i.status === 'in-progress');
+      notStarted = incomplete.filter(i => i.status !== 'in-progress');
+    }
 
     let text = `📊 Suggestion Analysis\n`;
     text += `═══════════════════════════════════════\n\n`;
@@ -1115,7 +1149,8 @@ server.tool(
     if (inProgress.length > 0) {
       text += `🔨 IN PROGRESS (finish these):\n`;
       inProgress.forEach((item: any) => {
-        text += `   • ${item.id} ${item.title}\n`;
+        const itemId = item.displayId || item.id;
+        text += `   • ${itemId} ${item.title}\n`;
       });
       text += `\n→ Suggestion: Finish in-progress work before starting new.\n\n`;
     }
@@ -1132,17 +1167,30 @@ server.tool(
     if (notStarted.length > 0 && inProgress.length === 0) {
       text += `⬜ READY TO START:\n`;
       notStarted.slice(0, 5).forEach((item: any) => {
-        text += `   • ${item.id} ${item.title} (${item.area})\n`;
+        const itemId = item.displayId || item.id;
+        const itemArea = item.areaCode || item.area;
+        text += `   • ${itemId} ${item.title} (${itemArea})\n`;
       });
       if (notStarted.length > 5) text += `   ... and ${notStarted.length - 5} more\n`;
-      text += `\n→ Suggestion: Start with ${notStarted[0].id} ${notStarted[0].title}\n`;
+      const firstId = notStarted[0].displayId || notStarted[0].id;
+      text += `\n→ Suggestion: Start with ${firstId} ${notStarted[0].title}\n`;
     }
 
-    const completed = allItems.length - incomplete.length;
-    const pct = allItems.length > 0 ? Math.round((completed / allItems.length) * 100) : 0;
+    // Use DB progress if available, otherwise calculate
+    let pct: number;
+    let remaining: number;
+    if (itemsResponse.success && itemsResponse.data?.progress) {
+      const progress = itemsResponse.data.progress;
+      pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+      remaining = progress.total - progress.done;
+    } else {
+      const completed = allItems.length - incomplete.length;
+      pct = allItems.length > 0 ? Math.round((completed / allItems.length) * 100) : 0;
+      remaining = incomplete.length;
+    }
 
     text += `\n───────────────────────────────────────\n`;
-    text += `Progress: ${pct}% | Bugs: ${bugs.length} | Remaining: ${incomplete.length}\n`;
+    text += `Progress: ${pct}% | Bugs: ${bugs.length} | Remaining: ${remaining}\n`;
 
     return {
       content: [{
@@ -2470,56 +2518,98 @@ server.resource(
   "The current SPEC.md contents - task list, areas, and progress. Read this to understand what needs to be done.",
   async () => {
     const repoPath = getRepoPath();
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
 
     try {
-      if (!fs.existsSync(specPath)) {
-        return {
-          contents: [{
-            uri: "chkd://spec",
-            mimeType: "text/plain",
-            text: `No SPEC.md found at ${specPath}\n\nCreate one with areas and tasks to track.`
-          }]
-        };
-      }
-
-      const specContent = fs.readFileSync(specPath, 'utf-8');
-      const parser = new SpecParser();
-      const spec = parser.parse(specContent);
-
       let text = `╔══════════════════════════════════════╗\n`;
       text += `║            PROJECT SPEC              ║\n`;
       text += `╚══════════════════════════════════════╝\n\n`;
 
-      const allItems = spec.areas.flatMap(a => a.items);
-      const completed = allItems.filter(i => i.completed).length;
-      const inProgress = allItems.filter(i => i.status === 'in-progress').length;
-      const total = allItems.length;
-      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+      // Try DB first
+      const itemsResponse = await api.getSpecItems(repoPath, { topLevel: true, withProgress: true, withChildren: true });
 
-      text += `Progress: ${pct}% (${completed}/${total} complete`;
-      if (inProgress > 0) text += `, ${inProgress} in progress`;
-      text += `)\n\n`;
+      if (itemsResponse.success && itemsResponse.data?.items?.length > 0) {
+        // Use DB items
+        const items = itemsResponse.data.items;
+        const progress = itemsResponse.data.progress;
 
-      for (const area of spec.areas) {
-        const areaItems = area.items;
-        const areaCompleted = areaItems.filter(i => i.completed).length;
-        const areaTotal = areaItems.length;
+        const pct = progress?.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+        const inProgressCount = progress?.inProgress || items.filter((i: any) => i.status === 'in-progress').length;
 
-        text += `═══ ${area.name} (${areaCompleted}/${areaTotal}) ═══\n`;
+        text += `Progress: ${pct}% (${progress?.done || 0}/${progress?.total || items.length} complete`;
+        if (inProgressCount > 0) text += `, ${inProgressCount} in progress`;
+        text += `)\n\n`;
 
-        for (const item of areaItems) {
-          const status = item.completed ? '✅' : item.status === 'in-progress' ? '🔨' : '⬜';
-          text += `${status} ${item.id} ${item.title}\n`;
+        // Group by area
+        const areas = ['SD', 'FE', 'BE', 'FUT'];
+        for (const areaCode of areas) {
+          const areaItems = items.filter((i: any) => i.areaCode === areaCode);
+          if (areaItems.length === 0) continue;
 
-          if (item.children && item.children.length > 0) {
-            for (const sub of item.children) {
-              const subStatus = sub.completed ? '✅' : sub.status === 'in-progress' ? '🔨' : '  ';
-              text += `   ${subStatus} ${sub.title}\n`;
+          const areaCompleted = areaItems.filter((i: any) => i.status === 'done').length;
+          const areaTotal = areaItems.length;
+
+          text += `═══ ${areaCode} (${areaCompleted}/${areaTotal}) ═══\n`;
+
+          for (const item of areaItems) {
+            const status = item.status === 'done' ? '✅' : item.status === 'in-progress' ? '🔨' : '⬜';
+            text += `${status} ${item.displayId} ${item.title}\n`;
+
+            if (item.children && item.children.length > 0) {
+              for (const sub of item.children) {
+                const subStatus = sub.status === 'done' ? '✅' : sub.status === 'in-progress' ? '🔨' : '  ';
+                text += `   ${subStatus} ${sub.title}\n`;
+              }
             }
           }
+          text += `\n`;
         }
-        text += `\n`;
+      } else {
+        // Fall back to parser
+        const specPath = path.join(repoPath, 'docs', 'SPEC.md');
+        if (!fs.existsSync(specPath)) {
+          return {
+            contents: [{
+              uri: "chkd://spec",
+              mimeType: "text/plain",
+              text: `No SPEC.md found at ${specPath}\n\nCreate one with areas and tasks to track.`
+            }]
+          };
+        }
+
+        const specContent = fs.readFileSync(specPath, 'utf-8');
+        const parser = new SpecParser();
+        const spec = parser.parse(specContent);
+
+        const allItems = spec.areas.flatMap(a => a.items);
+        const completed = allItems.filter(i => i.completed).length;
+        const inProgress = allItems.filter(i => i.status === 'in-progress').length;
+        const total = allItems.length;
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        text += `Progress: ${pct}% (${completed}/${total} complete`;
+        if (inProgress > 0) text += `, ${inProgress} in progress`;
+        text += `)\n\n`;
+
+        for (const area of spec.areas) {
+          const areaItems = area.items;
+          const areaCompleted = areaItems.filter(i => i.completed).length;
+          const areaTotal = areaItems.length;
+
+          text += `═══ ${area.name} (${areaCompleted}/${areaTotal}) ═══\n`;
+
+          for (const item of areaItems) {
+            const status = item.completed ? '✅' : item.status === 'in-progress' ? '🔨' : '⬜';
+            text += `${status} ${item.id} ${item.title}\n`;
+
+            if (item.children && item.children.length > 0) {
+              for (const sub of item.children) {
+                const subStatus = sub.completed ? '✅' : sub.status === 'in-progress' ? '🔨' : '  ';
+                text += `   ${subStatus} ${sub.title}\n`;
+              }
+            }
+          }
+          text += `\n`;
+        }
       }
 
       return {
