@@ -1,9 +1,15 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { SpecParser } from '$lib/server/spec/parser';
-import { getSetting } from '$lib/server/db/queries';
-import path from 'path';
-import fs from 'fs/promises';
+import { getRepoByPath, getSetting } from '$lib/server/db/queries';
+import { getItemsByRepo, getChildren } from '$lib/server/db/items';
+
+// Area names for display
+const AREA_NAMES: Record<string, string> = {
+  'SD': 'Site Design',
+  'FE': 'Frontend',
+  'BE': 'Backend',
+  'FUT': 'Future Areas'
+};
 
 // POST /api/session/check - Check if a request is on-plan using AI
 export const POST: RequestHandler = async ({ request }) => {
@@ -15,39 +21,60 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'repoPath and request are required' }, { status: 400 });
     }
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    let spec;
-
-    try {
-      await fs.access(specPath);
-      const parser = new SpecParser();
-      spec = await parser.parseFile(specPath);
-    } catch {
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
       return json({
         success: true,
         data: {
           onPlan: false,
           matchedItem: null,
-          feedback: 'No SPEC.md found - all work is off-plan',
+          feedback: 'Repository not in database - all work is off-plan',
           canContinue: true
         }
       });
     }
 
-    // Build a summary of spec items for the AI
-    const specSummary = spec.areas.map(area => {
-      const items = area.items.map(item => {
-        const status = item.completed ? '✓' : item.status === 'in-progress' ? '~' : ' ';
-        return `  [${status}] ${item.title}${item.description ? ` - ${item.description}` : ''}`;
-      }).join('\n');
-      return `## ${area.name} (${area.code})\n${items || '  (no items)'}`;
-    }).join('\n\n');
+    // Get all items from DB
+    const allItems = getItemsByRepo(repo.id);
+    if (allItems.length === 0) {
+      return json({
+        success: true,
+        data: {
+          onPlan: false,
+          matchedItem: null,
+          feedback: 'No spec items in database - all work is off-plan',
+          canContinue: true
+        }
+      });
+    }
+
+    // Group items by area and build summary
+    const itemsByArea = new Map<string, typeof allItems>();
+    for (const item of allItems) {
+      if (!item.parentId) { // Only top-level items
+        if (!itemsByArea.has(item.areaCode)) {
+          itemsByArea.set(item.areaCode, []);
+        }
+        itemsByArea.get(item.areaCode)!.push(item);
+      }
+    }
+
+    const specSummary = ['SD', 'FE', 'BE', 'FUT']
+      .filter(code => itemsByArea.has(code))
+      .map(code => {
+        const areaItems = itemsByArea.get(code)!;
+        const items = areaItems.map(item => {
+          const status = item.status === 'done' ? '✓' : item.status === 'in-progress' ? '~' : ' ';
+          return `  [${status}] ${item.title}${item.description ? ` - ${item.description}` : ''}`;
+        }).join('\n');
+        return `## ${AREA_NAMES[code]} (${code})\n${items || '  (no items)'}`;
+      }).join('\n\n');
 
     // Try AI matching if API key is available
     const apiKey = getSetting('anthropic_api_key');
 
     if (apiKey) {
-      const aiResult = await checkWithAI(apiKey, userRequest, specSummary, spec);
+      const aiResult = await checkWithAI(apiKey, userRequest, specSummary, allItems);
       if (aiResult) {
         return json({ success: true, data: aiResult });
       }
@@ -56,7 +83,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // Fall back to simple string matching
     return json({
       success: true,
-      data: simpleMatch(userRequest, spec)
+      data: simpleMatch(userRequest, allItems)
     });
   } catch (error) {
     return json({ success: false, error: String(error) }, { status: 500 });
@@ -68,7 +95,7 @@ async function checkWithAI(
   apiKey: string,
   userRequest: string,
   specSummary: string,
-  spec: ReturnType<SpecParser['parse']>
+  allItems: any[]
 ): Promise<{
   onPlan: boolean;
   matchedItem: { id: string; title: string; area: string } | null;
@@ -125,14 +152,12 @@ Be helpful but honest. Some off-plan requests are valid new features to add. Oth
       // Find the actual item if matched
       let matchedItem = null;
       if (parsed.matchedItemTitle && parsed.matchedArea) {
-        const area = spec.areas.find(a => a.code === parsed.matchedArea);
-        if (area) {
-          const item = area.items.find(i =>
-            i.title.toLowerCase() === parsed.matchedItemTitle.toLowerCase()
-          );
-          if (item) {
-            matchedItem = { id: item.id, title: item.title, area: area.code };
-          }
+        const item = allItems.find(i =>
+          i.title.toLowerCase() === parsed.matchedItemTitle.toLowerCase() &&
+          i.areaCode === parsed.matchedArea
+        );
+        if (item) {
+          matchedItem = { id: item.id, title: item.title, area: item.areaCode };
         }
       }
 
@@ -153,7 +178,7 @@ Be helpful but honest. Some off-plan requests are valid new features to add. Oth
 // Simple string-based matching (fallback)
 function simpleMatch(
   userRequest: string,
-  spec: ReturnType<SpecParser['parse']>
+  allItems: any[]
 ): {
   onPlan: boolean;
   matchedItem: { id: string; title: string; area: string } | null;
@@ -162,25 +187,25 @@ function simpleMatch(
 } {
   const query = userRequest.toLowerCase();
 
-  for (const area of spec.areas) {
-    for (const item of area.items) {
-      const titleLower = item.title.toLowerCase();
-      const descLower = item.description.toLowerCase();
+  for (const item of allItems) {
+    if (item.parentId) continue; // Skip children
 
-      // Check for keyword matches
-      const words = query.split(/\s+/).filter(w => w.length > 3);
-      const matchCount = words.filter(w =>
-        titleLower.includes(w) || descLower.includes(w)
-      ).length;
+    const titleLower = item.title.toLowerCase();
+    const descLower = (item.description || '').toLowerCase();
 
-      if (matchCount >= Math.min(2, words.length) || titleLower.includes(query)) {
-        return {
-          onPlan: true,
-          matchedItem: { id: item.id, title: item.title, area: area.code },
-          feedback: `Matches: "${item.title}" in ${area.name}`,
-          canContinue: true
-        };
-      }
+    // Check for keyword matches
+    const words = query.split(/\s+/).filter((w: string) => w.length > 3);
+    const matchCount = words.filter((w: string) =>
+      titleLower.includes(w) || descLower.includes(w)
+    ).length;
+
+    if (matchCount >= Math.min(2, words.length) || titleLower.includes(query)) {
+      return {
+        onPlan: true,
+        matchedItem: { id: item.id, title: item.title, area: item.areaCode },
+        feedback: `Matches: "${item.title}" in ${AREA_NAMES[item.areaCode]}`,
+        canContinue: true
+      };
     }
   }
 

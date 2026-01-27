@@ -1,11 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { SpecParser } from '$lib/server/spec/parser';
 import { getWorkflowByType } from '$lib/server/spec/writer';
 import { getRepoByPath } from '$lib/server/db/queries';
-import { createItem, getNextSectionNumber, searchItems } from '$lib/server/db/items';
-import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
+import { createItem, getNextSectionNumber, searchItems, getItemsByRepo } from '$lib/server/db/items';
+import type { AreaCode } from '$lib/types';
 
 // Known parameters for validation
 const KNOWN_PARAMS = [
@@ -54,19 +52,28 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    const parser = new SpecParser();
-    const spec = await parser.parseFile(specPath);
+    // Validate area code
+    const validAreas: AreaCode[] = ['SD', 'FE', 'BE', 'FUT'];
+    const areaNames: Record<string, string> = {
+      'SD': 'Site Design',
+      'FE': 'Frontend',
+      'BE': 'Backend',
+      'FUT': 'Future Areas'
+    };
 
-    // Validate area exists
-    const area = spec.areas.find(a => a.code === areaCode);
-    if (!area) {
-      const availableAreas = spec.areas.map(a => `${a.code} (${a.name})`).join(', ');
+    if (!validAreas.includes(areaCode as AreaCode)) {
+      const availableAreas = validAreas.map(code => `${code} (${areaNames[code]})`).join(', ');
       return json({
         success: false,
         error: `Area "${areaCode}" not found`,
         hint: `Available areas: ${availableAreas}`
       }, { status: 400 });
+    }
+
+    // Get repo from DB first (needed for duplicate check)
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
     }
 
     // Determine which tasks will be added
@@ -84,8 +91,8 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    // Check for duplicates
-    const allItems = spec.areas.flatMap(a => a.items);
+    // Check for duplicates in DB
+    const allItems = getItemsByRepo(repo.id);
     const titleLower = title.toLowerCase();
     const similarItem = allItems.find(i => {
       const itemTitleLower = i.title.toLowerCase();
@@ -102,6 +109,8 @@ export const POST: RequestHandler = async ({ request }) => {
         hint: 'Use a different title or edit the existing item'
       }, { status: 409 });
     }
+
+    const area = { name: areaNames[areaCode as AreaCode] };
 
     // Dry run - return what would be created
     if (dryRun) {
@@ -128,12 +137,6 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     }
 
-    // Write to DB (no fallback)
-    const repo = getRepoByPath(repoPath);
-    if (!repo) {
-      return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
-    }
-
     // Create in DB
     const sectionNumber = getNextSectionNumber(repo.id, areaCode as any);
     const displayId = `${areaCode}.${sectionNumber}`;
@@ -157,7 +160,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Create workflow sub-tasks
     if (tasksToAdd.length > 0) {
-      tasksToAdd.forEach((taskTitle, index) => {
+      tasksToAdd.forEach((taskTitle: string, index: number) => {
         createItem({
           repoId: repo.id,
           displayId: `${displayId}.${index + 1}`,
@@ -186,7 +189,6 @@ export const POST: RequestHandler = async ({ request }) => {
         sectionId: result.sectionId,
         areaCode: result.areaCode,
         areaName: area.name,
-        line: result.line,
         title: result.title,
         description: description || null,
         tasksAdded: tasksToAdd,

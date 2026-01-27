@@ -1,9 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getAllRepos, getSession, getRepoByPath } from '$lib/server/db/queries';
-import { SpecParser } from '$lib/server/spec/parser';
-import path from 'path';
-import fs from 'fs/promises';
+import { getSession, getRepoByPath } from '$lib/server/db/queries';
+import { getProgress, getItemsByStatus } from '$lib/server/db/items';
 
 // GET /api/status - Human-friendly status overview
 // Used by CLI: chkd status
@@ -26,16 +24,9 @@ export const GET: RequestHandler = async ({ url }) => {
     // Get session
     const session = getSession(repo.id);
 
-    // Get spec progress
-    let spec = null;
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    try {
-      await fs.access(specPath);
-      const parser = new SpecParser();
-      spec = await parser.parseFile(specPath);
-    } catch {
-      // No spec file
-    }
+    // Get spec progress from DB
+    const progress = getProgress(repo.id);
+    const hasItems = progress.total > 0;
 
     // Build human-friendly status
     const status: any = {
@@ -54,13 +45,20 @@ export const GET: RequestHandler = async ({ url }) => {
       },
     };
 
-    if (spec) {
+    if (hasItems) {
+      // Find items in progress for current phase info
+      const inProgressItems = getItemsByStatus(repo.id, 'in-progress');
+      const currentPhase = inProgressItems.length > 0 ? {
+        name: inProgressItems[0].areaCode,
+        status: 'in-progress'
+      } : null;
+
       status.spec = {
-        title: spec.title,
-        progress: spec.progress,
-        totalItems: spec.totalItems,
-        completedItems: spec.completedItems,
-        currentPhase: spec.phases.find(p => p.status === 'in-progress'),
+        title: repo.name,
+        progress: progress.percent,
+        totalItems: progress.total,
+        completedItems: progress.done,
+        currentPhase,
       };
     }
 
@@ -70,16 +68,13 @@ export const GET: RequestHandler = async ({ url }) => {
     } else if (session.anchor) {
       // User set an anchor - show that
       status.summary = `Ready. Next up: ${session.anchor.title}`;
-    } else if (spec) {
+    } else if (hasItems) {
       // No anchor - prompt discussion instead of auto-suggesting
-      const allComplete = spec.phases
-        .flatMap(p => p.items)
-        .every(i => i.completed);
-      status.summary = allComplete
-        ? `All ${spec.totalItems} items complete! 🎉`
+      status.summary = progress.percent === 100
+        ? `All ${progress.total} items complete! 🎉`
         : 'Ready. Discuss with user what to work on next.';
     } else {
-      status.summary = 'No spec found. Create docs/SPEC.md to get started.';
+      status.summary = 'No spec items in database. Run migration if you have a SPEC.md file.';
     }
 
     return json({ success: true, data: status });

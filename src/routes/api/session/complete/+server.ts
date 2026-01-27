@@ -1,10 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRepoByPath, getSession, clearSession } from '$lib/server/db/queries';
-import { SpecParser } from '$lib/server/spec/parser';
-import { markItemComplete } from '$lib/server/spec/writer';
-import path from 'path';
-import fs from 'fs/promises';
+import { getItem, getChildren, markItemDone } from '$lib/server/db/items';
 
 // POST /api/session/complete - Complete current task
 export const POST: RequestHandler = async ({ request }) => {
@@ -30,50 +27,23 @@ export const POST: RequestHandler = async ({ request }) => {
     const completedId = session.currentTask.id;
 
     // Check for incomplete children before marking complete
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    if (markSpec && !force) {
-      try {
-        const parser = new SpecParser();
-        const spec = await parser.parseFile(specPath);
+    if (markSpec && !force && completedId) {
+      const children = getChildren(completedId);
+      const incompleteChildren = children.filter(c => c.status !== 'done');
 
-        // Find the current task in the spec
-        let currentItem = null;
-        for (const area of spec.areas) {
-          for (const item of area.items) {
-            if (item.id === completedId || item.title.includes(completedTask)) {
-              currentItem = item;
-              break;
-            }
-          }
-          if (currentItem) break;
-        }
-
-        // Check for incomplete children
-        if (currentItem && currentItem.children && currentItem.children.length > 0) {
-          const incompleteChildren = currentItem.children.filter((c: any) => !c.completed);
-          if (incompleteChildren.length > 0) {
-            return json({
-              success: false,
-              error: `Task has ${incompleteChildren.length} incomplete sub-item(s)`,
-              incompleteItems: incompleteChildren.map((c: any) => c.title),
-              hint: 'Complete all sub-items first, or use --force to override'
-            }, { status: 400 });
-          }
-        }
-      } catch (err) {
-        // Can't check - proceed anyway
-        console.error('Could not check for incomplete children:', err);
+      if (incompleteChildren.length > 0) {
+        return json({
+          success: false,
+          error: `Task has ${incompleteChildren.length} incomplete sub-item(s)`,
+          incompleteItems: incompleteChildren.map(c => c.title),
+          hint: 'Complete all sub-items first, or use --force to override'
+        }, { status: 400 });
       }
     }
 
-    // Mark the item complete in the spec file
-    if (markSpec) {
-      try {
-        await markItemComplete(specPath, completedId);
-      } catch (err) {
-        // Log but don't fail - session still completes
-        console.error('Failed to mark spec item complete:', err);
-      }
+    // Mark the item complete in DB
+    if (markSpec && completedId) {
+      markItemDone(completedId);
     }
 
     // Clear the session

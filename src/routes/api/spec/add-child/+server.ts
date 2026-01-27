@@ -50,15 +50,12 @@ export const POST: RequestHandler = async ({ request }) => {
       priority: 'medium'
     });
 
-    const result = { childId: newChild.id };
-
     return json({
       success: true,
       data: {
-        childId: result.childId,
+        childId: newChild.id,
         parentId,
         title: title.trim(),
-        line: result.line,
         message: `Added subtask: ${title.trim()}`
       }
     });

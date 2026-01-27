@@ -2,9 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRepoByPath, getRepoById, getSession } from '$lib/server/db/queries';
 import { getDb } from '$lib/server/db';
-import { markItemInProgress } from '$lib/server/spec/writer';
-import { SpecParser } from '$lib/server/spec/parser';
-import path from 'path';
+import { findItemByQuery, getChildren, markItemInProgress } from '$lib/server/db/items';
 
 // POST /api/session/working-on - Signal Claude is working on an item
 export const POST: RequestHandler = async ({ request }) => {
@@ -33,70 +31,33 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    // Resolve item by searching spec (itemId might be a title/query)
+    // Resolve item by searching DB
     let resolvedId = itemId;
     let resolvedTitle = itemTitle;
+    const queryLower = (itemId || itemTitle || '').toLowerCase();
 
     if (itemId || itemTitle) {
-      const specPath = path.join(repo.path, 'docs', 'SPEC.md');
-      const parser = new SpecParser();
-      const spec = await parser.parseFile(specPath);
-      const queryLower = (itemId || itemTitle || '').toLowerCase();
-
       // Get current task to search its children first
-      const session = getSession(repo.id);
-      const currentTaskId = session?.currentTask?.id;
-
-      // Helper to search children
-      const searchChildren = (children: any[]): { id: string; title: string } | null => {
-        for (const child of children) {
-          if (child.status !== 'done' && child.title.toLowerCase().includes(queryLower)) {
-            return { id: child.id, title: child.title };
-          }
-          if (child.children?.length > 0) {
-            const found = searchChildren(child.children);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
+      const currentTaskId = currentSession.currentTask?.id;
 
       // Search current task's children first
       if (currentTaskId) {
-        for (const area of spec.areas) {
-          for (const item of area.items) {
-            if (item.id === currentTaskId && item.children.length > 0) {
-              const found = searchChildren(item.children);
-              if (found) {
-                resolvedId = found.id;
-                resolvedTitle = found.title;
-                break;
-              }
-            }
+        const children = getChildren(currentTaskId);
+        for (const child of children) {
+          if (child.status !== 'done' && child.title.toLowerCase().includes(queryLower)) {
+            resolvedId = child.id;
+            resolvedTitle = child.title;
+            break;
           }
-          if (resolvedId !== itemId) break;
         }
       }
 
-      // Fall back to global search
+      // Fall back to global search if not found in children
       if (resolvedId === itemId) {
-        for (const area of spec.areas) {
-          for (const item of area.items) {
-            if (item.status !== 'done' && item.title.toLowerCase().includes(queryLower)) {
-              resolvedId = item.id;
-              resolvedTitle = item.title;
-              break;
-            }
-            if (item.children?.length > 0) {
-              const found = searchChildren(item.children);
-              if (found) {
-                resolvedId = found.id;
-                resolvedTitle = found.title;
-                break;
-              }
-            }
-          }
-          if (resolvedId !== itemId) break;
+        const dbItem = findItemByQuery(repo.id, itemId || itemTitle);
+        if (dbItem) {
+          resolvedId = dbItem.id;
+          resolvedTitle = dbItem.title;
         }
       }
     }
@@ -113,11 +74,10 @@ export const POST: RequestHandler = async ({ request }) => {
       WHERE repo_id = ?
     `).run(resolvedId || null, resolvedTitle || null, repo.id);
 
-    // Mark item in-progress in spec file
+    // Mark item in-progress in DB
     if (resolvedId) {
-      const specPath = path.join(repo.path, 'docs', 'SPEC.md');
       try {
-        await markItemInProgress(specPath, resolvedId);
+        markItemInProgress(resolvedId);
       } catch (e) {
         // Item might already be in-progress or done, that's ok
       }

@@ -1,16 +1,15 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRepoByPath, getSession, saveItemDuration, updateSession, clearSession } from '$lib/server/db/queries';
-import { SpecParser } from '$lib/server/spec/parser';
 import { clearQueue } from '$lib/server/proposal';
 import {
   findItemByQuery,
   getItem,
   getChildren,
+  getItemsByRepo,
   markItemDone,
   deleteItem
 } from '$lib/server/db/items';
-import path from 'path';
 
 // POST /api/spec/tick - Mark an item complete
 export const POST: RequestHandler = async ({ request }) => {
@@ -22,121 +21,43 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'repoPath is required' }, { status: 400 });
     }
 
-    const specPath = path.join(repoPath, 'docs', 'SPEC.md');
-    const parser = new SpecParser();
-    const spec = await parser.parseFile(specPath);
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
+    }
 
-    // Find the item (including children)
+    const session = getSession(repo.id);
+    const currentTaskId = session?.currentTask?.id;
+
+    // Find the item
     let targetId = itemId;
     let targetTitle = '';
 
-    // Helper to search children (only incomplete items)
-    const searchChildren = (children: any[], queryLower: string): { id: string; title: string } | null => {
-      for (const child of children) {
-        // Only match incomplete items
-        if (child.status !== 'done' && child.title.toLowerCase().includes(queryLower)) {
-          return { id: child.id, title: child.title };
-        }
-        if (child.children && child.children.length > 0) {
-          const found = searchChildren(child.children, queryLower);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    // Get current session to prioritize current task's children
-    const repo = getRepoByPath(repoPath);
-    const session = repo ? getSession(repo.id) : null;
-    const currentTaskId = session?.currentTask?.id;
-
     if (!targetId && itemQuery) {
-      const areaMatch = itemQuery.match(/^([A-Z]{2,3})\.(\d+)$/i);
-      const numericMatch = itemQuery.match(/^(\d+)\.(\d+)$/);
-      const queryLower = itemQuery.toLowerCase();
-
-      // FIRST: If query is an area code (BE.2, SD.1), match by title prefix
-      // NOTE: Don't use array index - item numbers aren't sequential (gaps from deleted items)
-      if (areaMatch) {
-        const areaCode = areaMatch[1].toUpperCase();
-        const itemNumber = areaMatch[2];
-        const expectedPrefix = `${areaCode}.${itemNumber} `;
-        for (const area of spec.areas) {
-          if (area.code === areaCode) {
-            const item = area.items.find(i => i.title.startsWith(expectedPrefix));
-            if (item) {
-              targetId = item.id;
-              targetTitle = item.title;
-            }
-            break;
-          }
-        }
-      }
-
-      // SECOND: If query is numeric (1.1), match by area index
-      if (!targetId && numericMatch) {
-        const areaIdx = parseInt(numericMatch[1]);
-        const itemNum = parseInt(numericMatch[2]);
-        const area = spec.areas[areaIdx - 1];
-        if (area) {
-          const item = area.items[itemNum - 1];
-          if (item) {
-            targetId = item.id;
-            targetTitle = item.title;
-          }
-        }
-      }
-
-      // THIRD: Search current task's children by title
-      if (!targetId && currentTaskId) {
-        for (const area of spec.areas) {
-          for (const item of area.items) {
-            if (item.id === currentTaskId && item.children.length > 0) {
-              const found = searchChildren(item.children, queryLower);
-              if (found) {
-                targetId = found.id;
-                targetTitle = found.title;
-                break;
-              }
-            }
-          }
-          if (targetId) break;
-        }
-      }
-
-      // FOURTH: Search all items by title
-      if (!targetId) {
-        for (const area of spec.areas) {
-          for (const item of area.items) {
-            // Check item title (only incomplete)
-            if (item.status !== 'done' && item.title.toLowerCase().includes(queryLower)) {
-              targetId = item.id;
-              targetTitle = item.title;
+      // Try to find item by query in DB
+      const dbItem = findItemByQuery(repo.id, itemQuery);
+      if (dbItem) {
+        targetId = dbItem.id;
+        targetTitle = dbItem.title;
+      } else {
+        // If not found and we have a current task, search its children
+        if (currentTaskId) {
+          const children = getChildren(currentTaskId);
+          const queryLower = itemQuery.toLowerCase();
+          for (const child of children) {
+            if (child.status !== 'done' && child.title.toLowerCase().includes(queryLower)) {
+              targetId = child.id;
+              targetTitle = child.title;
               break;
             }
-
-            // Search children recursively
-            if (item.children && item.children.length > 0) {
-              const found = searchChildren(item.children, queryLower);
-              if (found) {
-                targetId = found.id;
-                targetTitle = found.title;
-                break;
-              }
-            }
           }
-          if (targetId) break;
         }
       }
     } else if (!targetId) {
       // No query - tick current task
-      const repo = getRepoByPath(repoPath);
-      if (repo) {
-        const session = getSession(repo.id);
-        if (session.currentTask) {
-          targetId = session.currentTask.id;
-          targetTitle = session.currentTask.title || '';
-        }
+      if (session?.currentTask) {
+        targetId = session.currentTask.id;
+        targetTitle = session.currentTask.title || '';
       }
     }
 
@@ -147,79 +68,17 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    // Find title, parent info, and sibling info
-    let parentTitle = '';
-    let parentId = '';
-    let hasMoreSiblings = false;
-
-    const findItemWithContext = (items: any[], parent?: any): { title: string; parentTitle?: string; parentId?: string; hasMoreSiblings: boolean } | null => {
-      for (const item of items) {
-        if (item.id === targetId) {
-          // Check if there are incomplete siblings
-          const siblings = parent?.children || items;
-          const incompleteSiblings = siblings.filter((s: any) => s.id !== targetId && s.status !== 'done');
-          return {
-            title: item.title,
-            parentTitle: parent?.title,
-            parentId: parent?.id,
-            hasMoreSiblings: incompleteSiblings.length > 0
-          };
-        }
-        if (item.children && item.children.length > 0) {
-          const found = findItemWithContext(item.children, item);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    // Helper to find incomplete children
-    const findIncompleteChildren = (items: any[], targetId: string): string[] => {
-      for (const item of items) {
-        if (item.id === targetId) {
-          if (!item.children || item.children.length === 0) return [];
-          const incomplete: string[] = [];
-          const collectIncomplete = (children: any[]) => {
-            for (const child of children) {
-              if (child.status !== 'done') {
-                incomplete.push(child.title);
-              }
-              if (child.children) collectIncomplete(child.children);
-            }
-          };
-          collectIncomplete(item.children);
-          return incomplete;
-        }
-        if (item.children) {
-          const found = findIncompleteChildren(item.children, targetId);
-          if (found.length > 0 || item.children.some((c: any) => c.id === targetId)) {
-            return found;
-          }
-        }
-      }
-      return [];
-    };
-
-    // Helper to find item status
-    const findItemStatus = (items: any[], targetId: string): string | null => {
-      for (const item of items) {
-        if (item.id === targetId) return item.status;
-        if (item.children) {
-          const found = findItemStatus(item.children, targetId);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    // Check if item is already complete
-    let itemStatus: string | null = null;
-    for (const area of spec.areas) {
-      itemStatus = findItemStatus(area.items, targetId);
-      if (itemStatus) break;
+    // Get the item from DB
+    const dbItem = getItem(targetId) || findItemByQuery(repo.id, targetId);
+    if (!dbItem) {
+      return json({ success: false, error: `Item "${targetId}" not found in database.` }, { status: 404 });
     }
 
-    if (itemStatus === 'done') {
+    targetId = dbItem.id;
+    if (!targetTitle) targetTitle = dbItem.title;
+
+    // Check if item is already complete
+    if (dbItem.status === 'done') {
       const shortTitle = targetTitle.length > 40 ? targetTitle.slice(0, 40) + '...' : targetTitle;
       return json({
         success: false,
@@ -229,11 +88,8 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Check for incomplete children before allowing tick
-    let incompleteChildren: string[] = [];
-    for (const area of spec.areas) {
-      incompleteChildren = findIncompleteChildren(area.items, targetId);
-      if (incompleteChildren.length > 0) break;
-    }
+    const children = getChildren(dbItem.id);
+    const incompleteChildren = children.filter(c => c.status !== 'done').map(c => c.title);
 
     if (incompleteChildren.length > 0) {
       return json({
@@ -245,8 +101,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // DEBOUNCE: Block tick if working was called less than 2 seconds ago
-    // This prevents batch calls like: chkd working && chkd tick
-    if (repo && session?.currentItem?.startTime) {
+    if (session?.currentItem?.startTime) {
       const startTime = new Date(session.currentItem.startTime + 'Z').getTime();
       const timeSinceWorking = Date.now() - startTime;
       const MIN_WORK_TIME_MS = 2000; // 2 seconds
@@ -262,25 +117,20 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    for (const area of spec.areas) {
-      const found = findItemWithContext(area.items);
-      if (found) {
-        if (!targetTitle) targetTitle = found.title;
-        parentTitle = found.parentTitle || '';
-        parentId = found.parentId || '';
-        hasMoreSiblings = found.hasMoreSiblings;
-        break;
+    // Get parent info for response
+    let parentTitle = '';
+    let parentId = '';
+    let hasMoreSiblings = false;
+
+    if (dbItem.parentId) {
+      const parent = getItem(dbItem.parentId);
+      if (parent) {
+        parentId = parent.id;
+        parentTitle = parent.title;
+        // Check for more incomplete siblings
+        const siblings = getChildren(parent.id);
+        hasMoreSiblings = siblings.some(s => s.id !== dbItem.id && s.status !== 'done');
       }
-    }
-
-    // Write to DB (no fallback)
-    if (!repo) {
-      return json({ success: false, error: 'Repository not found in database' }, { status: 404 });
-    }
-
-    const dbItem = findItemByQuery(repo.id, targetId);
-    if (!dbItem) {
-      return json({ success: false, error: `Item "${targetId}" not found in database. Run migration first.` }, { status: 404 });
     }
 
     // Mark done in DB
@@ -288,8 +138,8 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // If this is a top-level item, delete completed children from DB
     if (!dbItem.parentId) {
-      const children = getChildren(dbItem.id);
-      for (const child of children) {
+      const childrenToClean = getChildren(dbItem.id);
+      for (const child of childrenToClean) {
         if (child.status === 'done') {
           deleteItem(child.id);
         }
@@ -297,7 +147,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Save item duration if we were tracking this item
-    if (repo && session?.currentItem?.startTime) {
+    if (session?.currentItem?.startTime) {
       const startTime = new Date(session.currentItem.startTime + 'Z').getTime();
       const durationMs = Date.now() - startTime;
       if (durationMs > 0) {
@@ -308,7 +158,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // If ticking a top-level item (no parent), clear the session
-    if (repo && !parentId) {
+    if (!parentId) {
       clearSession(repo.id);
     }
 
@@ -316,7 +166,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const queuedItems = clearQueue(repoPath);
 
     // Check for rapid ticks (rate limiting)
-    const lastTickKey = `lastTick:${repo?.id}`;
+    const lastTickKey = `lastTick:${repo.id}`;
     const now = Date.now();
     const lastTick = (global as any)[lastTickKey] || 0;
     const timeSinceLastTick = now - lastTick;
