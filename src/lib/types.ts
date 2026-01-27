@@ -1,3 +1,21 @@
+// Workflow step with nested children (for spec task generation)
+export interface WorkflowStep {
+  task: string;
+  children: string[];
+}
+
+// Complete feature spec for creating items with all required metadata
+export interface FeatureSpec {
+  title: string;
+  description: string;
+  userStory: string;
+  keyRequirements: string[];
+  filesToChange: string[];
+  testing: string[];
+  areaCode: 'SD' | 'FE' | 'BE' | 'FUT';
+  phases?: WorkflowStep[];  // Optional - uses defaults if not provided
+}
+
 // Repository
 export interface Repository {
   id: string;
@@ -25,9 +43,17 @@ export interface ItemInfo {
   startTime?: string | null;  // When work started on this item
 }
 
+export interface AnchorInfo {
+  id: string;
+  title: string;
+  setAt: string | null;
+  setBy: 'ui' | 'cli' | null;
+}
+
 export interface TaskSession {
   currentTask: TaskInfo | null;
   currentItem: ItemInfo | null;  // item being worked on NOW
+  anchor: AnchorInfo | null;     // User-set task anchor (may differ from currentTask)
   startTime: string | null;
   iteration: number;
   status: SessionStatus;
@@ -67,4 +93,219 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+// ===== MULTI-WORKER SYSTEM =====
+
+// Worker status state machine:
+// pending -> waiting -> working -> (paused <-> working) -> merging -> merged
+//                                                      \-> error
+export type WorkerStatus = 'pending' | 'waiting' | 'working' | 'paused' | 'merging' | 'merged' | 'error';
+
+// Worker instance
+export interface Worker {
+  id: string;                    // 'worker-{username}-{timestamp}-{random4}'
+  repoId: string;
+  username: string;
+
+  // Assignment
+  taskId: string | null;
+  taskTitle: string | null;
+
+  // Status
+  status: WorkerStatus;
+  message: string | null;        // Last status message
+  progress: number;              // 0-100
+
+  // Git
+  worktreePath: string | null;
+  branchName: string | null;
+
+  // Timing
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  heartbeatAt: string | null;
+
+  // Queue
+  nextTaskId: string | null;
+  nextTaskTitle: string | null;
+
+  // Computed (for UI)
+  elapsedMs?: number;
+  heartbeatAgoMs?: number;
+}
+
+// Worker history entry (audit trail)
+export type WorkerOutcome = 'merged' | 'aborted' | 'error';
+
+export interface WorkerHistory {
+  id: string;
+  repoId: string;
+  workerId: string;
+
+  // What was done
+  taskId: string | null;
+  taskTitle: string | null;
+  branchName: string | null;
+
+  // Outcome
+  outcome: WorkerOutcome;
+  mergeConflicts: number;
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+
+  // Timing
+  startedAt: string | null;
+  completedAt: string | null;
+  durationMs: number | null;
+}
+
+// Manager signal types
+export type SignalType = 'status' | 'decision' | 'help' | 'suggestion' | 'warning';
+
+export interface ManagerSignal {
+  id: string;
+  repoId: string;
+
+  // Content
+  type: SignalType;
+  message: string;
+  details: Record<string, unknown> | null;  // JSON parsed
+
+  // Related worker
+  workerId: string | null;
+
+  // State
+  dismissed: boolean;
+  actionRequired: boolean;
+  actionOptions: string[] | null;  // JSON parsed
+
+  // Timing
+  createdAt: string;
+  dismissedAt: string | null;
+}
+
+// API types for worker management
+export interface SpawnWorkerRequest {
+  repoPath: string;
+  taskId: string;
+  taskTitle: string;
+  username?: string;
+  nextTaskId?: string;
+  nextTaskTitle?: string;
+}
+
+export interface SpawnWorkerResponse {
+  workerId: string;
+  worktreePath: string;
+  branchName: string;
+  command: string;  // e.g., 'cd ../myproject-worker-1 && claude'
+}
+
+export interface WorkerHeartbeatRequest {
+  message?: string;
+  progress?: number;
+}
+
+export interface WorkerHeartbeatResponse {
+  status: WorkerStatus;
+  shouldPause: boolean;
+  shouldAbort: boolean;
+  nextTask?: {
+    taskId: string;
+    taskTitle: string;
+  };
+}
+
+export interface WorkerCompleteResponse {
+  mergeStatus: 'clean' | 'conflicts' | 'pending';
+  conflicts?: ConflictInfo[];
+  nextTask?: {
+    taskId: string;
+    taskTitle: string;
+  };
+}
+
+export interface ConflictInfo {
+  file: string;
+  type: 'content' | 'deleted' | 'renamed';
+  oursContent?: string;   // First ~10 lines
+  theirsContent?: string; // First ~10 lines
+  conflictLines: number;
+}
+
+// ===== SPEC ITEMS (DB-FIRST) =====
+
+export type ItemStatus = 'open' | 'in-progress' | 'done' | 'skipped' | 'blocked';
+export type ItemPriority = 'low' | 'medium' | 'high' | 'critical';
+export type AreaCode = 'SD' | 'FE' | 'BE' | 'FUT';
+
+export interface SpecItem {
+  id: string;                       // UUID
+  repoId: string;
+  displayId: string;                // 'SD.37' or 'SD.37.1'
+
+  // Content
+  title: string;
+  description: string | null;
+  story: string | null;
+  keyRequirements: string[];        // JSON parsed
+  filesToChange: string[];          // JSON parsed
+  testing: string[];                // JSON parsed
+
+  // Classification
+  areaCode: AreaCode;
+  sectionNumber: number;
+
+  // Hierarchy
+  parentId: string | null;          // UUID of parent
+  sortOrder: number;
+
+  // Status
+  status: ItemStatus;
+  priority: ItemPriority;
+
+  // Tags (populated separately)
+  tags?: string[];
+
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateItemInput {
+  repoId: string;
+  displayId: string;
+  title: string;
+  description?: string;
+  story?: string;
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+  areaCode: AreaCode;
+  sectionNumber: number;
+  parentId?: string;
+  sortOrder?: number;
+  status?: ItemStatus;
+  priority?: ItemPriority;
+}
+
+export interface UpdateItemInput {
+  title?: string;
+  description?: string | null;
+  story?: string | null;
+  keyRequirements?: string[];
+  filesToChange?: string[];
+  testing?: string[];
+  status?: ItemStatus;
+  priority?: ItemPriority;
+  sortOrder?: number;
+}
+
+export interface ItemProgress {
+  total: number;
+  done: number;
+  percent: number;
 }
