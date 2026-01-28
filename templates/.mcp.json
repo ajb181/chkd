@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "chkd": {
+      "command": "npx",
+      "args": ["tsx", "/Users/alex/chkd/src/mcp/server-http.ts"]
+    }
+  }
+}

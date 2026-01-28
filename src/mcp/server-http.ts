@@ -2309,9 +2309,10 @@ server.tool(
 // ============================================
 
 server.resource(
+  "conscience",
   "chkd://conscience",
-  "Current session state, guidance, and behavioral reminders. Read this to understand where you are and what you should be doing.",
-  async () => {
+  { description: "Current session state, guidance, and behavioral reminders. Read this to understand where you are and what you should be doing." },
+  async (uri, extra) => {
     const repoPath = getRepoPath();
 
     try {
@@ -2457,9 +2458,10 @@ server.resource(
 
 // Spec resource - read the current spec
 server.resource(
+  "spec",
   "chkd://spec",
-  "The current spec from the database - task list, areas, and progress. Read this to understand what needs to be done.",
-  async () => {
+  { description: "The current spec from the database - task list, areas, and progress. Read this to understand what needs to be done." },
+  async (uri, extra) => {
     const repoPath = getRepoPath();
 
     try {

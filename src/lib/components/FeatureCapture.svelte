@@ -109,6 +109,19 @@
   let adding = false;
   let addError: string | null = null;
   let addSuccess: { sectionId: string; areaName: string; taskCount: number } | null = null;
+  let copied = false;
+
+  // Copy ID to clipboard
+  async function copyId() {
+    if (!addSuccess) return;
+    try {
+      await navigator.clipboard.writeText(addSuccess.sectionId);
+      copied = true;
+      setTimeout(() => copied = false, 2000);
+    } catch (e) {
+      console.error('Failed to copy:', e);
+    }
+  }
 
   // Pending attachments (to be attached after feature is created)
   let pendingFiles: File[] = [];
@@ -280,12 +293,12 @@
         areaName: res.data.areaName,
         taskCount: res.data.taskCount
       };
-      // Auto-close after 3 seconds, or user can click to close immediately
+      // Auto-close after 5 seconds, or user can click to close immediately
       setTimeout(() => {
         if (addSuccess) {
           dispatch('added');
         }
-      }, 3000);
+      }, 5000);
     } else {
       addError = res.error || 'Failed to add feature';
     }
@@ -758,7 +771,10 @@
               <div class="success-icon">✓</div>
               <h2>Feature Added!</h2>
               <div class="success-details">
-                <div class="success-id">{addSuccess.sectionId}</div>
+                <button class="success-id" on:click={copyId} title="Click to copy ID">
+                  {addSuccess.sectionId}
+                  {#if copied}<span class="copied-badge">Copied!</span>{/if}
+                </button>
                 <div class="success-meta">
                   Added to {addSuccess.areaName} with {addSuccess.taskCount} tasks
                 </div>
@@ -766,7 +782,7 @@
               <button class="btn-primary" on:click={() => dispatch('added')}>
                 Done
               </button>
-              <p class="success-hint">Closing automatically...</p>
+              <p class="success-hint">Click ID to copy • Closing in 5s...</p>
             </div>
           {:else}
             <h2>Ready to add</h2>
@@ -1598,6 +1614,32 @@
     padding: var(--space-sm) var(--space-md);
     border-radius: var(--radius-md);
     margin-bottom: var(--space-sm);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .success-id:hover {
+    border-color: var(--success);
+    background: var(--success-bg);
+  }
+
+  .copied-badge {
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--success);
+    color: white;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
   }
 
   .success-meta {

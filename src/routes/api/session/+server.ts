@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSession, getRepoByPath, getRepoById } from '$lib/server/db/queries';
+import { getSession, getRepoByPath, getRepoById, updateSession, clearSession } from '$lib/server/db/queries';
 import { getAllHandoverNotes } from '$lib/server/proposal';
 
 // GET /api/session - Get current session state
@@ -41,6 +41,46 @@ export const GET: RequestHandler = async ({ url }) => {
     return json({
       success: true,
       data: { ...session, repoPath: repo.path, handoverNotes }
+    });
+  } catch (error) {
+    return json({ success: false, error: String(error) }, { status: 500 });
+  }
+};
+
+// PATCH /api/session - Update session state manually
+export const PATCH: RequestHandler = async ({ request }) => {
+  try {
+    const body = await request.json();
+    const { repoPath, status, mode } = body;
+
+    if (!repoPath) {
+      return json({ success: false, error: 'repoPath is required' }, { status: 400 });
+    }
+
+    const repo = getRepoByPath(repoPath);
+    if (!repo) {
+      return json({ success: false, error: 'Repository not found' }, { status: 404 });
+    }
+
+    // If setting to idle, clear the session
+    if (status === 'idle') {
+      clearSession(repo.id);
+      return json({
+        success: true,
+        data: { message: 'Session cleared', status: 'idle' }
+      });
+    }
+
+    // Otherwise update status/mode
+    const updates: { status?: string; mode?: string | null } = {};
+    if (status) updates.status = status;
+    if (mode !== undefined) updates.mode = mode;
+
+    updateSession(repo.id, updates);
+
+    return json({
+      success: true,
+      data: { message: `Session updated to ${status || mode}`, status, mode }
     });
   } catch (error) {
     return json({ success: false, error: String(error) }, { status: 500 });
