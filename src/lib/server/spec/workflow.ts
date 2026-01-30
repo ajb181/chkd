@@ -111,8 +111,36 @@ export const DEBUG_WORKFLOW: WorkflowStep[] = [
   DEFAULT_WORKFLOW_STEPS[7], // Commit
 ];
 
+/** Frontend workflow: Explore → Design → Build (with mocks) → Test → Polish → Commit
+ *  Philosophy: Build UI first with mock data but correct function signatures.
+ *  Backend is a separate item. Wire-up happens after both exist.
+ */
+export const FRONTEND_WORKFLOW: WorkflowStep[] = [
+  {
+    task: 'Explore: research problem, check existing code/patterns',
+    children: ['Research: investigate codebase and problem space', 'Share: inform user of findings']
+  },
+  {
+    task: 'Design: plan approach + define function/API contracts',
+    children: ['Draft: component structure, props, function signatures', 'Review: confirm approach with user']
+  },
+  {
+    task: 'Build: create UI with mock data, correct function signatures',
+    children: ['Implement: build components with TypeScript interfaces', 'Mock: stub API calls with realistic fake data']
+  },
+  {
+    task: 'Test: verify UI works correctly with mocks',
+    children: ['Manual: click through all states in browser', 'Verify: loading, empty, error states all render']
+  },
+  FE_POLISH_STEP,
+  {
+    task: 'Commit: commit code with descriptive message',
+    children: ['Stage: review changes', 'Commit: push to remote']
+  }
+];
+
 /** Valid workflow types */
-export type WorkflowType = 'remove' | 'backend' | 'refactor' | 'audit' | 'debug';
+export type WorkflowType = 'remove' | 'backend' | 'refactor' | 'audit' | 'debug' | 'frontend';
 
 /** Get workflow steps by type and area */
 export function getWorkflowByType(type?: string, areaCode?: string): WorkflowStep[] {
@@ -120,6 +148,7 @@ export function getWorkflowByType(type?: string, areaCode?: string): WorkflowSte
 
   switch (type) {
     case 'remove': return REMOVE_WORKFLOW;
+    case 'frontend': return FRONTEND_WORKFLOW;
     case 'backend':
       // Backend always uses BE Polish
       return [
@@ -140,15 +169,21 @@ export function getWorkflowByType(type?: string, areaCode?: string): WorkflowSte
     case 'audit': return AUDIT_WORKFLOW;
     case 'debug': return DEBUG_WORKFLOW;
     default:
-      // Default workflow with area-aware Polish
+      // Area-aware defaults: FE gets frontend workflow, BE gets backend workflow
+      if (areaCode === 'FE' || areaCode === 'SD') return FRONTEND_WORKFLOW;
+      if (areaCode === 'BE') return [
+        DEFAULT_WORKFLOW_STEPS[0], // Explore
+        DEFAULT_WORKFLOW_STEPS[1], // Design
+        DEFAULT_WORKFLOW_STEPS[4], // Implement
+        BE_POLISH_STEP,
+        DEFAULT_WORKFLOW_STEPS[7], // Commit
+      ];
+      // Generic fallback
       return [
         DEFAULT_WORKFLOW_STEPS[0], // Explore
         DEFAULT_WORKFLOW_STEPS[1], // Design
-        DEFAULT_WORKFLOW_STEPS[2], // Prototype
-        DEFAULT_WORKFLOW_STEPS[3], // Feedback
         DEFAULT_WORKFLOW_STEPS[4], // Implement
         polish,
-        DEFAULT_WORKFLOW_STEPS[6], // Document
         DEFAULT_WORKFLOW_STEPS[7], // Commit
       ];
   }
