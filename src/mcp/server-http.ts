@@ -179,11 +179,22 @@ async function getContextualNudges(
     return nudges;
   }
 
-  // Check-in nudge
+  // Check-in nudge - make it prominent when overdue
   const timeSinceCheckIn = getTimeSinceCheckIn(repoPath);
   if (timeSinceCheckIn > CHECK_IN_INTERVAL) {
     const mins = Math.floor(timeSinceCheckIn / 60000);
-    nudges.push(`⏰ ${mins}+ min without check-in. Run checkin()`);
+    if (mins >= 30) {
+      // Very overdue - urgent warning
+      nudges.unshift(`🚨 ${mins}+ min without check-in!`);
+      nudges.unshift(`   STOP and run checkin() NOW before continuing.`);
+      nudges.unshift(`   Philosophy: "Tick. Verify. Tick. Verify."`);
+    } else if (mins >= 15) {
+      // Moderately overdue
+      nudges.unshift(`⏰ ${mins}+ min without check-in - run checkin()`);
+    } else {
+      // Just overdue
+      nudges.push(`⏰ ${mins}+ min without check-in. Run checkin()`);
+    }
   }
 
   // Off-track nudge
@@ -465,7 +476,7 @@ CHECKPOINTS (get user alignment):
 □ "I think I found the cause: [X]. Does that make sense?"
 
 WHEN YOU FIND SOMETHING:
-• Bug to fix? → bugfix("description")
+• Bug to fix? → bug("description") to log it, then bugfix("description")
 • Just learning? → Document in .debug-notes.md
 • Scope creep idea? → bug("idea") or win("idea")
 
@@ -512,11 +523,40 @@ server.tool(
     const duration = formatDuration(session.elapsedMs || 0);
 
     await api.clearSession(repoPath);
+    
+    // Get context for smarter next-step suggestions
+    const bugsResponse = await api.getBugs(repoPath);
+    const openBugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
+    
+    const queueResponse = await api.getQueue(repoPath);
+    const queue = queueResponse.data?.items || [];
+    
+    let text = `✅ Session ended: ${taskTitle}\n📊 Duration: ${duration}\n`;
+    
+    // Context-aware next step suggestions
+    text += `\n───────────────────────────────────────`;
+    text += `\nWHAT'S NEXT?`;
+    
+    if (queue.length > 0) {
+      text += `\n• 📬 Queue has ${queue.length} message(s) from user - check these first`;
+    }
+    
+    if (session.mode === 'debugging') {
+      text += `\n• Was this a bug? → bug("description") to log it`;
+      text += `\n• Ready to fix? → bugfix("description") to start`;
+    }
+    
+    if (openBugs.length > 0) {
+      text += `\n• 🐛 ${openBugs.length} open bug(s) - bugfix() to work on one`;
+    }
+    
+    text += `\n• 💬 Discuss with user what to work on next`;
+    text += `\n• 📊 status() to see full project state`;
 
     return {
       content: [{
         type: "text",
-        text: `✅ Session ended: ${taskTitle}\n📊 Duration: ${duration}\n\n💭 What's next? Run status() to see options.`
+        text
       }]
     };
   }
@@ -579,19 +619,20 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    const bug = await api.getBugByQuery(repoPath, query);
+    let bug = await api.getBugByQuery(repoPath, query);
+    
+    // Auto-create bug if not found (common flow: debug → bugfix with same description)
     if (!bug) {
-      const bugsResponse = await api.getBugs(repoPath);
-      const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed');
-      let bugList = bugs.length > 0
-        ? bugs.map((b: any) => `  • ${b.id.slice(0,6)} - ${b.title}`).join('\n')
-        : '  (no open bugs)';
-      return {
-        content: [{
-          type: "text",
-          text: `❌ Bug not found: "${query}"\n\nOpen bugs:\n${bugList}`
-        }]
-      };
+      const createResponse = await api.createBug(repoPath, query, undefined, 'medium');
+      if (!createResponse.success) {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ Failed to create bug: ${createResponse.error}`
+          }]
+        };
+      }
+      bug = createResponse.data;
     }
 
     if (bug.status === 'fixed') {
@@ -862,12 +903,25 @@ server.tool(
     recordPulse(repoPath);
     recordCheckIn(repoPath);
 
+    // Get progress info
+    const progressResponse = await api.getSpecProgress(repoPath);
+    const progress = progressResponse.data?.progress;
+    
     let text = `💓 Pulse: ${status}\n`;
-    text += `✓ Check-in recorded (timer reset)\n`;
+    text += `───────────────────────────────────────\n`;
+    text += `✓ Check-in recorded (timer reset)\n\n`;
 
+    // Current task info
     if (session?.currentTask) {
-      text += `Task: ${session.currentTask.title}\n`;
-      text += `Iteration: ${session.iteration || 1} • ${formatDuration(session.elapsedMs || 0)}\n`;
+      text += `📋 Current Task:\n`;
+      text += `   ${session.currentTask.title}\n`;
+      text += `   Iteration ${session.iteration || 1} • ${formatDuration(session.elapsedMs || 0)}\n\n`;
+    }
+    
+    // Overall progress
+    if (progress) {
+      const pct = progress.percent || 0;
+      text += `📊 Project: ${pct}% complete (${progress.done}/${progress.total})\n\n`;
     }
 
     // Show anchor status
@@ -875,20 +929,23 @@ server.tool(
     const trackStatus = anchorResponse.data;
     if (trackStatus?.anchor) {
       if (trackStatus.onTrack) {
-        text += `🎯 Anchor: ${trackStatus.anchor.title} ✓\n`;
+        text += `🎯 On Track: ${trackStatus.anchor.title}\n`;
       } else {
         text += `⚠️ OFF TRACK from anchor: ${trackStatus.anchor.title}\n`;
+        text += `   → Return to anchor or call pivot()\n`;
       }
     }
 
+    // Queue
     if (queue.length > 0) {
-      text += `\n📬 Queue (${queue.length}):\n`;
+      text += `\n📬 Queue (${queue.length} from user):\n`;
       queue.forEach((q: any) => {
         text += `  • ${q.title}\n`;
       });
     }
 
-    text += `\n💭 Keep going. Pulse again in ~15 min or when you make progress.`;
+    text += `\n───────────────────────────────────────`;
+    text += `\n💭 Keep going. Pulse again in ~15 min.`;
 
     return {
       content: [{
@@ -955,6 +1012,13 @@ server.tool(
     const queue = queueResponse.data?.items || [];
 
     let text = `✅ Completed: ${fullTitle}`;
+    
+    // Check if this was a Confirm step - remind about user approval
+    const lowerTitle = fullTitle.toLowerCase();
+    if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
+      text += `\n\n⚠️  CHECKPOINT: Did you get explicit user approval?`;
+      text += `\n   If not, discuss with user before proceeding.`;
+    }
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -1026,6 +1090,14 @@ server.tool(
     const queue = queueResponse.data?.items || [];
 
     let text = `🔨 Working on: ${fullTitle}`;
+    
+    // Check if this is a Confirm/Verify step - warn about user approval requirement
+    const lowerTitle = fullTitle.toLowerCase();
+    if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
+      text += `\n\n🛑 USER APPROVAL REQUIRED`;
+      text += `\n   This step needs explicit user approval before ticking.`;
+      text += `\n   Show your findings → wait for user "yes" → then tick.`;
+    }
 
     if (queue.length > 0) {
       text += `\n\n📬 Queue (${queue.length}):\n`;
@@ -1431,20 +1503,30 @@ server.tool(
 // upgrade_mcp - Check server version and get upgrade instructions
 server.tool(
   "upgrade_mcp",
-  "Check which MCP server version you're using and get upgrade instructions if needed.",
+  "Check MCP server version, staleness, and get upgrade instructions if needed.",
   {},
   async () => {
     const repoPath = getRepoPath();
-    const chkdPath = repoPath; // Assuming current project is chkd dev repo
+    const chkdPath = repoPath;
+    const stale = isServerStale();
 
     let text = `╔══════════════════════════════════════╗\n`;
     text += `║       MCP SERVER VERSION CHECK       ║\n`;
     text += `╚══════════════════════════════════════╝\n\n`;
 
-    text += `✅ You're using the NEW HTTP-based server!\n\n`;
+    // Version and staleness check
     text += `Server Type: ${SERVER_TYPE}\n`;
-    text += `Version: ${SERVER_VERSION}\n\n`;
-    text += `───────────────────────────────────────\n`;
+    text += `Version: ${SERVER_VERSION}\n`;
+    
+    if (stale) {
+      text += `\n⚠️  SERVER IS STALE!\n`;
+      text += `The server code has changed since this session started.\n`;
+      text += `Restart Claude Code to get the latest tools.\n`;
+    } else {
+      text += `Status: ✅ Up to date\n`;
+    }
+    
+    text += `\n───────────────────────────────────────\n`;
     text += `Benefits of HTTP-based server:\n`;
     text += `• UI syncs automatically (no refresh!)\n`;
     text += `• Single source of truth (API)\n`;
@@ -1452,16 +1534,17 @@ server.tool(
     text += `• Better error handling\n`;
     text += `───────────────────────────────────────\n\n`;
 
-    text += `🔄 TO UPGRADE OTHER PROJECTS:\n\n`;
-    text += `If you have OTHER projects using chkd MCP,\n`;
-    text += `update them to use the new server:\n\n`;
+    if (stale) {
+      text += `🔄 ACTION REQUIRED:\n`;
+      text += `Restart Claude Code to use the updated MCP server.\n\n`;
+    }
+
+    text += `📋 TO UPGRADE OTHER PROJECTS:\n`;
     text += `1. Open that project in Claude Code\n`;
-    text += `2. Run these commands:\n`;
+    text += `2. Run:\n`;
     text += `   claude mcp remove chkd\n`;
     text += `   claude mcp add chkd -- npx tsx ${chkdPath}/src/mcp/server-http.ts\n`;
-    text += `3. Restart Claude Code\n\n`;
-    text += `💡 The old server (server.ts) still works but\n`;
-    text += `   doesn't have UI sync capabilities.`;
+    text += `3. Restart Claude Code`;
 
     return {
       content: [{
@@ -2084,7 +2167,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `✅ All ${totalActive} workers are healthy\n\n💡 No dead workers detected (threshold: ${thresholdMinutes || 2} min)`
+          text: `✅ All ${totalActive} workers are healthy\n\n💡 No dead workers detected (heartbeat threshold: ${thresholdMinutes || 2} min, pending timeout: 5 min)`
         }]
       };
     }
@@ -2126,14 +2209,30 @@ server.tool(
 // worker_heartbeat - Worker reports status
 server.tool(
   "worker_heartbeat",
-  "Send a heartbeat to report worker status. Workers should call this every 30 seconds to stay alive. Returns instructions if worker should pause/abort.",
+  "Send a heartbeat to report worker status. Workers should call this every 30 seconds to stay alive. Returns instructions if worker should pause/abort. Auto-detects worker ID if running in a worktree.",
   {
-    workerId: z.string().describe("Your worker ID"),
+    workerId: z.string().optional().describe("Your worker ID (auto-detected if in worktree)"),
     message: z.string().optional().describe("Brief status message (what you're doing)"),
     progress: z.number().min(0).max(100).optional().describe("Progress percentage (0-100)")
   },
   async ({ workerId, message, progress }) => {
-    const response = await api.workerHeartbeat(workerId, message, progress);
+    // Auto-detect worker ID from worktree context if not provided
+    let resolvedWorkerId = workerId;
+    if (!resolvedWorkerId) {
+      const workerContext = await getWorkerContext();
+      if (workerContext?.id) {
+        resolvedWorkerId = workerContext.id;
+      } else {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ No worker ID provided and not running in a worker worktree.\n\n💡 Either provide workerId parameter or run this from a worker context.`
+          }]
+        };
+      }
+    }
+    
+    const response = await api.workerHeartbeat(resolvedWorkerId, message, progress);
 
     if (!response.success) {
       return {
@@ -2173,19 +2272,35 @@ server.tool(
 // worker_complete - Worker signals task completion
 server.tool(
   "worker_complete",
-  "Signal that your task is complete and ready for merge. Master Claude will handle the merge process.",
+  "Signal that your task is complete and ready for merge. Master Claude will handle the merge process. Auto-detects worker ID if running in a worktree.",
   {
-    workerId: z.string().describe("Your worker ID"),
+    workerId: z.string().optional().describe("Your worker ID (auto-detected if in worktree)"),
     summary: z.string().optional().describe("Brief summary of what was accomplished")
   },
   async ({ workerId, summary }) => {
+    // Auto-detect worker ID from worktree context if not provided
+    let resolvedWorkerId = workerId;
+    if (!resolvedWorkerId) {
+      const workerContext = await getWorkerContext();
+      if (workerContext?.id) {
+        resolvedWorkerId = workerContext.id;
+      } else {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ No worker ID provided and not running in a worker worktree.\n\n💡 Either provide workerId parameter or run this from a worker context.`
+          }]
+        };
+      }
+    }
+    
     // First update worker message with summary
     if (summary) {
-      await api.updateWorker(workerId, { message: summary, progress: 100 });
+      await api.updateWorker(resolvedWorkerId, { message: summary, progress: 100 });
     }
 
     // Then trigger completion/merge
-    const response = await api.completeWorker(workerId, true);
+    const response = await api.completeWorker(resolvedWorkerId, true);
 
     if (!response.success) {
       return {

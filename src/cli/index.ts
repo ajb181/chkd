@@ -570,12 +570,24 @@ async function done(force: boolean = false) {
 
   console.log(`\n  ✅ Completed: ${res.data.completedTask}`);
 
-  if (res.data.nextTask) {
-    console.log(`\n  📋 Next up: ${res.data.nextTask}`);
-  } else {
-    console.log(`\n  💬 Discuss with user what to work on next.`);
-  }
+  // Get context for smarter suggestions
+  const bugsRes = await api(`/api/bugs?repoPath=${encodeURIComponent(cwd)}`);
+  const openBugs = (bugsRes.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
+  
+  console.log(`\n  ─────────────────────────────────`);
+  console.log(`  WHAT'S NEXT?`);
 
+  if (res.data.nextTask) {
+    console.log(`  • 📋 Next in spec: ${res.data.nextTask}`);
+  }
+  
+  if (openBugs.length > 0) {
+    console.log(`  • 🐛 ${openBugs.length} open bug(s) - chkd bugfix to work on one`);
+  }
+  
+  console.log(`  • 💬 Discuss with user what to work on next`);
+  console.log(`  • 📊 chkd status to see full project state`);
+  
   console.log(`\n  Session is now idle.\n`);
 }
 
@@ -990,16 +1002,28 @@ async function startBugfix(query: string, options: { convert?: boolean } = {}) {
   const queryLower = query.toLowerCase();
 
   // Find by ID or title
-  const bug = bugs.find((b: any) =>
+  let bug = bugs.find((b: any) =>
     b.id === query ||
     (typeof b.id === 'string' && b.id.startsWith(query)) ||
     b.title.toLowerCase().includes(queryLower)
   );
 
+  // Auto-create bug if not found (common flow: debug → bugfix with same description)
+  let createdBug = false;
   if (!bug) {
-    console.log(`\n  ❌ Bug not found: "${query}"`);
-    console.log(`\n  Run 'chkd bugs' to see available bugs.\n`);
-    return;
+    const createRes = await api('/api/bugs', {
+      method: 'POST',
+      body: JSON.stringify({ repoPath: cwd, title: query, severity: 'medium' }),
+    });
+    
+    if (!createRes.success) {
+      console.log(`\n  ❌ Bug not found and could not create: "${query}"`);
+      console.log(`  ${createRes.error}\n`);
+      return;
+    }
+    
+    bug = createRes.data;
+    createdBug = true;
   }
 
   if (bug.status === 'fixed') {
@@ -1041,6 +1065,9 @@ async function startBugfix(query: string, options: { convert?: boolean } = {}) {
                   bug.severity === 'high' ? '🟠' :
                   bug.severity === 'low' ? '🟢' : '🟡';
 
+  if (createdBug) {
+    console.log(`\n  ✓ Bug logged: ${bug.id?.slice(0, 6) || 'new'}`);
+  }
   console.log(`\n  🐛 Bug: ${bug.title}`);
   console.log(`  ─────────────────────────────────`);
   console.log(`  Severity: ${sevIcon} ${bug.severity.toUpperCase()}`);

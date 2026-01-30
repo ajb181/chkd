@@ -62,9 +62,22 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     if (!targetId) {
+      // Check if session exists but no task vs completely idle
+      const sessionExists = session && session.status !== 'idle';
+      
+      if (!sessionExists && itemQuery) {
+        // Session dropped/expired while user thought they were working
+        return json({
+          success: false,
+          error: `Item "${itemQuery}" not found and no active session`,
+          hint: 'Session may have expired. Try: 1) Start fresh with chkd start "task" or 2) Use full item title if ticking a specific item'
+        }, { status: 400 });
+      }
+      
       return json({
         success: false,
-        error: 'No item specified and no current task'
+        error: 'No item specified and no current task',
+        hint: 'Start a task first with chkd start "task" or specify an item to tick'
       }, { status: 400 });
     }
 

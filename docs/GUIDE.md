@@ -8,7 +8,7 @@
 
 chkd helps you build software with Claude Code without losing control:
 
-1. **Spec-driven** - Your features are stored in a local database (viewable via UI/MCP)
+1. **Spec-driven** - Your features live in `docs/SPEC.md`
 2. **Progress tracking** - See what's done, in progress, blocked
 3. **Keeps Claude focused** - Builds what you planned, logs surprises
 4. **MCP integration** - Claude gets context automatically
@@ -230,43 +230,101 @@ When the MCP server is connected, Claude has these tools:
 | `epics` | List all epics with progress |
 | `tag` | Link item to epic via tag |
 
----
-
-## Dashboard UI
-
-Access the dashboard at `http://localhost:3847` when the server is running.
-
-### Views
-
-Toggle between three views using the buttons in the header:
-
-| View | Description |
-|------|-------------|
-| **Todo List** | Items grouped by priority (P1/P2/P3/Backlog) |
-| **By Area** | Items grouped by area (SD/FE/BE/FUT) |
-| **By Epic** | Items grouped by epic tag |
-
-### Epic View
-
-The epic view shows all epics with:
-- **Description** visible under the header
-- **Progress bar** showing completion (X/Y items)
-- **Status badge** (planning, in-progress, review, complete)
-- **Collapsible stories** section
-
-Items tagged with an epic appear grouped together. Epic tags are highlighted in coral across all views.
-
-Click the file path to open the epic doc in VS Code.
-
-### Filtering
-
-- **Search box** - Filter items by title
-- **Show completed** - Toggle to show/hide completed items
-- **Tag filter** - Click tags to filter by epic
-
 **Resources** (Claude reads these for context):
 - `chkd://conscience` - Session state, guidance, habits
 - `chkd://spec` - Current spec with progress
+
+---
+
+## Skills (in Claude Code)
+
+| Skill | Purpose |
+|-------|---------|
+| `/chkd FE.1` | Build task FE.1 from the spec |
+| `/epic "Name"` | Plan and create a large feature (interview → design → stories) |
+| `/story` | Plan features, refine specs |
+| `/bugfix` | Fix bugs with minimal changes |
+
+---
+
+## Daily Workflow
+
+```
+1. Start chkd server     →  cd ~/chkd && npm run dev
+2. Open Claude Code      →  claude
+3. Check status          →  Claude runs status
+4. Build a task          →  /chkd FE.1
+5. Review and commit     →  /commit
+6. Repeat
+```
+
+---
+
+## Spec Format
+
+```markdown
+## Area Name
+
+- [ ] **CODE.1 Feature title** - Description
+  - [ ] Sub-task 1
+  - [ ] Sub-task 2
+```
+
+**Area codes:** FE (Frontend), BE (Backend), SD (Site Design), FUT (Future)
+
+**Markers:**
+- `[ ]` - Not started
+- `[~]` - In progress
+- `[x]` - Complete
+- `[!]` - Blocked
+
+---
+
+## Staying Focused
+
+When working on a task:
+
+1. **Notice a bug?** → `bug("description")` then continue
+2. **Want to refactor?** → Log it, don't do it
+3. **Something seems off?** → Log it, stay on track
+
+The bugs/quick wins lists exist so nothing gets lost. Fix them later.
+
+---
+
+## Epics (Large Features)
+
+For features that span multiple spec items, use the `/epic` skill:
+
+```
+/epic "Auth Overhaul"
+```
+
+### What the Skill Does
+
+1. **Interview** - Asks questions to understand the feature
+2. **Design** - Breaks down into stories, identifies areas (FE/BE/SD)
+3. **Create epic** - Makes `docs/epics/auth-overhaul.md` with scope and checklist
+4. **Create stories** - Adds spec items linked to the epic tag
+
+### Manual Epic Management
+
+If you need to manage epics manually:
+
+```
+epic("Name", "description", ["scope items"])   # Create epic doc
+add("Story", areaCode="BE", epic="auth-overhaul")  # Add linked item
+tag("BE.3", ["auth-overhaul"])                 # Tag existing item
+epics                                           # List all epics
+```
+
+### Track Epic Progress
+
+```
+epics
+```
+
+Shows all epics with linked item counts and completion status.
 
 ---
 
@@ -350,12 +408,12 @@ You'll see output like:
 ```
 ✅ Worker spawned: worker-alex-fe11
 
-📂 Worktree: /Users/alex/chkd-worker-alex-fe11
+📂 Worktree: /Users/alex/project-worker-alex-fe11
 🌿 Branch: feature/fe11-app-shell-navigation
 
 To start the worker, run in a NEW terminal:
 ────────────────────────────────────────
-cd /Users/alex/chkd-worker-alex-fe11 && claude
+cd /Users/alex/project-worker-alex-fe11 && claude
 ────────────────────────────────────────
 ```
 
@@ -364,7 +422,7 @@ cd /Users/alex/chkd-worker-alex-fe11 && claude
 Open a **new terminal window** and run the command:
 
 ```bash
-cd /Users/alex/chkd-worker-alex-fe11 && claude
+cd /Users/alex/project-worker-alex-fe11 && claude
 ```
 
 The worker Claude will automatically:
@@ -499,24 +557,7 @@ WORKER 1 (separate terminal):
 ────────────────────────────────────────
 ```
 
-### Dashboard View
-
-The chkd dashboard shows workers in the repo card:
-
-```
-┌─────────────────────────────────────────────────────┐
-│  📁 my-project                           67% ████░░ │
-│                                                     │
-│  Current: Building user auth                        │
-│                                                     │
-│  👥 Workers:                                        │
-│     🟢 worker-alex-fe11  FE.11  Working  80%       │
-│     🟡 worker-alex-be24  BE.24  Merging            │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
-
-### Troubleshooting
+### Troubleshooting Workers
 
 **Worker not responding:**
 ```
@@ -548,73 +589,16 @@ git worktree remove ../proj-worker-old --force
 
 ---
 
-## Skills (in Claude Code)
-
-| Skill | Purpose |
-|-------|---------|
-| `/chkd FE.1` | Build task FE.1 from the spec |
-| `/story` | Plan features, refine specs |
-| `/bugfix` | Fix bugs with minimal changes |
-| `/commit` | Safe commit workflow |
-
----
-
-## Daily Workflow
-
-```
-1. Start chkd server     →  cd ~/chkd && npm run dev
-2. Open Claude Code      →  claude
-3. Check status          →  Claude runs status
-4. Build a task          →  /chkd FE.1
-5. Review and commit     →  /commit
-6. Repeat
-```
-
----
-
-## Spec Format
-
-```markdown
-## Area Name
-
-- [ ] **CODE.1 Feature title** - Description
-  - [ ] Sub-task 1
-  - [ ] Sub-task 2
-```
-
-**Area codes:** FE (Frontend), BE (Backend), SD (Site Design), FUT (Future)
-
-**Markers:**
-- `[ ]` - Not started
-- `[~]` - In progress
-- `[x]` - Complete
-- `[!]` - Blocked
-
----
-
-## Staying Focused
-
-When working on a task:
-
-1. **Notice a bug?** → `bug("description")` then continue
-2. **Want to refactor?** → Log it, don't do it
-3. **Something seems off?** → Log it, stay on track
-
-The bugs/quick wins lists exist so nothing gets lost. Fix them later.
-
----
-
 ## Files chkd Creates
 
 | File | Purpose |
 |------|---------|
-| `docs/SPEC.md` | Feature checklist (optional, can be imported to DB) |
+| `docs/SPEC.md` | Feature checklist (source of truth) |
 | `docs/GUIDE.md` | This guide |
-| `docs/PHILOSOPHY.md` | Full chkd philosophy explanation |
-| `docs/instructions/` | Mode-specific guidance (build, bugfix, debug, etc.) |
 | `docs/QUICKWINS.md` | Small improvements to do later |
+| `docs/epics/` | Epic definitions for large features |
 | `docs/attachments/` | File attachments for bugs/items |
-| `CLAUDE.md` | Core behaviors for Claude (short, focused) |
+| `CLAUDE.md` | Instructions for Claude |
 | `.claude/skills/` | Build skills |
 
 ---

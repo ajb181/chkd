@@ -27,13 +27,23 @@ export const GET: RequestHandler = async ({ url }) => {
   const workers = getActiveWorkers(repo.id);
   const now = Date.now();
 
+  // Pending workers should transition within 5 minutes, otherwise they're likely dead
+  const PENDING_TIMEOUT_MS = 5 * 60 * 1000;
+  
   const deadWorkers = workers.filter(worker => {
-    // Skip workers that haven't started yet
+    // Check for stuck PENDING/WAITING workers
     if (worker.status === 'pending' || worker.status === 'waiting') {
+      // If created too long ago and still pending, likely dead (Claude session closed before starting)
+      if (worker.createdAt) {
+        const createdTime = new Date(worker.createdAt + 'Z').getTime();
+        if ((now - createdTime) > PENDING_TIMEOUT_MS) {
+          return true; // Flag as dead - stuck in pending
+        }
+      }
       return false;
     }
 
-    // Check heartbeat
+    // Check heartbeat for active workers
     if (!worker.heartbeatAt) {
       // No heartbeat ever - check if started long ago
       if (worker.startedAt) {
