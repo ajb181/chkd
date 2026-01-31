@@ -15,10 +15,7 @@ import { execSync } from 'child_process';
 
 // HTTP client for API calls
 import * as api from './http-client.js';
-
-// HTTP base URL for direct fetch calls (matches http-client.ts)
-const PORT = process.env.CHKD_PORT ? parseInt(process.env.CHKD_PORT, 10) : 3848;
-const HTTP_BASE = `http://localhost:${PORT}`;
+import { BASE_URL as HTTP_BASE } from './http-client.js';
 
 // Note: Parser removed - DB is source of truth via HTTP API
 

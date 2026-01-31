@@ -9,8 +9,8 @@
  * - Set CHKD_PORT=3847 when developing chkd itself
  */
 
-const PORT = process.env.CHKD_PORT ? parseInt(process.env.CHKD_PORT, 10) : 3848;
-const BASE_URL = `http://localhost:${PORT}`;
+export const PORT = process.env.CHKD_PORT ? parseInt(process.env.CHKD_PORT, 10) : 3848;
+export const BASE_URL = `http://localhost:${PORT}`;
 
 interface ApiResponse<T = any> {
   success: boolean;
