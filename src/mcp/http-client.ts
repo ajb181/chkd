@@ -437,3 +437,41 @@ export async function findSpecItem(repoPath: string, query: string) {
     withChildren: 'true'
   });
 }
+
+// ============================================
+// Learnings API (Prototype)
+// ============================================
+
+export async function getLearnings(
+  repoPath: string,
+  options?: {
+    category?: string;
+    query?: string;
+    limit?: number;
+  }
+) {
+  const params: Record<string, string> = { repoPath };
+  if (options?.category) params.category = options.category;
+  if (options?.query) params.query = options.query;
+  if (options?.limit) params.limit = String(options.limit);
+  return request('GET', '/api/learnings', undefined, params);
+}
+
+export async function addLearning(
+  repoPath: string,
+  text: string,
+  category?: string,
+  context?: string
+) {
+  return request('POST', '/api/learnings', {
+    repoPath,
+    text,
+    category,
+    context,
+    source: 'mcp'
+  });
+}
+
+export async function deleteLearning(repoPath: string, id: string) {
+  return request('DELETE', '/api/learnings', { repoPath, id });
+}

@@ -4208,6 +4208,145 @@ server.tool(
 );
 
 // ============================================
+// LEARNINGS (Prototype - Capture context from conversations)
+// ============================================
+
+// learn - Capture a learning from the conversation
+server.tool(
+  "learn",
+  "Capture a learning from the current conversation. Use this to record preferences, patterns, decisions, or mistakes that should inform future work. This is a prototype feature to test whether capturing fine-grained context helps later.",
+  {
+    text: z.string().describe("The learning itself (e.g., 'Prefer Svelte 5 runes over legacy syntax')"),
+    category: z.enum(['preference', 'pattern', 'decision', 'mistake', 'context', 'other']).optional()
+      .describe("Category: preference (user likes X), pattern (do it this way), decision (we chose X), mistake (avoid Y), context (background info)"),
+    context: z.string().optional().describe("What was happening when this came up (optional)")
+  },
+  async ({ text, category, context }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const response = await api.addLearning(repoPath, text, category, context);
+
+    if (!response.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${response.error}`
+        }]
+      };
+    }
+
+    const categoryIcon = {
+      preference: '💜',
+      pattern: '🔄',
+      decision: '✅',
+      mistake: '⚠️',
+      context: '📝',
+      other: '💡'
+    }[category || 'other'] || '💡';
+
+    let resultText = `${categoryIcon} Learning captured\n`;
+    resultText += `───────────────────────────────────────\n`;
+    resultText += `"${text}"\n`;
+    if (category) resultText += `Category: ${category}\n`;
+    if (context) resultText += `Context: ${context}\n`;
+    resultText += `\n💡 View learnings with learnings()`;
+
+    return {
+      content: [{
+        type: "text",
+        text: resultText
+      }]
+    };
+  }
+);
+
+// learnings - Retrieve captured learnings
+server.tool(
+  "learnings",
+  "Retrieve captured learnings for this project. Use this at the start of work to recall preferences, patterns, and decisions from previous sessions.",
+  {
+    category: z.enum(['preference', 'pattern', 'decision', 'mistake', 'context', 'other']).optional()
+      .describe("Filter by category"),
+    query: z.string().optional().describe("Search text in learnings"),
+    limit: z.number().optional().describe("Max results to return (default: 50)")
+  },
+  async ({ category, query, limit }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const response = await api.getLearnings(repoPath, { category, query, limit });
+
+    if (!response.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${response.error}`
+        }]
+      };
+    }
+
+    const learnings = response.data || [];
+
+    if (learnings.length === 0) {
+      let emptyText = `📚 No learnings captured yet\n\n`;
+      emptyText += `💡 Capture learnings as you work:\n`;
+      emptyText += `   learn("Prefer Svelte 5 runes", "preference")\n`;
+      emptyText += `   learn("Always add loading states", "pattern")\n`;
+      emptyText += `   learn("Chose SQLite over Postgres", "decision", "For simplicity")`;
+      return {
+        content: [{
+          type: "text",
+          text: emptyText
+        }]
+      };
+    }
+
+    const categoryIcons: Record<string, string> = {
+      preference: '💜',
+      pattern: '🔄',
+      decision: '✅',
+      mistake: '⚠️',
+      context: '📝',
+      other: '💡'
+    };
+
+    let text = `📚 Project Learnings (${learnings.length})\n`;
+    text += `═══════════════════════════════════════\n\n`;
+
+    // Group by category
+    const grouped: Record<string, any[]> = {};
+    for (const l of learnings) {
+      const cat = l.category || 'other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(l);
+    }
+
+    for (const [cat, items] of Object.entries(grouped)) {
+      const icon = categoryIcons[cat] || '💡';
+      text += `${icon} ${cat.toUpperCase()} (${items.length})\n`;
+      for (const item of items) {
+        text += `  • ${item.text}\n`;
+        if (item.context) {
+          text += `    ↳ ${item.context}\n`;
+        }
+      }
+      text += `\n`;
+    }
+
+    text += `───────────────────────────────────────\n`;
+    text += `💡 Add more with learn("text", "category")`;
+
+    return {
+      content: [{
+        type: "text",
+        text
+      }]
+    };
+  }
+);
+
+// ============================================
 // START SERVER
 // ============================================
 

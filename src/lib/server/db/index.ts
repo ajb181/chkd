@@ -302,6 +302,22 @@ function initSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_item_tags_tag ON item_tags(tag);
+
+    -- Learnings capture (prototype: capture context from conversations)
+    CREATE TABLE IF NOT EXISTS learnings (
+      id TEXT PRIMARY KEY,
+      repo_id TEXT NOT NULL,
+      text TEXT NOT NULL,                     -- The learning itself
+      category TEXT,                          -- e.g., 'preference', 'pattern', 'mistake', 'decision'
+      context TEXT,                           -- What was happening when this was captured
+      source TEXT DEFAULT 'mcp',              -- How it was captured: 'mcp', 'ui', 'auto'
+      relevance_score REAL DEFAULT 1.0,       -- For future ranking
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (repo_id) REFERENCES repositories(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_learnings_repo ON learnings(repo_id);
+    CREATE INDEX IF NOT EXISTS idx_learnings_category ON learnings(category);
   `);
 }
 
