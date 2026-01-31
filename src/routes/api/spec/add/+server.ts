@@ -160,8 +160,41 @@ export const POST: RequestHandler = async ({ request }) => {
       priority: 'medium'
     });
 
-    // Create workflow sub-tasks
-    if (tasksToAdd.length > 0) {
+    // Create workflow sub-tasks with nested children (the 8-step workflow)
+    if (withWorkflow && !tasks?.length) {
+      // Use full workflow structure with children
+      workflowSteps.forEach((step, stepIndex: number) => {
+        const stepItem = createItem({
+          repoId: repo.id,
+          displayId: `${displayId}.${stepIndex + 1}`,
+          title: step.task,
+          areaCode: areaCode as any,
+          sectionNumber,
+          parentId: newItem.id,
+          sortOrder: stepIndex,
+          status: 'open',
+          priority: 'medium'
+        });
+
+        // Create children as nested checkpoints
+        if (step.children && step.children.length > 0) {
+          step.children.forEach((childTitle: string, childIndex: number) => {
+            createItem({
+              repoId: repo.id,
+              displayId: `${displayId}.${stepIndex + 1}.${childIndex + 1}`,
+              title: childTitle,
+              areaCode: areaCode as any,
+              sectionNumber,
+              parentId: stepItem.id,
+              sortOrder: childIndex,
+              status: 'open',
+              priority: 'medium'
+            });
+          });
+        }
+      });
+    } else if (tasksToAdd.length > 0) {
+      // Custom tasks provided - create flat structure
       tasksToAdd.forEach((taskTitle: string, index: number) => {
         createItem({
           repoId: repo.id,
@@ -176,6 +209,13 @@ export const POST: RequestHandler = async ({ request }) => {
         });
       });
     }
+
+    // Calculate total items created (steps + their children)
+    const totalSteps = withWorkflow && !tasks?.length ? workflowSteps.length : tasksToAdd.length;
+    const totalChildren = withWorkflow && !tasks?.length 
+      ? workflowSteps.reduce((sum, step) => sum + (step.children?.length || 0), 0)
+      : 0;
+    const totalCreated = totalSteps + totalChildren;
 
     const result = {
       itemId: newItem.id,
@@ -193,9 +233,11 @@ export const POST: RequestHandler = async ({ request }) => {
         areaName: area.name,
         title: result.title,
         description: description || null,
-        tasksAdded: tasksToAdd,
-        taskCount: tasksToAdd.length,
-        message: `Added "${title}" to ${area.name} with ${tasksToAdd.length} sub-tasks`
+        tasksAdded: withWorkflow && !tasks?.length ? workflowSteps.map(s => s.task) : tasksToAdd,
+        taskCount: totalSteps,
+        checkpointCount: totalChildren,
+        totalItemsCreated: totalCreated,
+        message: `Added "${title}" to ${area.name} with ${totalSteps} workflow steps and ${totalChildren} checkpoints`
       },
       warnings: warnings.length > 0 ? warnings : undefined
     });
