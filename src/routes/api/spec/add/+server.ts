@@ -77,8 +77,9 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Determine which tasks will be added
-    // getWorkflowByType returns WorkflowStep[] with { task, children } - extract task strings
+    // getWorkflowByType returns WorkflowStep[] with { task, children }
     const workflowSteps = getWorkflowByType(workflowType, areaCode);
+    const useWorkflowSteps = withWorkflow && (!tasks || tasks.length === 0);
     const tasksToAdd: string[] = withWorkflow
       ? (tasks && tasks.length > 0 ? tasks : workflowSteps.map(step => step.task))
       : [];
@@ -160,10 +161,10 @@ export const POST: RequestHandler = async ({ request }) => {
       priority: 'medium'
     });
 
-    // Create workflow sub-tasks
+    // Create workflow sub-tasks (and their children if using workflow steps)
     if (tasksToAdd.length > 0) {
       tasksToAdd.forEach((taskTitle: string, index: number) => {
-        createItem({
+        const subItem = createItem({
           repoId: repo.id,
           displayId: `${displayId}.${index + 1}`,
           title: taskTitle,
@@ -174,6 +175,23 @@ export const POST: RequestHandler = async ({ request }) => {
           status: 'open',
           priority: 'medium'
         });
+
+        // Create children if using workflow steps (not custom tasks)
+        if (useWorkflowSteps && workflowSteps[index]?.children) {
+          workflowSteps[index].children.forEach((childTitle: string, childIndex: number) => {
+            createItem({
+              repoId: repo.id,
+              displayId: `${displayId}.${index + 1}.${childIndex + 1}`,
+              title: childTitle,
+              areaCode: areaCode as any,
+              sectionNumber,
+              parentId: subItem.id,
+              sortOrder: childIndex,
+              status: 'open',
+              priority: 'medium'
+            });
+          });
+        }
       });
     }
 
