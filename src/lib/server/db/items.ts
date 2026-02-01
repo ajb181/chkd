@@ -147,14 +147,32 @@ export function updateItem(id: string, updates: UpdateItemInput): SpecItem | nul
 export function deleteItem(id: string): boolean {
   const db = getDb();
   
-  // First, recursively delete all children
-  const children = db.prepare('SELECT id FROM spec_items WHERE parent_id = ?').all(id) as { id: string }[];
-  for (const child of children) {
-    deleteItem(child.id);
+  // Recursively collect all descendant IDs (depth-first, leaves first)
+  function collectDescendants(parentId: string): string[] {
+    const children = db.prepare('SELECT id FROM spec_items WHERE parent_id = ?').all(parentId) as { id: string }[];
+    const allIds: string[] = [];
+    for (const child of children) {
+      // Get grandchildren first (depth-first)
+      allIds.push(...collectDescendants(child.id));
+      allIds.push(child.id);
+    }
+    return allIds;
   }
   
-  // Tags are deleted via ON DELETE CASCADE
-  const result = db.prepare('DELETE FROM spec_items WHERE id = ?').run(id);
+  // Get all descendants (leaves first)
+  const descendantIds = collectDescendants(id);
+  
+  // Delete in a transaction
+  const deleteAll = db.transaction(() => {
+    // Delete descendants from leaves up
+    for (const descId of descendantIds) {
+      db.prepare('DELETE FROM spec_items WHERE id = ?').run(descId);
+    }
+    // Finally delete the item itself
+    return db.prepare('DELETE FROM spec_items WHERE id = ?').run(id);
+  });
+  
+  const result = deleteAll();
   return result.changes > 0;
 }
 
