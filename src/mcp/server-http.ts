@@ -156,7 +156,6 @@ function recordPulse(repoPath: string): void {
 async function getContextualNudges(
   session: any,
   queue: any[],
-  bugs: any[],
   repoPath: string
 ): Promise<string[]> {
   const nudges: string[] = [];
@@ -174,8 +173,6 @@ async function getContextualNudges(
     } else {
       nudges.push(`🚨 IDLE: You're not in a session! Start one NOW:`);
       nudges.push(`   → impromptu("what you're doing") for ad-hoc work`);
-      nudges.push(`   → debug("what you're investigating") for research`);
-      nudges.push(`   → bugfix("bug title") to fix a bug`);
     }
     return nudges;
   }
@@ -209,15 +206,8 @@ async function getContextualNudges(
   }
 
   // Mode-specific nudges
-  if (session.mode === 'debugging') {
-    nudges.push(`🔧 Debug mode: Focus on root cause, minimal changes`);
-  } else if (session.mode === 'impromptu') {
+  if (session.mode === 'impromptu') {
     nudges.push(`⚡ Impromptu: Log what you did when done`);
-  }
-
-  // Bug count nudge
-  if (bugs.length >= 5) {
-    nudges.push(`🐛 ${bugs.length} open bugs - consider fixing some soon`);
   }
 
   return nudges;
@@ -226,6 +216,79 @@ async function getContextualNudges(
 function formatNudges(nudges: string[]): string {
   if (nudges.length === 0) return '';
   return `\n───────────────────\n` + nudges.join('\n');
+}
+
+// Get type/area-specific guidance for working/tick
+interface TypeAreaContext {
+  workflowType: string | null;
+  areaCode: string;
+}
+
+function getWorkingGuidance(ctx: TypeAreaContext): string[] {
+  const guidance: string[] = [];
+  
+  // Workflow type guidance
+  switch (ctx.workflowType) {
+    case 'quickwin':
+      guidance.push(`⏱️ QUICK WIN: Keep it under 30 min. If it's growing, stop and reassess.`);
+      break;
+    case 'refactor':
+      guidance.push(`🔄 REFACTOR: No behavior changes! Tests must pass before AND after.`);
+      break;
+    case 'audit':
+      guidance.push(`📋 AUDIT: Document findings. No fixes yet - just investigate and report.`);
+      break;
+    case 'remove':
+      guidance.push(`🗑️ REMOVE: Check dependencies first. What breaks if this goes away?`);
+      break;
+  }
+  
+  // Area code guidance
+  switch (ctx.areaCode) {
+    case 'FE':
+      guidance.push(`🖼️ FRONTEND: Check all states — loading, error, empty, success.`);
+      break;
+    case 'BE':
+      guidance.push(`📡 BACKEND: API contract first. Document the interface before implementing.`);
+      break;
+    case 'SD':
+      guidance.push(`📐 SYSTEM DESIGN: Think architecture. Consider scale, failure modes, edge cases.`);
+      break;
+  }
+  
+  return guidance;
+}
+
+function getTickGuidance(ctx: TypeAreaContext): string[] {
+  const guidance: string[] = [];
+  
+  // Workflow type guidance
+  switch (ctx.workflowType) {
+    case 'quickwin':
+      guidance.push(`⚡ Quick win step done. Still on track for <30 min?`);
+      break;
+    case 'refactor':
+      guidance.push(`🔄 Refactor step done. Behavior unchanged? Tests still passing?`);
+      break;
+    case 'audit':
+      guidance.push(`📋 Audit step done. Capture findings in docs before moving on.`);
+      break;
+    case 'remove':
+      guidance.push(`🗑️ Removal step done. Verify nothing is broken.`);
+      break;
+  }
+  
+  // Area code guidance
+  switch (ctx.areaCode) {
+    case 'FE':
+      guidance.push(`🖼️ Did you test all UI states? Visual check complete?`);
+      break;
+    case 'BE':
+      guidance.push(`📡 API response matches contract? Error handling in place?`);
+      break;
+  }
+  
+  return guidance;
 }
 
 // Server version identifier
@@ -291,12 +354,9 @@ server.tool(
     }
     // If DB has no data, progress stays at 0 - project needs migration
 
-    // Get queue and bugs
+    // Get queue
     const queueResponse = await api.getQueue(repoPath);
     const queue = queueResponse.data?.items || [];
-
-    const bugsResponse = await api.getBugs(repoPath);
-    const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
 
     let statusText = '';
 
@@ -342,7 +402,7 @@ server.tool(
           statusText += `💡 START THIS NOW → impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")\n`;
         } else {
           statusText += `Status: IDLE - No active task\n`;
-          statusText += `💡 Start with impromptu(), debug(), or bugfix()\n`;
+          statusText += `💡 Start with impromptu()\n`;
         }
       } else {
         statusText += `Status: ${session.status.toUpperCase()}\n`;
@@ -355,13 +415,8 @@ server.tool(
         statusText += `Duration: ${formatDuration(session.elapsedMs)}\n`;
       }
 
-      // Summary
-      if (bugs.length > 0) {
-        statusText += `\n💭 Summary: ${bugs.length} bug${bugs.length > 1 ? 's' : ''}\n`;
-      }
-
       // Get nudges
-      const nudges = await getContextualNudges(session, queue, bugs, repoPath);
+      const nudges = await getContextualNudges(session, queue, repoPath);
       statusText += formatNudges(nudges) + getStaleWarning();
     }
 
@@ -421,88 +476,10 @@ server.tool(
   }
 );
 
-// debug - Start a debug session
-server.tool(
-  "debug",
-  "Start a debug/investigation session. Use when researching an issue or exploring code.",
-  {
-    description: z.string().describe("What you're investigating (e.g., 'Why login is slow')")
-  },
-  async ({ description }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const response = await api.startAdhocSession(repoPath, 'debug', description);
-
-    if (!response.success) {
-      return {
-        content: [{
-          type: "text",
-          text: `⚠️ ${response.error}\n\n${response.hint || ''}`
-        }]
-      };
-    }
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    let text = `🔍 INVESTIGATION MODE
-═══════════════════════════════════════
-Investigating: ${description}
-
-MINDSET: You're a detective, not a fixer.
-Your goal is UNDERSTANDING, not solutions.
-───────────────────────────────────────
-
-📓 START DEBUG NOTES:
-   echo "## Investigation: $(date '+%H:%M')" >> .debug-notes.md
-   echo "**Question:** ${description}" >> .debug-notes.md
-
-INVESTIGATION PROCESS:
-1. OBSERVE  → What exactly is happening? Gather facts.
-2. QUESTION → Ask the user for context, reproduction steps.
-3. HYPOTHESIZE → List 2-3 possible causes.
-4. TEST    → Check each hypothesis systematically.
-5. CONCLUDE → What did you learn? Document it.
-
-⚠️  DISCIPLINE:
-• Don't jump to fixes - understand first
-• Don't assume - ask the user
-• Don't rush - investigation takes time
-• Update .debug-notes.md as you work
-
-CHECKPOINTS (get user alignment):
-□ "Here's what I'm seeing... does that match your experience?"
-□ "I have 3 hypotheses: X, Y, Z. Which should I check first?"
-□ "I think I found the cause: [X]. Does that make sense?"
-
-WHEN YOU FIND SOMETHING:
-• Bug to fix? → bug("description") to log it, then bugfix("description")
-• Just learning? → Document in .debug-notes.md
-• Scope creep idea? → bug("idea") or win("idea")
-
-When done: done()`;
-
-    if (queue.length > 0) {
-      text += `\n\n📬 Queue (${queue.length}):\n`;
-      queue.forEach((q: any) => {
-        text += `  • ${q.title}\n`;
-      });
-    }
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
 // done - End the current session
 server.tool(
   "done",
-  "End the current session (impromptu, debug, or feature work). Clears the active state.",
+  "End the current session (impromptu or feature work). Clears the active state.",
   {},
   async () => {
     const repoPath = getRepoPath();
@@ -525,10 +502,6 @@ server.tool(
 
     await api.clearSession(repoPath);
     
-    // Get context for smarter next-step suggestions
-    const bugsResponse = await api.getBugs(repoPath);
-    const openBugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
-    
     const queueResponse = await api.getQueue(repoPath);
     const queue = queueResponse.data?.items || [];
     
@@ -542,15 +515,6 @@ server.tool(
       text += `\n• 📬 Queue has ${queue.length} message(s) from user - check these first`;
     }
     
-    if (session.mode === 'debugging') {
-      text += `\n• Was this a bug? → bug("description") to log it`;
-      text += `\n• Ready to fix? → bugfix("description") to start`;
-    }
-    
-    if (openBugs.length > 0) {
-      text += `\n• 🐛 ${openBugs.length} open bug(s) - bugfix() to work on one`;
-    }
-    
     text += `\n• 💬 Discuss with user what to work on next`;
     text += `\n• 📊 status() to see full project state`;
 
@@ -558,422 +522,6 @@ server.tool(
       content: [{
         type: "text",
         text
-      }]
-    };
-  }
-);
-
-// bug - Log a bug
-server.tool(
-  "bug",
-  "Log a bug you noticed. Use this immediately when you see something wrong - don't wait!",
-  {
-    description: z.string().describe("What's broken or wrong"),
-    severity: z.enum(["low", "medium", "high", "critical"]).optional().describe("Bug severity (default: medium)")
-  },
-  async ({ description, severity }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    await api.createBug(repoPath, description, undefined, severity || 'medium');
-
-    const sessionResponse = await api.getSession(repoPath);
-    const session = sessionResponse.data;
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    const bugsResponse = await api.getBugs(repoPath);
-    const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed');
-
-    let text = `✓ Bug logged: ${description}\n`;
-
-    if (session && session.status !== 'idle' && session.currentTask) {
-      text += `\n🎯 Continue with: ${session.currentTask.title}`;
-      text += `\n   Don't derail - fix bugs later!`;
-    } else {
-      text += `\n💭 Fix it later with bugfix()`;
-    }
-
-    const nudges = await getContextualNudges(session || { status: 'idle', elapsedMs: 0 }, queue, bugs, repoPath);
-    if (nudges.length > 0) {
-      text += formatNudges(nudges);
-    }
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
-// bugfix - Start working on a bug
-server.tool(
-  "bugfix",
-  "Start working on a bug. This begins a debug session and prompts you to align with the user on what the bug means.",
-  {
-    query: z.string().describe("Bug title or ID to work on")
-  },
-  async ({ query }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    let bug = await api.getBugByQuery(repoPath, query);
-    
-    // Auto-create bug if not found (common flow: debug → bugfix with same description)
-    if (!bug) {
-      const createResponse = await api.createBug(repoPath, query, undefined, 'medium');
-      if (!createResponse.success) {
-        return {
-          content: [{
-            type: "text",
-            text: `❌ Failed to create bug: ${createResponse.error}`
-          }]
-        };
-      }
-      bug = createResponse.data;
-    }
-
-    if (bug.status === 'fixed') {
-      return {
-        content: [{
-          type: "text",
-          text: `⚠️ Bug already fixed: ${bug.title}`
-        }]
-      };
-    }
-
-    // Mark as in progress
-    await api.updateBug(repoPath, query, 'in_progress');
-
-    // Start debug session
-    await api.startAdhocSession(repoPath, 'debug', `Fixing: ${bug.title}`);
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    const sevIcon = bug.severity === 'critical' ? '🔴' :
-                    bug.severity === 'high' ? '🟠' :
-                    bug.severity === 'low' ? '🟢' : '🟡';
-
-    let text = `🔧 BUGFIX MODE
-═══════════════════════════════════════
-Bug: ${bug.title}
-Severity: ${sevIcon} ${bug.severity.toUpperCase()}${bug.description ? `\nDescription: ${bug.description}` : ''}
-
-MINDSET: Surgical precision. Fix the bug, nothing more.
-───────────────────────────────────────
-
-📓 START DEBUG NOTES:
-   echo "## Bugfix: $(date '+%H:%M')" >> .debug-notes.md
-   echo "**Bug:** ${bug.title}" >> .debug-notes.md
-
-FIRST: SIZE THE BUG
-┌─────────────────────────────────────┐
-│ SMALL BUG (Quick Fix Track)         │
-│ • Clear error with stack trace      │
-│ • Points to specific line           │
-│ • Fix will be < 10 lines            │
-│                                     │
-│ BIG BUG (Deep Investigation)        │
-│ • Vague symptoms, no clear error    │
-│ • Multiple possible causes          │
-│ • Can't reliably reproduce          │
-│ → Use debug() instead          │
-└─────────────────────────────────────┘
-
-THE PROCESS:
-1. ALIGN    → Explain your understanding to user. Get agreement.
-2. RESEARCH → Search first! Someone probably hit this before.
-3. REPRODUCE → Confirm you can trigger the bug.
-4. ISOLATE  → Find root cause. Think out loud.
-5. PROPOSE  → Describe fix to user. Get approval.
-6. FIX      → Minimal change only. Don't refactor.
-7. VERIFY   → User confirms it's fixed. Not you.
-
-⚠️  DISCIPLINE - You are in BUGFIX mode:
-• Research before brute force (web search is faster)
-• Minimal changes only - smallest fix that works
-• DON'T refactor "while you're in there"
-• DON'T add features or improvements
-• DON'T fix things that aren't broken
-• Capture ideas with bug() or win(), don't act
-
-CHECKPOINTS (get user alignment):
-□ "Here's my understanding of the bug... correct?"
-□ "I found this might be the cause: [X]. Should I dig deeper?"
-□ "I want to make this change: [X]. Sound right?"
-□ "Can you test now? Try the steps that caused the bug."
-
-RED FLAGS - You're going off track if thinking:
-• "While I'm here, I should also..."  → NO
-• "This code is messy, let me clean..." → NO
-• "I could add a feature that prevents..." → NO
-
-IF USER GOES OFF TRACK (you can push back!):
-• User asks unrelated question → "Park that for later?"
-• User wants to add features → "Let's log that as a quick win"
-• User derails into tangent → "Should I note that and stay on the bug?"
-
-When fix is ready: fix("${bug.title}")
-After user verifies: resolve("${bug.title}")`;
-
-    if (queue.length > 0) {
-      text += `\n\n📬 Queue (${queue.length}):\n`;
-      queue.forEach((q: any) => {
-        text += `  • ${q.title}\n`;
-      });
-    }
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
-// fix - Signal fix is ready
-server.tool(
-  "fix",
-  "Signal that your fix is ready. This prompts you to verify with the user before closing.",
-  {
-    query: z.string().describe("Bug title or ID")
-  },
-  async ({ query }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const bug = await api.getBugByQuery(repoPath, query);
-    if (!bug) {
-      return {
-        content: [{
-          type: "text",
-          text: `❌ Bug not found: "${query}"`
-        }]
-      };
-    }
-
-    return {
-      content: [{
-        type: "text",
-        text: `🔧 Fix ready: ${bug.title}\n─────────────────────────────────\n⚠️  VERIFY WITH USER:\n   Ask user to confirm the fix solves the problem.\n   Do not close until user has verified.\n─────────────────────────────────\n📦 BEFORE RESOLVING:\n   1. Review docs - update if behavior changed:\n      - CLAUDE.md, README.md, GUIDE.md\n      - CLI help text, API docs\n   2. Commit with descriptive message:\n      - Summary: what was fixed\n      - Body: root cause + how fixed\n   3. Push to remote\n   4. Then resolve\n─────────────────────────────────\n💡 Run resolve("${query}") after docs+commit+push and user confirms`
-      }]
-    };
-  }
-);
-
-// resolve - Close a verified bug
-server.tool(
-  "resolve",
-  "Close a bug after user has verified the fix works. Only use this after getting user confirmation!",
-  {
-    query: z.string().describe("Bug title or ID")
-  },
-  async ({ query }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const bug = await api.getBugByQuery(repoPath, query);
-    if (!bug) {
-      return {
-        content: [{
-          type: "text",
-          text: `❌ Bug not found: "${query}"`
-        }]
-      };
-    }
-
-    await api.updateBug(repoPath, query, 'fixed');
-
-    return {
-      content: [{
-        type: "text",
-        text: `✅ Bug resolved: ${bug.title}\n📴 Debug session ended\n\n📦 Commit your fix:\n   git add -A && git commit -m "fix: ${bug.title.slice(0, 50)}"\n   git push\n\n💭 Nice work. What's next?`
-      }]
-    };
-  }
-);
-
-// checkin - Structured check-in
-server.tool(
-  "checkin",
-  "Do a structured check-in with the user. Use this when prompted about 15-min check-in. Asks how things are going.",
-  {},
-  async () => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const sessionResponse = await api.getSession(repoPath);
-    const session = sessionResponse.data || { status: 'idle', elapsedMs: 0 };
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    const bugsResponse = await api.getBugs(repoPath);
-    const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
-
-    const anchorResponse = await api.getAnchor(repoPath);
-    const trackStatus = anchorResponse.data;
-
-    recordCheckIn(repoPath);
-
-    let text = `╔══════════════════════════════════════╗\n`;
-    text += `║      15-MINUTE CHECK-IN              ║\n`;
-    text += `╚══════════════════════════════════════╝\n\n`;
-
-    text += `How are we doing? Let's review:\n\n`;
-
-    // Current state
-    if (session.status === 'idle') {
-      text += `⚠️ Status: IDLE (not in a session)\n`;
-    } else {
-      text += `✓ Status: ${session.mode?.toUpperCase() || 'WORKING'}\n`;
-      if (session.currentTask) {
-        text += `  Task: ${session.currentTask.title}\n`;
-      }
-      text += `  Time: ${formatDuration(session.elapsedMs)}\n`;
-    }
-
-    // Anchor check
-    if (trackStatus?.anchor) {
-      if (trackStatus.onTrack) {
-        text += `\n🎯 Anchor: ON TRACK\n`;
-        text += `  Working on: ${trackStatus.anchor.title}\n`;
-      } else {
-        text += `\n⚠️ Anchor: OFF TRACK\n`;
-        text += `  Should be: ${trackStatus.anchor.title}\n`;
-        if (trackStatus.current) {
-          text += `  Actually on: ${trackStatus.current.title}\n`;
-        }
-        text += `  → Return to anchor or call pivot()\n`;
-      }
-    }
-
-    // Queue
-    if (queue.length > 0) {
-      text += `\n📬 User messages (${queue.length}):\n`;
-      queue.forEach((q: any) => {
-        text += `  • ${q.title}\n`;
-      });
-    }
-
-    // Bugs
-    if (bugs.length > 0) {
-      text += `\n🐛 Open bugs: ${bugs.length}\n`;
-    }
-
-    text += `\n───────────────────────────────────────\n`;
-    text += `Questions to discuss with user:\n`;
-    text += `• Are we making good progress?\n`;
-    text += `• Any blockers or concerns?\n`;
-    text += `• Should we adjust our approach?\n`;
-    text += `• Anything to add to the queue?\n`;
-    text += `───────────────────────────────────────\n`;
-    text += `💡 Timer reset. Next check-in in ~15 min.`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
-// pulse - Quick status update
-server.tool(
-  "pulse",
-  "Check in with a status update. Use this every 15 min or when you make progress. Resets the check-in timer.",
-  {
-    status: z.string().describe("Brief status update - what are you working on?")
-  },
-  async ({ status }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const sessionResponse = await api.getSession(repoPath);
-    const session = sessionResponse.data;
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    recordPulse(repoPath);
-    recordCheckIn(repoPath);
-
-    // Get progress info
-    const progressResponse = await api.getSpecProgress(repoPath);
-    const progress = progressResponse.data?.progress;
-    
-    let text = `💓 Pulse: ${status}\n`;
-    text += `───────────────────────────────────────\n`;
-    text += `✓ Check-in recorded (timer reset)\n\n`;
-
-    // Current task info
-    if (session?.currentTask) {
-      text += `📋 Current Task:\n`;
-      text += `   ${session.currentTask.title}\n`;
-      text += `   Iteration ${session.iteration || 1} • ${formatDuration(session.elapsedMs || 0)}\n\n`;
-    }
-    
-    // Overall progress
-    if (progress) {
-      const pct = progress.percent || 0;
-      text += `📊 Project: ${pct}% complete (${progress.done}/${progress.total})\n\n`;
-    }
-
-    // Show anchor status
-    const anchorResponse = await api.getAnchor(repoPath);
-    const trackStatus = anchorResponse.data;
-    if (trackStatus?.anchor) {
-      if (trackStatus.onTrack) {
-        text += `🎯 On Track: ${trackStatus.anchor.title}\n`;
-      } else {
-        text += `⚠️ OFF TRACK from anchor: ${trackStatus.anchor.title}\n`;
-        text += `   → Return to anchor or call pivot()\n`;
-      }
-    }
-
-    // Queue
-    if (queue.length > 0) {
-      text += `\n📬 Queue (${queue.length} from user):\n`;
-      queue.forEach((q: any) => {
-        text += `  • ${q.title}\n`;
-      });
-    }
-
-    text += `\n───────────────────────────────────────`;
-    text += `\n💭 Keep going. Pulse again in ~15 min.`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
-// also - Log off-task work
-server.tool(
-  "also",
-  "Log something you did that wasn't part of the current task. Tracks off-plan work so nothing is forgotten.",
-  {
-    description: z.string().describe("What you did that was off-task")
-  },
-  async ({ description }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    await api.addAlsoDid(repoPath, description);
-
-    return {
-      content: [{
-        type: "text",
-        text: `✓ Logged: ${description}\n\n💭 Tracked as "also did". Now back to the main task.`
       }]
     };
   }
@@ -990,11 +538,16 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    // Get full title from DB (no fallback - DB is source of truth)
+    // Get full title and context from DB
     let fullTitle = item;
+    let workflowType: string | null = null;
+    let areaCode = 'SD';
     const findResponse = await api.findSpecItem(repoPath, item);
     if (findResponse.success && findResponse.data?.items?.length > 0) {
-      fullTitle = findResponse.data.items[0].title;
+      const foundItem = findResponse.data.items[0];
+      fullTitle = foundItem.title;
+      workflowType = foundItem.workflowType || null;
+      areaCode = foundItem.areaCode || 'SD';
     }
     // If not found, use the input as-is - the tick API will error if invalid
 
@@ -1019,6 +572,12 @@ server.tool(
     if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
       text += `\n\n⚠️  CHECKPOINT: Did you get explicit user approval?`;
       text += `\n   If not, discuss with user before proceeding.`;
+    }
+
+    // Add type/area-specific guidance
+    const tickGuidance = getTickGuidance({ workflowType, areaCode });
+    if (tickGuidance.length > 0) {
+      text += `\n\n` + tickGuidance.join('\n');
     }
 
     if (queue.length > 0) {
@@ -1079,11 +638,16 @@ server.tool(
       };
     }
 
-    // Get full title from DB (no fallback - DB is source of truth)
+    // Get full title and context from DB
     let fullTitle = item;
+    let workflowType: string | null = null;
+    let areaCode = 'SD';
     const findResponse = await api.findSpecItem(repoPath, item);
     if (findResponse.success && findResponse.data?.items?.length > 0) {
-      fullTitle = findResponse.data.items[0].title;
+      const foundItem = findResponse.data.items[0];
+      fullTitle = foundItem.title;
+      workflowType = foundItem.workflowType || null;
+      areaCode = foundItem.areaCode || 'SD';
     }
     // If not found, use the input as-is
 
@@ -1091,6 +655,12 @@ server.tool(
     const queue = queueResponse.data?.items || [];
 
     let text = `🔨 Working on: ${fullTitle}`;
+    
+    // Add type/area-specific guidance FIRST (most important context)
+    const workingGuidance = getWorkingGuidance({ workflowType, areaCode });
+    if (workingGuidance.length > 0) {
+      text += `\n\n` + workingGuidance.join('\n');
+    }
     
     // Check if this is a Confirm/Verify step - warn about user approval requirement
     const lowerTitle = fullTitle.toLowerCase();
@@ -1110,182 +680,6 @@ server.tool(
     text += `\n\n⚠️ IMPORTANT: Tick each sub-item as you complete it.`;
     text += `\n   Do NOT batch ticks at the end - tick as you go!`;
     text += `\n\n💭 When done, run tick() immediately.`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
-// suggest - Suggest what to work on
-server.tool(
-  "suggest",
-  "Analyze the spec and suggest what to work on next. Use this to help the user decide their next task.",
-  {},
-  async () => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const bugsResponse = await api.getBugs(repoPath);
-    const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
-    const criticalBugs = bugs.filter((b: any) => b.severity === 'critical');
-    const highBugs = bugs.filter((b: any) => b.severity === 'high');
-
-    // Get items from DB (no fallback - DB is source of truth)
-    const itemsResponse = await api.getSpecItems(repoPath, { topLevel: true, withProgress: true });
-    if (!itemsResponse.success || !itemsResponse.data?.items) {
-      return {
-        content: [{
-          type: "text",
-          text: `❌ Repository not in database. Run migration first:\n\nnpm run migrate -- "${repoPath}"`
-        }]
-      };
-    }
-
-    const allItems = itemsResponse.data.items;
-    const incomplete = allItems.filter((i: any) => i.status !== 'done' && i.status !== 'skipped');
-    const inProgress = incomplete.filter((i: any) => i.status === 'in-progress');
-    const notStarted = incomplete.filter((i: any) => i.status === 'open');
-
-    let text = `📊 Suggestion Analysis\n`;
-    text += `═══════════════════════════════════════\n\n`;
-
-    if (criticalBugs.length > 0) {
-      text += `🔴 CRITICAL BUGS (fix first!):\n`;
-      criticalBugs.forEach((b: any) => {
-        text += `   • ${b.title}\n`;
-      });
-      text += `\n→ Suggestion: Fix critical bugs before new features.\n`;
-      text += `  Use bugfix("${criticalBugs[0].title}")\n\n`;
-    }
-
-    if (inProgress.length > 0) {
-      text += `🔨 IN PROGRESS (finish these):\n`;
-      inProgress.forEach((item: any) => {
-        const itemId = item.displayId || item.id;
-        text += `   • ${itemId} ${item.title}\n`;
-      });
-      text += `\n→ Suggestion: Finish in-progress work before starting new.\n\n`;
-    }
-
-    if (criticalBugs.length === 0 && highBugs.length > 0) {
-      text += `🟠 HIGH PRIORITY BUGS:\n`;
-      highBugs.slice(0, 3).forEach((b: any) => {
-        text += `   • ${b.title}\n`;
-      });
-      if (highBugs.length > 3) text += `   ... and ${highBugs.length - 3} more\n`;
-      text += `\n`;
-    }
-
-    if (notStarted.length > 0 && inProgress.length === 0) {
-      text += `⬜ READY TO START:\n`;
-      notStarted.slice(0, 5).forEach((item: any) => {
-        const itemId = item.displayId || item.id;
-        const itemArea = item.areaCode || item.area;
-        text += `   • ${itemId} ${item.title} (${itemArea})\n`;
-      });
-      if (notStarted.length > 5) text += `   ... and ${notStarted.length - 5} more\n`;
-      const firstId = notStarted[0].displayId || notStarted[0].id;
-      text += `\n→ Suggestion: Start with ${firstId} ${notStarted[0].title}\n`;
-    }
-
-    // Use DB progress if available, otherwise calculate
-    let pct: number;
-    let remaining: number;
-    if (itemsResponse.success && itemsResponse.data?.progress) {
-      const progress = itemsResponse.data.progress;
-      pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
-      remaining = progress.total - progress.done;
-    } else {
-      const completed = allItems.length - incomplete.length;
-      pct = allItems.length > 0 ? Math.round((completed / allItems.length) * 100) : 0;
-      remaining = incomplete.length;
-    }
-
-    text += `\n───────────────────────────────────────\n`;
-    text += `Progress: ${pct}% | Bugs: ${bugs.length} | Remaining: ${remaining}\n`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
-// pivot - Change anchor/focus
-server.tool(
-  "pivot",
-  "Explicitly change focus to a new task. Use when you need to work on something different from the anchor. This acknowledges the pivot rather than silently drifting.",
-  {
-    taskId: z.string().describe("ID of the new task (e.g., 'SD.3')"),
-    taskTitle: z.string().describe("Title of the new task"),
-    reason: z.string().optional().describe("Why are you pivoting? (optional)")
-  },
-  async ({ taskId, taskTitle, reason }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const sessionResponse = await api.getSession(repoPath);
-    const session = sessionResponse.data;
-    const previousAnchor = session?.anchor?.title || 'none';
-
-    await api.setAnchor(repoPath, taskId, taskTitle, 'cli');
-
-    let text = `🔄 Pivot acknowledged\n`;
-    text += `───────────────────────────────────────\n`;
-    text += `Previous: ${previousAnchor}\n`;
-    text += `New anchor: ${taskTitle}\n`;
-    if (reason) {
-      text += `Reason: ${reason}\n`;
-    }
-    text += `───────────────────────────────────────\n`;
-    text += `💡 You're now on track for ${taskTitle}`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
-// bugs - List open bugs
-server.tool(
-  "bugs",
-  "List all open bugs in the project.",
-  {},
-  async () => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const bugsResponse = await api.getBugs(repoPath);
-    const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
-
-    if (bugs.length === 0) {
-      return {
-        content: [{
-          type: "text",
-          text: `🐛 No open bugs\n\n💭 Notice something wrong? Log it with bug()`
-        }]
-      };
-    }
-
-    let text = `🐛 Open Bugs (${bugs.length})\n─────────────────\n`;
-
-    bugs.forEach((bug: any) => {
-      const sevIcon = bug.severity === 'critical' ? '🔴' :
-                      bug.severity === 'high' ? '🟠' :
-                      bug.severity === 'low' ? '🟢' : '🟡';
-      text += `${bug.id.slice(0,6)} ${sevIcon} ${bug.title}\n`;
-    });
-
-    text += `\n💭 Fix bugs with bugfix("title or id")`;
 
     return {
       content: [{
@@ -1570,7 +964,7 @@ server.tool(
       return { content: [{ type: "text", text: "❌ files cannot be empty" }] };
     }
 
-    const response = await fetch(`${API_BASE}/api/spec/add`, {
+    const response = await fetch(`${HTTP_BASE}/api/spec/add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1607,7 +1001,7 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    const response = await fetch(`${API_BASE}/api/spec/items?repoPath=${encodeURIComponent(repoPath)}`);
+    const response = await fetch(`${HTTP_BASE}/api/spec/items?repoPath=${encodeURIComponent(repoPath)}`);
     const result = await response.json();
     const allItems = result.data || [];
     
@@ -1669,7 +1063,7 @@ server.tool(
     await requireRepo(repoPath);
 
     // Find the item
-    const findRes = await fetch(`${API_BASE}/api/spec/item?repoPath=${encodeURIComponent(repoPath)}&query=${encodeURIComponent(id)}`);
+    const findRes = await fetch(`${HTTP_BASE}/api/spec/item?repoPath=${encodeURIComponent(repoPath)}&query=${encodeURIComponent(id)}`);
     const findResult = await findRes.json();
     
     if (!findResult.success || !findResult.data) {
@@ -1679,7 +1073,7 @@ server.tool(
     const item = findResult.data;
 
     // Mark as done
-    const response = await fetch(`${API_BASE}/api/spec/update`, {
+    const response = await fetch(`${HTTP_BASE}/api/spec/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repoPath, itemId: item.id, status: 'done' })
@@ -1697,6 +1091,78 @@ server.tool(
         text: `✅ Quick win done: ${item.displayId} ${title}\n\n📦 Before committing:\n   1. Review docs if behavior changed\n   2. Commit with descriptive message\n   3. Push to remote`
       }]
     };
+  }
+);
+
+// list - List items with optional filters
+server.tool(
+  "list",
+  "List spec items with optional filters by type, area, or status.",
+  {
+    type: z.enum(['quickwin', 'refactor', 'audit', 'remove', 'default', 'all']).optional().describe("Workflow type filter (default: all)"),
+    area: z.enum(['SD', 'FE', 'BE', 'FUT']).optional().describe("Area code filter"),
+    status: z.enum(['open', 'in-progress', 'done']).optional().describe("Status filter")
+  },
+  async ({ type, area, status }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    // Build query params
+    const params = new URLSearchParams({ repoPath, topLevel: 'true' });
+    if (type && type !== 'all') {
+      params.set('workflowType', type);
+    }
+    if (area) {
+      params.set('area', area);
+    }
+    if (status) {
+      params.set('status', status);
+    }
+
+    const response = await fetch(`${HTTP_BASE}/api/spec/items?${params}`);
+    const result = await response.json();
+    const items = (result.data?.items || []).filter((i: any) => !i.parentId);
+
+    if (items.length === 0) {
+      let msg = `📋 No items found`;
+      if (type && type !== 'all') msg += ` (type: ${type})`;
+      if (area) msg += ` (area: ${area})`;
+      if (status) msg += ` (status: ${status})`;
+      return { content: [{ type: "text", text: msg }] };
+    }
+
+    // Group by status
+    const pending = items.filter((i: any) => i.status === 'open' || i.status === 'in-progress');
+    const completed = items.filter((i: any) => i.status === 'done');
+
+    let text = `📋 Items`;
+    if (type && type !== 'all') text += ` [${type}]`;
+    if (area) text += ` [${area}]`;
+    text += `\n═══════════════════════════════════════\n\n`;
+
+    if (pending.length > 0) {
+      text += `⬜ PENDING (${pending.length}):\n`;
+      pending.forEach((i: any) => {
+        const statusIcon = i.status === 'in-progress' ? '◐' : '○';
+        const typeTag = i.workflowType ? ` [${i.workflowType}]` : '';
+        text += `  ${statusIcon} ${i.displayId} ${i.title.replace(/^[A-Z]+\.\d+\s*/, '')}${typeTag}\n`;
+      });
+      text += `\n`;
+    }
+
+    if (completed.length > 0 && !status) {
+      text += `✅ COMPLETED (${completed.length}):\n`;
+      completed.slice(0, 5).forEach((i: any) => {
+        text += `  ✓ ${i.displayId} ${i.title.replace(/^[A-Z]+\.\d+\s*/, '')}\n`;
+      });
+      if (completed.length > 5) {
+        text += `  ... and ${completed.length - 5} more\n`;
+      }
+    }
+
+    text += `\n💡 Filter: list(type="quickwin") list(area="FE") list(status="open")`;
+
+    return { content: [{ type: "text", text }] };
   }
 );
 
@@ -1801,10 +1267,10 @@ server.tool(
 // attach - Attach a file to an item
 server.tool(
   "attach",
-  "Attach a file (screenshot, log, etc.) to a bug, quick win, or spec item. Files are stored in docs/attachments/.",
+  "Attach a file (screenshot, log, etc.) to a quick win or spec item. Files are stored in docs/attachments/.",
   {
-    itemType: z.enum(['bug', 'quickwin', 'item']).describe("Type of item to attach to: 'bug', 'quickwin', or 'item'"),
-    itemId: z.string().describe("ID of the item (bug ID, quick win ID, or spec item ID like 'SD.1')"),
+    itemType: z.enum(['quickwin', 'item']).describe("Type of item to attach to: 'quickwin' or 'item'"),
+    itemId: z.string().describe("ID of the item (quick win ID, or spec item ID like 'SD.1')"),
     filePath: z.string().describe("Absolute path to the file to attach")
   },
   async ({ itemType, itemId, filePath }) => {
@@ -1834,9 +1300,9 @@ server.tool(
 // attachments - List attachments for an item
 server.tool(
   "attachments",
-  "List attachments for a bug, quick win, or spec item.",
+  "List attachments for a quick win or spec item.",
   {
-    itemType: z.enum(['bug', 'quickwin', 'item']).optional().describe("Type of item: 'bug', 'quickwin', or 'item'. Omit to list all."),
+    itemType: z.enum(['quickwin', 'item']).optional().describe("Type of item: 'quickwin' or 'item'. Omit to list all."),
     itemId: z.string().optional().describe("ID of the item. Omit to list all of that type.")
   },
   async ({ itemType, itemId }) => {
@@ -2487,9 +1953,6 @@ server.resource(
       const queueResponse = await api.getQueue(repoPath);
       const queue = queueResponse.data?.items || [];
 
-      const bugsResponse = await api.getBugs(repoPath);
-      const bugs = (bugsResponse.data || []).filter((b: any) => b.status !== 'fixed' && b.status !== 'wont_fix');
-
       const anchorResponse = await api.getAnchor(repoPath);
       const trackStatus = anchorResponse.data;
 
@@ -2546,7 +2009,6 @@ server.resource(
         text += `│ Start one before writing code:      │\n`;
         text += `│  • status() - see what's next  │\n`;
         text += `│  • impromptu("desc") - ad-hoc  │\n`;
-        text += `│  • debug("desc") - investigate │\n`;
         text += `└─────────────────────────────────────┘\n\n`;
       } else {
         const modeIcon = session.mode === 'debugging' ? '🔧' :
@@ -2567,25 +2029,8 @@ server.resource(
         text += `└─────────────────────────────────────┘\n\n`;
       }
 
-      // Bugs
-      if (bugs.length > 0) {
-        text += `┌─ 🐛 OPEN BUGS (${bugs.length}) ${'─'.repeat(Math.max(0, 18 - String(bugs.length).length))}┐\n`;
-        const showBugs = bugs.slice(0, 3);
-        showBugs.forEach((bug: any) => {
-          const sevIcon = bug.severity === 'critical' ? '🔴' :
-                          bug.severity === 'high' ? '🟠' : '🟡';
-          const title = bug.title.length > 30 ? bug.title.slice(0, 27) + '...' : bug.title;
-          text += `│ ${sevIcon} ${title.padEnd(32)}│\n`;
-        });
-        if (bugs.length > 3) {
-          text += `│ ... and ${bugs.length - 3} more                      │\n`;
-        }
-        text += `└─────────────────────────────────────┘\n\n`;
-      }
-
       // Habits
       text += `┌─ HABITS ────────────────────────────┐\n`;
-      text += `│ • See bug? → bug() then move on│\n`;
       text += `│ • Off-task? → also() to log    │\n`;
       text += `│ • Progress? → pulse() visible  │\n`;
       text += `│ • Sub-item done? → tick() NOW  │\n`;
@@ -2687,7 +2132,6 @@ server.resource(
     }
   }
 );
-);
 
 // ============================================
 // SPEC MAINTENANCE TOOLS
@@ -2744,145 +2188,6 @@ server.tool(
         content: [{ type: "text", text: `Error: ${error}` }]
       };
     }
-  }
-);
-
-// ============================================
-// LEARNINGS (Prototype - Capture context from conversations)
-// ============================================
-
-// learn - Capture a learning from the conversation
-server.tool(
-  "learn",
-  "Capture a learning from the current conversation. Use this to record preferences, patterns, decisions, or mistakes that should inform future work. This is a prototype feature to test whether capturing fine-grained context helps later.",
-  {
-    text: z.string().describe("The learning itself (e.g., 'Prefer Svelte 5 runes over legacy syntax')"),
-    category: z.enum(['preference', 'pattern', 'decision', 'mistake', 'context', 'other']).optional()
-      .describe("Category: preference (user likes X), pattern (do it this way), decision (we chose X), mistake (avoid Y), context (background info)"),
-    context: z.string().optional().describe("What was happening when this came up (optional)")
-  },
-  async ({ text, category, context }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const response = await api.addLearning(repoPath, text, category, context);
-
-    if (!response.success) {
-      return {
-        content: [{
-          type: "text",
-          text: `❌ ${response.error}`
-        }]
-      };
-    }
-
-    const categoryIcon = {
-      preference: '💜',
-      pattern: '🔄',
-      decision: '✅',
-      mistake: '⚠️',
-      context: '📝',
-      other: '💡'
-    }[category || 'other'] || '💡';
-
-    let resultText = `${categoryIcon} Learning captured\n`;
-    resultText += `───────────────────────────────────────\n`;
-    resultText += `"${text}"\n`;
-    if (category) resultText += `Category: ${category}\n`;
-    if (context) resultText += `Context: ${context}\n`;
-    resultText += `\n💡 View learnings with learnings()`;
-
-    return {
-      content: [{
-        type: "text",
-        text: resultText
-      }]
-    };
-  }
-);
-
-// learnings - Retrieve captured learnings
-server.tool(
-  "learnings",
-  "Retrieve captured learnings for this project. Use this at the start of work to recall preferences, patterns, and decisions from previous sessions.",
-  {
-    category: z.enum(['preference', 'pattern', 'decision', 'mistake', 'context', 'other']).optional()
-      .describe("Filter by category"),
-    query: z.string().optional().describe("Search text in learnings"),
-    limit: z.number().optional().describe("Max results to return (default: 50)")
-  },
-  async ({ category, query, limit }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const response = await api.getLearnings(repoPath, { category, query, limit });
-
-    if (!response.success) {
-      return {
-        content: [{
-          type: "text",
-          text: `❌ ${response.error}`
-        }]
-      };
-    }
-
-    const learnings = response.data || [];
-
-    if (learnings.length === 0) {
-      let emptyText = `📚 No learnings captured yet\n\n`;
-      emptyText += `💡 Capture learnings as you work:\n`;
-      emptyText += `   learn("Prefer Svelte 5 runes", "preference")\n`;
-      emptyText += `   learn("Always add loading states", "pattern")\n`;
-      emptyText += `   learn("Chose SQLite over Postgres", "decision", "For simplicity")`;
-      return {
-        content: [{
-          type: "text",
-          text: emptyText
-        }]
-      };
-    }
-
-    const categoryIcons: Record<string, string> = {
-      preference: '💜',
-      pattern: '🔄',
-      decision: '✅',
-      mistake: '⚠️',
-      context: '📝',
-      other: '💡'
-    };
-
-    let text = `📚 Project Learnings (${learnings.length})\n`;
-    text += `═══════════════════════════════════════\n\n`;
-
-    // Group by category
-    const grouped: Record<string, any[]> = {};
-    for (const l of learnings) {
-      const cat = l.category || 'other';
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(l);
-    }
-
-    for (const [cat, items] of Object.entries(grouped)) {
-      const icon = categoryIcons[cat] || '💡';
-      text += `${icon} ${cat.toUpperCase()} (${items.length})\n`;
-      for (const item of items) {
-        text += `  • ${item.text}\n`;
-        if (item.context) {
-          text += `    ↳ ${item.context}\n`;
-        }
-      }
-      text += `\n`;
-    }
-
-    text += `───────────────────────────────────────\n`;
-    text += `💡 Add more with learn("text", "category")`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
   }
 );
 
