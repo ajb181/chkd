@@ -335,6 +335,7 @@ async function checkVersionSync(): Promise<void> {
 function getVersionWarning(): string {
   if (!versionMismatch) return '';
   return `\n⚠️ MCP OUT OF SYNC (local: ${versionMismatch.local}, server: ${versionMismatch.server})\n   Restart Claude Code to pick up latest changes.\n`;
+}
 
 // Track when this server instance started (for stale detection)
 const SERVER_START_TIME = Date.now();
