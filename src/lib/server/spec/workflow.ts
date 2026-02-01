@@ -93,12 +93,59 @@ export const REMOVE_WORKFLOW: WorkflowStep[] = [
   DEFAULT_WORKFLOW_STEPS[7], // Commit
 ];
 
-/** Refactor workflow: Explore → Wire-up → Polish → Commit */
+/** Refactor workflow: Understand → Plan → Tests Before → Confirm → Refactor → Tests After → Commit */
 export const REFACTOR_WORKFLOW: WorkflowStep[] = [
-  DEFAULT_WORKFLOW_STEPS[0], // Explore
-  DEFAULT_WORKFLOW_STEPS[3], // Wire-up
-  DEFAULT_WORKFLOW_STEPS[5], // Polish
-  DEFAULT_WORKFLOW_STEPS[7], // Commit
+  {
+    task: 'Understand: what are we refactoring and why?',
+    children: [
+      'What: identify the code to refactor',
+      'Why: cleaner, faster, simpler? Document the reason'
+    ]
+  },
+  {
+    task: 'Plan: design the refactor approach',
+    children: [
+      'Approach: how will you restructure it?',
+      'Risks: what could break?'
+    ]
+  },
+  {
+    task: 'Tests Before: ensure existing behavior is captured',
+    children: [
+      'Find: locate existing tests (unit + e2e)',
+      'Run: all tests must pass before refactoring',
+      'Write: if no tests exist, write them first'
+    ]
+  },
+  {
+    task: 'Confirm: get user approval before changing',
+    children: [
+      'Share: present plan to user',
+      'Approve: get explicit go-ahead'
+    ]
+  },
+  {
+    task: 'Refactor: make the changes',
+    children: [
+      'Change: restructure the code',
+      'Preserve: keep behavior exactly the same'
+    ]
+  },
+  {
+    task: 'Tests After: verify nothing broke',
+    children: [
+      'Run: ALL tests again (unit + e2e)',
+      'Verify: same behavior, all passing',
+      'Add: write new tests if coverage gaps found'
+    ]
+  },
+  {
+    task: 'Commit: descriptive message',
+    children: [
+      'Stage: review all changes',
+      'Commit: explain what changed and why'
+    ]
+  }
 ];
 
 /** Audit workflow: Explore → Feedback → Document → Commit (research + discuss findings) */
@@ -109,15 +156,50 @@ export const AUDIT_WORKFLOW: WorkflowStep[] = [
   DEFAULT_WORKFLOW_STEPS[7], // Commit
 ];
 
-/** Debug workflow: Explore → Verify → Wire-up → Commit (investigate + confirm fix + fix) */
+/** Debug workflow: Reproduce → Investigate → Share → Fix → Test → Commit */
 export const DEBUG_WORKFLOW: WorkflowStep[] = [
-  DEFAULT_WORKFLOW_STEPS[0], // Explore
   {
-    task: 'Verify: confirm findings and fix approach with user',
-    children: ['Share: present findings to user', 'Confirm: get user approval on fix approach']
+    task: 'Reproduce: confirm the bug exists',
+    children: [
+      'Steps: what triggers the bug?',
+      'Evidence: screenshot/log showing the bug'
+    ]
   },
-  DEFAULT_WORKFLOW_STEPS[3], // Wire-up
-  DEFAULT_WORKFLOW_STEPS[7], // Commit
+  {
+    task: 'Investigate: find the root cause',
+    children: [
+      'Trace: follow the code path',
+      'Cause: identify why it breaks'
+    ]
+  },
+  {
+    task: 'Share: present findings to user',
+    children: [
+      'Explain: what is broken and why',
+      'Propose: how you will fix it'
+    ]
+  },
+  {
+    task: 'Fix: implement the fix',
+    children: [
+      'Change: make the fix',
+      'Verify: confirm bug is gone'
+    ]
+  },
+  {
+    task: 'Test: check for regressions',
+    children: [
+      'Run: ALL existing tests',
+      'Check: related functionality still works'
+    ]
+  },
+  {
+    task: 'Commit: descriptive message',
+    children: [
+      'Stage: review changes',
+      'Commit: what was broken, why, how fixed'
+    ]
+  }
 ];
 
 /** Quick Win workflow: Scope → Align → Fix → Verify → Commit */
