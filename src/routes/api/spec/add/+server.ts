@@ -8,7 +8,7 @@ import type { AreaCode } from '$lib/types';
 // Known parameters for validation
 const KNOWN_PARAMS = [
   'repoPath', 'title', 'description', 'areaCode',
-  'withWorkflow', 'workflowType', 'tasks', 'dryRun', 'confirmLarge',
+  'workflowType', 'tasks', 'dryRun', 'confirmLarge',
   'story', 'keyRequirements', 'filesToChange', 'testing', 'fileLink'
 ];
 
@@ -21,7 +21,6 @@ export const POST: RequestHandler = async ({ request }) => {
       title,
       description,
       areaCode,
-      withWorkflow = true,
       workflowType,
       tasks,
       dryRun = false,
@@ -48,7 +47,33 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({
         success: false,
         error: 'repoPath, title, and areaCode are required',
-        hint: 'Required: repoPath, title, areaCode (SD/FE/BE/FUT). Optional: description, story, keyRequirements[], filesToChange[], testing[], tasks[], withWorkflow, dryRun'
+        hint: 'Required: repoPath, title, areaCode, keyRequirements[], filesToChange[], testing[]'
+      }, { status: 400 });
+    }
+
+    // Strict validation: require planning fields upfront
+    // This is the core principle of chkd - think before you code
+    const missingFields: string[] = [];
+    if (!keyRequirements || !Array.isArray(keyRequirements) || keyRequirements.length === 0) {
+      missingFields.push('keyRequirements[]');
+    }
+    if (!filesToChange || !Array.isArray(filesToChange) || filesToChange.length === 0) {
+      missingFields.push('filesToChange[]');
+    }
+    if (!testing || !Array.isArray(testing) || testing.length === 0) {
+      missingFields.push('testing[]');
+    }
+
+    if (missingFields.length > 0) {
+      return json({
+        success: false,
+        error: `Missing required planning fields: ${missingFields.join(', ')}`,
+        hint: 'chkd requires upfront planning. Provide: keyRequirements (what this must do), filesToChange (files you\'ll touch), testing (how you\'ll verify it works)',
+        example: {
+          keyRequirements: ['Must handle edge case X', 'Must validate input Y'],
+          filesToChange: ['src/lib/foo.ts', 'src/routes/bar/+page.svelte'],
+          testing: ['Unit test for X', 'Manual test: do Y, expect Z']
+        }
       }, { status: 400 });
     }
 
@@ -76,22 +101,12 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: 'Repository not found in database. Run migration first.' }, { status: 404 });
     }
 
-    // Determine which tasks will be added
-    // getWorkflowByType returns WorkflowStep[] with { task, children }
+    // Get the workflow steps (always used - no custom tasks allowed)
     const workflowSteps = getWorkflowByType(workflowType, areaCode);
-    const useWorkflowSteps = withWorkflow && (!tasks || tasks.length === 0);
-    const tasksToAdd: string[] = withWorkflow
-      ? (tasks && tasks.length > 0 ? tasks : workflowSteps.map(step => step.task))
-      : [];
-
-    // Check for large additions
-    if (tasksToAdd.length > 10 && !confirmLarge) {
-      return json({
-        success: false,
-        error: `Adding ${tasksToAdd.length} sub-tasks requires confirmation`,
-        hint: 'Set confirmLarge: true to proceed with large additions',
-        preview: { title, taskCount: tasksToAdd.length, tasks: tasksToAdd }
-      }, { status: 400 });
+    
+    // Warn if custom tasks were passed (they're ignored)
+    if (tasks && tasks.length > 0) {
+      warnings.push('Custom tasks ignored - chkd always uses the standard workflow with checkpoints');
     }
 
     // Check for duplicates in DB
@@ -117,6 +132,8 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Dry run - return what would be created
     if (dryRun) {
+      const stepCount = workflowSteps.length;
+      const checkpointCount = workflowSteps.reduce((sum, step) => sum + (step.children?.length || 0), 0);
       return json({
         success: true,
         dryRun: true,
@@ -127,14 +144,17 @@ export const POST: RequestHandler = async ({ request }) => {
             areaCode,
             areaName: area.name,
             story: story || null,
-            keyRequirements: keyRequirements || ['TBC'],
-            filesToChange: filesToChange || ['TBC'],
-            testing: testing || ['TBC'],
-            withWorkflow,
-            tasks: tasksToAdd,
-            taskCount: tasksToAdd.length
+            keyRequirements,
+            filesToChange,
+            testing,
+            workflow: workflowSteps.map(s => ({
+              step: s.task,
+              checkpoints: s.children || []
+            })),
+            stepCount,
+            checkpointCount
           },
-          message: `Would add "${title}" to ${area.name} with ${tasksToAdd.length} sub-tasks`
+          message: `Would add "${title}" to ${area.name} with ${stepCount} steps and ${checkpointCount} checkpoints`
         },
         warnings: warnings.length > 0 ? warnings : undefined
       });
@@ -156,36 +176,37 @@ export const POST: RequestHandler = async ({ request }) => {
       testing: Array.isArray(testing) ? testing : undefined,
       areaCode: areaCode as any,
       sectionNumber,
+      workflowType: workflowType || undefined,
       sortOrder: sectionNumber - 1,
       status: 'open',
       priority: 'medium'
     });
 
-    // Create workflow sub-tasks (and their children if using workflow steps)
-    if (tasksToAdd.length > 0) {
-      tasksToAdd.forEach((taskTitle: string, index: number) => {
-        const subItem = createItem({
+    // Create workflow sub-tasks with nested children (ALWAYS - no bypass)
+    // This is the core of chkd: every task gets the full workflow with checkpoints
+    workflowSteps.forEach((step, stepIndex: number) => {
+        const stepItem = createItem({
           repoId: repo.id,
-          displayId: `${displayId}.${index + 1}`,
-          title: taskTitle,
+          displayId: `${displayId}.${stepIndex + 1}`,
+          title: step.task,
           areaCode: areaCode as any,
           sectionNumber,
           parentId: newItem.id,
-          sortOrder: index,
+          sortOrder: stepIndex,
           status: 'open',
           priority: 'medium'
         });
 
-        // Create children if using workflow steps (not custom tasks)
-        if (useWorkflowSteps && workflowSteps[index]?.children) {
-          workflowSteps[index].children.forEach((childTitle: string, childIndex: number) => {
+        // Create children as nested checkpoints (MANDATORY)
+        if (step.children && step.children.length > 0) {
+          step.children.forEach((childTitle: string, childIndex: number) => {
             createItem({
               repoId: repo.id,
-              displayId: `${displayId}.${index + 1}.${childIndex + 1}`,
+              displayId: `${displayId}.${stepIndex + 1}.${childIndex + 1}`,
               title: childTitle,
               areaCode: areaCode as any,
               sectionNumber,
-              parentId: subItem.id,
+              parentId: stepItem.id,
               sortOrder: childIndex,
               status: 'open',
               priority: 'medium'
@@ -193,27 +214,29 @@ export const POST: RequestHandler = async ({ request }) => {
           });
         }
       });
-    }
 
-    const result = {
-      itemId: newItem.id,
-      sectionId: displayId,
-      areaCode,
-      title: fullTitle
-    };
+    // Calculate total items created (steps + their children)
+    const totalSteps = workflowSteps.length;
+    const totalChildren = workflowSteps.reduce((sum, step) => sum + (step.children?.length || 0), 0);
+    const totalCreated = totalSteps + totalChildren;
 
     return json({
       success: true,
       data: {
-        itemId: result.itemId,
-        sectionId: result.sectionId,
-        areaCode: result.areaCode,
+        itemId: newItem.id,
+        sectionId: displayId,
+        areaCode,
         areaName: area.name,
-        title: result.title,
+        title: fullTitle,
         description: description || null,
-        tasksAdded: tasksToAdd,
-        taskCount: tasksToAdd.length,
-        message: `Added "${title}" to ${area.name} with ${tasksToAdd.length} sub-tasks`
+        workflow: workflowSteps.map(s => ({
+          step: s.task,
+          checkpoints: s.children || []
+        })),
+        stepCount: totalSteps,
+        checkpointCount: totalChildren,
+        totalItemsCreated: totalCreated,
+        message: `Added "${title}" to ${area.name} with ${totalSteps} steps and ${totalChildren} checkpoints`
       },
       warnings: warnings.length > 0 ? warnings : undefined
     });

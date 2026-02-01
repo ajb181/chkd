@@ -9,8 +9,8 @@
  * - Set CHKD_PORT=3847 when developing chkd itself
  */
 
-const PORT = process.env.CHKD_PORT ? parseInt(process.env.CHKD_PORT, 10) : 3848;
-const BASE_URL = `http://localhost:${PORT}`;
+export const PORT = process.env.CHKD_PORT ? parseInt(process.env.CHKD_PORT, 10) : 3848;
+export const BASE_URL = `http://localhost:${PORT}`;
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -185,24 +185,22 @@ export interface AddFeatureOptions {
   filesToChange?: string[];
   testing?: string[];
   fileLink?: string;  // Link to detailed design doc, Figma, etc.
-  tasks?: string[];
-  withWorkflow?: boolean;
+  // tasks removed - chkd always uses standard workflow
+  // withWorkflow removed - always true
 }
 
 export async function addFeature(
   repoPath: string,
   title: string,
   areaCode: string,
-  description?: string,
-  tasks?: string[]
+  description?: string
 ) {
   return request('POST', '/api/spec/add', {
     repoPath,
     title,
     areaCode,
     description,
-    withWorkflow: true,
-    tasks
+    withWorkflow: true  // Always uses standard workflow with checkpoints
   });
 }
 
@@ -220,8 +218,7 @@ export async function addFeatureWithMetadata(
     filesToChange: opts.filesToChange,
     testing: opts.testing,
     fileLink: opts.fileLink,
-    tasks: opts.tasks,
-    withWorkflow: opts.withWorkflow !== false
+    withWorkflow: true  // Always uses standard workflow with checkpoints
   });
 }
 
@@ -293,6 +290,10 @@ export async function getRepoByPath(repoPath: string): Promise<ApiResponse & { r
     return { success: true, repo };
   }
   return { success: true, repo: undefined };
+}
+
+export async function createRepo(repoPath: string, name: string, branch?: string): Promise<ApiResponse> {
+  return request('POST', '/api/repos', { path: repoPath, name, branch });
 }
 
 // ============================================
@@ -436,4 +437,42 @@ export async function findSpecItem(repoPath: string, query: string) {
     query,
     withChildren: 'true'
   });
+}
+
+// ============================================
+// Learnings API (Prototype)
+// ============================================
+
+export async function getLearnings(
+  repoPath: string,
+  options?: {
+    category?: string;
+    query?: string;
+    limit?: number;
+  }
+) {
+  const params: Record<string, string> = { repoPath };
+  if (options?.category) params.category = options.category;
+  if (options?.query) params.query = options.query;
+  if (options?.limit) params.limit = String(options.limit);
+  return request('GET', '/api/learnings', undefined, params);
+}
+
+export async function addLearning(
+  repoPath: string,
+  text: string,
+  category?: string,
+  context?: string
+) {
+  return request('POST', '/api/learnings', {
+    repoPath,
+    text,
+    category,
+    context,
+    source: 'mcp'
+  });
+}
+
+export async function deleteLearning(repoPath: string, id: string) {
+  return request('DELETE', '/api/learnings', { repoPath, id });
 }

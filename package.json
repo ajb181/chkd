@@ -17,7 +17,6 @@
     "mcp:build": "node scripts/build-mcp.js"
   },
   "bin": {
-    "chkd": "./src/cli/index.ts",
     "chkd-mcp": "./src/mcp/server-http.ts"
   },
   "license": "MIT",

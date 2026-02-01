@@ -4,8 +4,7 @@ import {
   getQueueItems,
   addQueueItem,
   removeQueueItem,
-  type QueueItem,
-} from '$lib/server/proposal';
+} from '$lib/server/queue';
 
 // GET /api/session/queue - Get queued items
 export const GET: RequestHandler = async ({ url }) => {

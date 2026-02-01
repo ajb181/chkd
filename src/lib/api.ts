@@ -425,79 +425,36 @@ export async function addFeatureToArea(repoPath: string, title: string, areaCode
 }
 
 // ============================================
-// Proposal System
+// REMOVED FUNCTIONS (stubs for backwards compatibility)
+// These were part of the proposal system that was deleted for simplification
 // ============================================
 
-// Quick add off-plan item (deviate)
-export async function deviate(repoPath: string, title: string, areaCode?: string, setAsCurrent?: boolean): Promise<ApiResponse<any>> {
-  const res = await fetch(`${BASE_URL}/api/session/deviate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, title, areaCode, setAsCurrent })
-  });
-  return res.json();
-}
-
-// Propose a scope change (needs approval for big changes)
-export async function proposeChange(
-  repoPath: string,
-  type: 'add' | 'modify' | 'remove',
-  title: string,
-  options?: { description?: string; reason?: string; size?: 'small' | 'big'; areaCode?: string }
-): Promise<ApiResponse<any>> {
-  const res = await fetch(`${BASE_URL}/api/session/propose-change`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, type, title, ...options })
-  });
-  return res.json();
-}
-
-// Respond to a proposal
-export async function respondToProposal(
-  repoPath: string,
-  proposalId: string,
-  response: 'approve' | 'reject' | 'send-to-chkd'
-): Promise<ApiResponse<any>> {
-  const res = await fetch(`${BASE_URL}/api/session/respond-to-proposal`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, proposalId, response })
-  });
-  return res.json();
-}
-
-// Get pending proposals
-export async function getProposals(repoPath: string, all?: boolean): Promise<ApiResponse<any>> {
-  const url = `${BASE_URL}/api/session/proposals?repoPath=${encodeURIComponent(repoPath)}${all ? '&all=true' : ''}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-// Get flagged items
-export async function getFlaggedItems(repoPath: string, all?: boolean): Promise<ApiResponse<any>> {
-  const url = `${BASE_URL}/api/session/flagged?repoPath=${encodeURIComponent(repoPath)}${all ? '&all=true' : ''}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-// Capture something for later
-export async function captureForLater(
-  repoPath: string,
-  title: string,
-  options?: { description?: string; type?: string; urgency?: string }
-): Promise<ApiResponse<any>> {
-  const res = await fetch(`${BASE_URL}/api/session/flagged`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, title, ...options })
-  });
-  return res.json();
-}
-
-// Get audit items
 export async function getAuditItems(repoPath: string): Promise<ApiResponse<any>> {
-  const res = await fetch(`${BASE_URL}/api/session/audit?repoPath=${encodeURIComponent(repoPath)}`);
+  return { success: true, data: [] };
+}
+
+export async function getFlaggedItems(repoPath: string, all?: boolean): Promise<ApiResponse<any>> {
+  return { success: true, data: [] };
+}
+
+export async function getProposals(repoPath: string, all?: boolean): Promise<ApiResponse<any>> {
+  return { success: true, data: [] };
+}
+
+export async function deviate(repoPath: string, title: string, areaCode?: string): Promise<ApiResponse<any>> {
+  return { success: false, error: 'Use chkd add instead - deviate removed for simplification' };
+}
+
+export async function proposeChange(repoPath: string, type: string, title: string, options?: any): Promise<ApiResponse<any>> {
+  return { success: false, error: 'Proposal system removed for simplification' };
+}
+
+export async function respondToProposal(repoPath: string, proposalId: string, response: string): Promise<ApiResponse<any>> {
+  return { success: false, error: 'Proposal system removed for simplification' };
+}
+
+export async function captureForLater(repoPath: string, title: string, options?: any): Promise<ApiResponse<any>> {
+  return { success: false, error: 'Capture system removed - use queue instead' };
   return res.json();
 }
 

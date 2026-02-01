@@ -258,6 +258,7 @@ export interface SpecItem {
   // Classification
   areaCode: AreaCode;
   sectionNumber: number;
+  workflowType: string | null;      // 'quickwin', 'refactor', 'audit', 'remove', or null for default
 
   // Hierarchy
   parentId: string | null;          // UUID of parent
@@ -286,6 +287,7 @@ export interface CreateItemInput {
   testing?: string[];
   areaCode: AreaCode;
   sectionNumber: number;
+  workflowType?: string;
   parentId?: string;
   sortOrder?: number;
   status?: ItemStatus;

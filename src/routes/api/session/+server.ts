@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getSession, getRepoByPath, getRepoById, updateSession, clearSession } from '$lib/server/db/queries';
-import { getAllHandoverNotes } from '$lib/server/proposal';
 
 // GET /api/session - Get current session state
 export const GET: RequestHandler = async ({ url }) => {
@@ -37,10 +36,9 @@ export const GET: RequestHandler = async ({ url }) => {
     }
 
     const session = getSession(repo.id);
-    const handoverNotes = await getAllHandoverNotes(repo.path);
     return json({
       success: true,
-      data: { ...session, repoPath: repo.path, handoverNotes }
+      data: { ...session, repoPath: repo.path }
     });
   } catch (error) {
     return json({ success: false, error: String(error) }, { status: 500 });

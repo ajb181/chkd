@@ -270,6 +270,7 @@ function initSchema(db: Database.Database): void {
       -- Classification
       area_code TEXT NOT NULL,          -- 'SD', 'FE', 'BE', 'FUT'
       section_number INTEGER NOT NULL,  -- 37 from SD.37
+      workflow_type TEXT,               -- 'quickwin', 'refactor', 'audit', 'remove', or NULL for default
 
       -- Hierarchy
       parent_id TEXT,                   -- UUID of parent, NULL for top-level
@@ -302,6 +303,22 @@ function initSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_item_tags_tag ON item_tags(tag);
+
+    -- Learnings capture (prototype: capture context from conversations)
+    CREATE TABLE IF NOT EXISTS learnings (
+      id TEXT PRIMARY KEY,
+      repo_id TEXT NOT NULL,
+      text TEXT NOT NULL,                     -- The learning itself
+      category TEXT,                          -- e.g., 'preference', 'pattern', 'mistake', 'decision'
+      context TEXT,                           -- What was happening when this was captured
+      source TEXT DEFAULT 'mcp',              -- How it was captured: 'mcp', 'ui', 'auto'
+      relevance_score REAL DEFAULT 1.0,       -- For future ranking
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (repo_id) REFERENCES repositories(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_learnings_repo ON learnings(repo_id);
+    CREATE INDEX IF NOT EXISTS idx_learnings_category ON learnings(category);
   `);
 }
 
@@ -341,6 +358,13 @@ function runMigrations(db: Database.Database): void {
       ALTER TABLE sessions ADD COLUMN worker_id TEXT;
       ALTER TABLE sessions ADD COLUMN is_master INTEGER DEFAULT 0;
     `);
+  }
+
+  // Workflow type migration for spec_items
+  const specItemsInfo = db.prepare("PRAGMA table_info(spec_items)").all() as any[];
+  const specItemsCols = specItemsInfo.map(c => c.name);
+  if (!specItemsCols.includes('workflow_type')) {
+    db.exec(`ALTER TABLE spec_items ADD COLUMN workflow_type TEXT;`);
   }
 }
 

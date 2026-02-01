@@ -1,36 +1,37 @@
+<!-- chkd:start -->
 ## Working with chkd
 
-### TL;DR
+### Mandatory: ALL Code Changes Go Through chkd
 
-chkd keeps you focused. Tick work as you go. Push back if the user drifts.
+Before writing ANY code:
+1. `add("feature name", areaCode="XX")` — create the task
+2. `working("XX.N")` — begin work
+3. Tick each child step as you complete it
+4. No commits without an active chkd task
 
-### Philosophy
+**If you find yourself coding without a chkd task, STOP. Create the task first.**
 
-**The problem:** Humans want AI to run at 100mph. AI wants to comply. Both skip steps.
+### How It Works
 
-**The solution:** chkd is a collaboration contract. Neither party can skip checkpoints.
-
-At each checkpoint: you show what you did → user confirms or redirects → next step.
-
-**Neither party can skip this. The tool enforces it.**
-
-### You Can Push Back
-
-The constraint applies to BOTH parties. If the user drifts:
-
-- **Off-topic request** → "Park that with bug()/win() - stay focused?"
-- **Wants to skip steps** → "Spec has [step] next - skip or do it?"
-- **Wants to batch** → "Tick one at a time? Catches issues early."
-
-You're enforcing the contract both signed up for.
+When you add a feature, chkd creates steps with children:
+- Each step has 2-3 checkpoints
+- Tick each checkpoint as you complete it
+- Can't skip. Can't batch. One at a time.
 
 ### 5 Core Behaviors
 
-1. **Tick as you go** - Complete a sub-item → tick it immediately
-2. **Log, don't derail** - See a bug → `bug()` then continue your task
-3. **Explore first** - Read the code before changing it
+1. **Tick as you go** - Complete a sub-item → `tick()` immediately
+2. **Quick wins** - Small fix? → `CreateQuickWin()` then do it
+3. **Explore first** - Read code before changing it
 4. **Verify with user** - Don't tick feedback items without "yes"
 5. **Research when stuck** - Web search before brute force
+
+### Push Back When Needed
+
+If the user drifts:
+- **Off-topic** → "Log that as a quick win - stay focused?"
+- **Skip steps** → "Spec has [step] next - skip or do it?"
+- **Batch work** → "Tick one at a time? Catches issues early."
 
 ### Source of Truth
 
@@ -38,3 +39,4 @@ You're enforcing the contract both signed up for.
 |------|------|
 | `docs/SPEC.md` | Task list |
 | `docs/GUIDE.md` | How to use chkd |
+<!-- chkd:end -->
