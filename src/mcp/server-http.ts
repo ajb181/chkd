@@ -2278,62 +2278,6 @@ server.resource(
 // ============================================
 // SPEC MAINTENANCE TOOLS
 // ============================================
-
-// transfer - Transfer an item to a different repo
-server.tool(
-  "transfer",
-  "Transfer a spec item from the current repo to another repo. Use when an item was created in the wrong project.",
-  {
-    itemId: z.string().describe("Item ID or title to transfer (e.g., 'SD.1' or 'User auth')"),
-    targetRepoPath: z.string().describe("Path to the target repository"),
-    targetAreaCode: z.string().describe("Target area code in destination repo (SD, FE, BE, FUT)")
-  },
-  async ({ itemId, targetRepoPath, targetAreaCode }) => {
-    const repoPath = getRepoPath(); if (!repoPath) {
-      return {
-        content: [{ type: "text", text: "No repo path set." }]
-      };
-    }
-
-    try {
-      const res = await fetch(`${HTTP_BASE}/api/spec/transfer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceRepoPath: repoPath,
-          targetRepoPath,
-          itemId,
-          targetAreaCode
-        })
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        return {
-          content: [{ type: "text", text: `Error: ${data.error}` }]
-        };
-      }
-
-      let text = `✅ Item Transferred\n`;
-      text += `═══════════════════════════════════════\n\n`;
-      text += `📦 From: ${data.data.sourceRepo}\n`;
-      text += `📦 To: ${data.data.targetRepo}\n`;
-      text += `🆔 New ID: ${data.data.newItemId}\n`;
-      text += `📍 Area: ${data.data.targetArea}\n\n`;
-      text += `The item has been moved to the target repository.`;
-
-      return {
-        content: [{ type: "text", text }]
-      };
-    } catch (error) {
-      return {
-        content: [{ type: "text", text: `Error: ${error}` }]
-      };
-    }
-  }
-);
-
-// ============================================
 // START SERVER
 // ============================================
 
