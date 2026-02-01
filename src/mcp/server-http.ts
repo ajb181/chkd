@@ -294,7 +294,7 @@ function getTickGuidance(ctx: TypeAreaContext): string[] {
 
 // Server version identifier
 const SERVER_TYPE = "http-based";
-const SERVER_VERSION = "0.3.1";  // Auto-bumped by pre-commit hook
+const SERVER_VERSION = "0.3.2";  // Auto-bumped by pre-commit hook
 
 // Version sync check - compares local file hash with server's expected hash
 let versionCheckDone = false;
@@ -1098,6 +1098,37 @@ server.tool(
       content: [{
         type: "text",
         text: `🏷️ Tags set on ${itemId}: ${tagList}\n\n💡 Filter by tag in the UI`
+      }]
+    };
+  }
+);
+
+// delete - Delete a spec item
+server.tool(
+  "delete",
+  "Delete a spec item or quick win. Use with caution - this is permanent.",
+  {
+    itemId: z.string().describe("Item ID or title to delete (e.g., 'FE.1' or 'Login page')")
+  },
+  async ({ itemId }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const response = await api.deleteItem(repoPath, itemId);
+
+    if (!response.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${response.error}`
+        }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `🗑️ Deleted: ${itemId}\n\nThis action cannot be undone.`
       }]
     };
   }
