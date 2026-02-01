@@ -1553,7 +1553,7 @@ server.tool(
 
 // quickwin - Add quick win (requires planning)
 server.tool(
-  "quickwin",
+  "StartQuickWin",
   "Add a quick win with required planning. Creates a FUT task with 5-step workflow: Scope → Align → Fix → Verify → Commit.",
   {
     title: z.string().describe("Quick win title (e.g., 'Fix button alignment')"),
@@ -1600,7 +1600,7 @@ server.tool(
 
 // quickwins - List quick wins
 server.tool(
-  "quickwins",
+  "ListQuickWins",
   "List all quick wins (FUT area tasks).",
   {},
   async () => {
@@ -1620,7 +1620,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `📝 No quick wins yet\n\n💡 Add one with quickwin(title, files, test)`
+          text: `📝 No quick wins yet\n\n💡 Add one with StartQuickWin(title, files, test)`
         }]
       };
     }
@@ -1659,7 +1659,7 @@ server.tool(
 
 // quickwin_done - Complete a quick win
 server.tool(
-  "quickwin_done",
+  "CompleteQuickWin",
   "Mark a quick win as done. Use FUT.X ID to find it.",
   {
     id: z.string().describe("Quick win ID (e.g., FUT.1)")
