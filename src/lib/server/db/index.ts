@@ -366,6 +366,57 @@ function runMigrations(db: Database.Database): void {
   if (!specItemsCols.includes('workflow_type')) {
     db.exec(`ALTER TABLE spec_items ADD COLUMN workflow_type TEXT;`);
   }
+
+  // Migration: Add ON DELETE CASCADE to parent_id foreign key
+  // Check if we need to migrate by looking at the foreign key info
+  const fkInfo = db.prepare("PRAGMA foreign_key_list(spec_items)").all() as any[];
+  const parentFk = fkInfo.find((fk: any) => fk.from === 'parent_id');
+  
+  if (parentFk && parentFk.on_delete !== 'CASCADE') {
+    console.log('[migration] Adding ON DELETE CASCADE to spec_items.parent_id...');
+    
+    db.exec(`
+      -- Create new table with correct FK constraint
+      CREATE TABLE spec_items_new (
+        id TEXT PRIMARY KEY,
+        repo_id TEXT NOT NULL,
+        display_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        story TEXT,
+        key_requirements TEXT,
+        files_to_change TEXT,
+        testing TEXT,
+        area_code TEXT NOT NULL,
+        section_number INTEGER NOT NULL,
+        workflow_type TEXT,
+        parent_id TEXT,
+        sort_order INTEGER DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'open',
+        priority TEXT DEFAULT 'medium',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (repo_id) REFERENCES repositories(id),
+        FOREIGN KEY (parent_id) REFERENCES spec_items_new(id) ON DELETE CASCADE
+      );
+      
+      -- Copy data
+      INSERT INTO spec_items_new SELECT * FROM spec_items;
+      
+      -- Drop old table and rename
+      DROP TABLE spec_items;
+      ALTER TABLE spec_items_new RENAME TO spec_items;
+      
+      -- Recreate indexes
+      CREATE UNIQUE INDEX idx_spec_items_display ON spec_items(repo_id, display_id);
+      CREATE INDEX idx_spec_items_repo_status ON spec_items(repo_id, status);
+      CREATE INDEX idx_spec_items_repo_area ON spec_items(repo_id, area_code);
+      CREATE INDEX idx_spec_items_parent ON spec_items(parent_id);
+      CREATE INDEX idx_spec_items_repo_priority ON spec_items(repo_id, priority);
+    `);
+    
+    console.log('[migration] Done - ON DELETE CASCADE added');
+  }
 }
 
 export function closeDb(): void {

@@ -147,36 +147,43 @@ export function updateItem(id: string, updates: UpdateItemInput): SpecItem | nul
 export function deleteItem(id: string): boolean {
   const db = getDb();
   
-  // Temporarily disable foreign key checks for this operation
-  db.pragma('foreign_keys = OFF');
+  console.log(`[deleteItem] Starting delete for id: ${id}`);
+  
+  // Collect all descendant IDs first
+  function collectDescendants(parentId: string): string[] {
+    const children = db.prepare('SELECT id, display_id FROM spec_items WHERE parent_id = ?').all(parentId) as { id: string, display_id: string }[];
+    console.log(`[deleteItem] Found ${children.length} children for ${parentId}`);
+    const allIds: string[] = [];
+    for (const child of children) {
+      console.log(`[deleteItem]   - child: ${child.display_id} (${child.id})`);
+      allIds.push(child.id);
+      allIds.push(...collectDescendants(child.id));
+    }
+    return allIds;
+  }
+  
+  const descendantIds = collectDescendants(id);
+  console.log(`[deleteItem] Total descendants to delete: ${descendantIds.length}`);
   
   try {
-    // Recursively collect all descendant IDs (depth-first, leaves first)
-    function collectDescendants(parentId: string): string[] {
-      const children = db.prepare('SELECT id FROM spec_items WHERE parent_id = ?').all(parentId) as { id: string }[];
-      const allIds: string[] = [];
-      for (const child of children) {
-        allIds.push(...collectDescendants(child.id));
-        allIds.push(child.id);
-      }
-      return allIds;
+    // Delete in reverse order (deepest first) without transaction first
+    const allToDelete = [...descendantIds, id];
+    console.log(`[deleteItem] Deleting ${allToDelete.length} items total`);
+    
+    for (const delId of allToDelete) {
+      console.log(`[deleteItem] Deleting: ${delId}`);
+      // First clear any parent references TO this item
+      db.prepare('UPDATE spec_items SET parent_id = NULL WHERE parent_id = ?').run(delId);
+      // Then delete
+      db.prepare('DELETE FROM spec_items WHERE id = ?').run(delId);
+      console.log(`[deleteItem] Deleted: ${delId}`);
     }
     
-    const descendantIds = collectDescendants(id);
-    
-    // Delete all in transaction
-    const deleteAll = db.transaction(() => {
-      for (const descId of descendantIds) {
-        db.prepare('DELETE FROM spec_items WHERE id = ?').run(descId);
-      }
-      return db.prepare('DELETE FROM spec_items WHERE id = ?').run(id);
-    });
-    
-    const result = deleteAll();
-    return result.changes > 0;
-  } finally {
-    // Re-enable foreign key checks
-    db.pragma('foreign_keys = ON');
+    console.log(`[deleteItem] Success!`);
+    return true;
+  } catch (err) {
+    console.error(`[deleteItem] Error:`, err);
+    throw err;
   }
 }
 
