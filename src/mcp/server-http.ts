@@ -294,7 +294,7 @@ function getTickGuidance(ctx: TypeAreaContext): string[] {
 
 // Server version identifier
 const SERVER_TYPE = "http-based";
-const SERVER_VERSION = "0.3.2";  // Auto-bumped by pre-commit hook
+const SERVER_VERSION = "0.3.3";  // Auto-bumped by pre-commit hook
 
 // Version sync check - compares local file hash with server's expected hash
 let versionCheckDone = false;
@@ -589,7 +589,7 @@ server.tool(
     } else {
       statusText += `📁 ${path.basename(repoPath)}\n`;
       statusText += `Progress: ${progress.percentage}% (${progress.completed}/${progress.total})\n`;
-      statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}`;
+      statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION} [${getLocalMcpHash()}]${isServerStale() ? ' ⚠️ STALE' : ''}`;
       statusText += getVersionWarning();
       statusText += `\n`;
     }
