@@ -1661,13 +1661,27 @@ async function bugs(filter?: string) {
 // Quick Wins
 // ============================================
 
-async function win(title: string) {
-  if (!title) {
-    console.log(`\n  Usage: chkd win "quick improvement title"`);
-    console.log(`\n  Examples:`);
-    console.log(`    chkd win "Add loading spinner to save button"`);
-    console.log(`    chkd win "Fix typo in footer"`);
-    console.log(`\n  Creates a task with quickwin workflow (5 steps).\n`);
+async function win(title: string, flags: Record<string, any> = {}) {
+  const files = flags.files || flags.f;
+  const test = flags.test || flags.t;
+  const why = flags.why || flags.w;
+
+  if (!title || !files || !test) {
+    console.log(`\n  Usage: chkd win "title" --files "file.ts" --test "how to verify"`);
+    console.log(`\n  Required flags:`);
+    console.log(`    --files, -f    File(s) you'll change (comma-separated)`);
+    console.log(`    --test, -t     How you'll verify it works`);
+    console.log(`    --why, -w      Why this fix is needed (optional)`);
+    console.log(`\n  Example:`);
+    console.log(`    chkd win "Fix button alignment" --files "src/Button.tsx" --test "Button centers correctly"`);
+    console.log(`\n  Quick wins still require planning. No shortcuts.\n`);
+    return;
+  }
+
+  // Parse files (comma-separated)
+  const filesToChange = files.split(',').map((f: string) => f.trim()).filter(Boolean);
+  if (filesToChange.length === 0) {
+    console.log(`\n  ❌ --files cannot be empty\n`);
     return;
   }
 
@@ -1681,9 +1695,9 @@ async function win(title: string) {
       title,
       areaCode: 'FUT',
       workflowType: 'quickwin',
-      keyRequirements: ['Quick fix - should take <30 min'],
-      filesToChange: ['TBD during scope'],
-      testing: ['Manual verification']
+      keyRequirements: [why || `Quick fix: ${title}`],
+      filesToChange,
+      testing: [test]
     }),
   });
 
@@ -1694,8 +1708,10 @@ async function win(title: string) {
 
   console.log(`\n  ⚡ Quick win created: ${res.data.sectionId} ${title}`);
   console.log(`  ─────────────────────────────────`);
-  console.log(`  📋 5-step workflow: Scope → Align → Fix → Verify → Commit`);
-  console.log(`  💡 Start it with: chkd start ${res.data.sectionId}\n`);
+  console.log(`  📁 Files: ${filesToChange.join(', ')}`);
+  console.log(`  ✓ Test: ${test}`);
+  console.log(`  📋 Workflow: Scope → Align → Fix → Verify → Commit`);
+  console.log(`  💡 Start: chkd start ${res.data.sectionId}\n`);
 }
 
 async function wins() {
@@ -3545,7 +3561,7 @@ async function main() {
       await startBugfix(arg, { convert: flags.convert });
       break;
     case 'win':
-      await win(arg);
+      await win(arg, flags);
       break;
     case 'wins':
       await wins();
