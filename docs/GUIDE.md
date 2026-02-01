@@ -8,7 +8,7 @@
 
 chkd helps you build software with Claude Code without losing control:
 
-1. **Spec-driven** - Your features live in `docs/SPEC.md`
+1. **Spec-driven** - Your features live in the database, visible in UI
 2. **Progress tracking** - See what's done, in progress, blocked
 3. **Keeps Claude focused** - Builds what you planned, logs surprises
 4. **MCP integration** - Claude gets context automatically
@@ -30,33 +30,15 @@ The workflow is a forcing function for both.
 | Without chkd | With chkd |
 |--------------|-----------|
 | Human: "Build SD.13" | Human: "Build SD.13" |
-| AI: builds 10 things in one go | AI: "Working on SD.13.1" |
-| Human: "Looks done!" | AI: "Done. Ticking SD.13.1" |
+| AI: builds 10 things in one go | AI: `working("SD.13.1")` |
+| Human: "Looks done!" | AI: "Done." `tick("SD.13.1")` |
 | 3 features missing, no one notices | Human: "Ok, next" |
-| | AI: "Working on SD.13.2..." |
+| | AI: `working("SD.13.2")` |
 | | *forced pause at each step* |
 
 The human can't say "just do it all" because the tool doesn't work that way. The AI can't batch because the workflow demands tick-by-tick progress.
 
 **The constraint applies to both.**
-
-### Human Nature + AI Nature
-
-**Human nature:**
-- "Let it run, I'll review at the end"
-- "I trust the AI, it's probably fine"
-- "Faster is better"
-- "Checking each step is tedious"
-
-**AI nature:**
-- "I'll do everything you asked"
-- "I'll optimize for completion"
-- "I won't stop to verify unless told"
-- "I'll make assumptions to keep moving"
-
-Both want the same thing: **Speed without friction.**
-
-chkd says: No. Tick. Verify. Tick. Verify.
 
 ### The Philosophy
 
@@ -68,36 +50,6 @@ It forces checkpoints where both parties must align:
 - Then next step
 
 Neither party can skip this. The tool enforces it.
-
-### What This Means for the Workflow
-
-The Verify step isn't just for Claude. It's a handoff point:
-
-```
-- [ ] Build: implement the thing
-- [ ] Verify: compare to spec, iterate if gaps  ← HUMAN + AI checkpoint
-- [ ] Commit: what was built + assumptions
-```
-
-At "Verify":
-- AI shows the work
-- Human looks at it (or AI describes what to look at)
-- Gap found? Iterate before moving on
-- No gap? Tick, commit, continue
-
-**Neither party can skip the checkpoint. That's the point.**
-
-### The Commit Is Also a Contract
-
-The commit message with assumptions isn't just documentation. It's:
-
-1. **AI declares:** "Here's what I built, here's what I assumed"
-2. **Human sees:** The assumptions, the gaps noted
-3. **Both agree:** This is done, move on
-
-If human doesn't like the assumptions, they stop. If AI skipped something, it's visible.
-
-### Simple Statement
 
 **chkd exists to slow down both human and AI to the speed of good work.**
 
@@ -119,13 +71,11 @@ Server runs at `http://localhost:3847`. Keep this terminal open.
 
 ### 2. Register the MCP Server
 
-Register chkd as a global MCP server so it's available in all projects:
+Register chkd as a global MCP server:
 
 ```bash
 claude mcp add --scope user chkd -- npx tsx ~/chkd/src/mcp/server-http.ts
 ```
-
-The `--scope user` flag makes chkd available in all projects, including git worktrees for parallel development.
 
 Verify it's working:
 
@@ -133,150 +83,140 @@ Verify it's working:
 claude mcp list
 ```
 
-### 3. Add chkd to your project
+### 3. Sync your project
+
+Open Claude Code in your project:
 
 ```bash
 cd ~/my-project
-git init  # if not already a git repo
-chkd upgrade
-```
-
-This creates:
-- `docs/SPEC.md` - Your feature checklist
-- `docs/GUIDE.md` - This guide
-- `CLAUDE.md` - Instructions for Claude
-- `.claude/skills/` - Build skills
-
-### 4. Add features to your spec
-
-Edit `docs/SPEC.md`:
-
-```markdown
-# My Project
-
-## Frontend
-
-- [ ] **FE.1 Login page** - Email/password form with validation
-- [ ] **FE.2 Dashboard** - Show user stats
-
-## Backend
-
-- [ ] **BE.1 Auth API** - Login, logout, sessions
-```
-
-### 5. Build something
-
-Start Claude Code in your project folder:
-
-```bash
 claude
 ```
 
-Then use the `/chkd` skill:
+Then run the sync tool:
 
 ```
-/chkd FE.1
+sync()
 ```
 
-Claude reads your spec and builds the feature.
+This:
+- Registers the project with chkd
+- Creates/updates `CLAUDE.md` with chkd section
+- Copies guide files to `docs/`
+
+### 4. Add a feature
+
+```
+add("Login page", areaCode="FE")
+```
+
+This creates a task with workflow steps:
+- Explore → Design → Prototype → Wire-up → Feedback → Polish → Document → Commit
+
+### 5. Build it
+
+```
+working("FE.1")
+```
+
+Then tick each step as you complete it:
+
+```
+tick("Explore")
+tick("Design")
+...
+```
 
 ---
 
 ## MCP Tools
 
-When the MCP server is connected, Claude has these tools:
+### Core Workflow
 
-**Core Workflow:**
 | Tool | What it does |
 |------|--------------|
-| `status` | See current state - **run this first!** |
-| `working` | Signal starting work on an item |
-| `tick` | Mark item complete |
-| `suggest` | Get suggestion for what to work on next |
-| `add` | Add feature with workflow sub-tasks |
-| `add_child` | Add sub-task to existing item |
+| `sync()` | Register project, sync CLAUDE.md and docs |
+| `status()` | See current state - **run this first!** |
+| `working(item)` | Signal starting work on an item |
+| `tick(item)` | Mark item complete |
+| `done()` | End current session |
 
-**Sessions & Focus:**
+### Spec Management
+
 | Tool | What it does |
 |------|--------------|
-| `impromptu` | Start ad-hoc work session |
-| `debug` | Start investigation session |
-| `done` | End current session |
-| `pivot` | Change anchor/focus explicitly |
-| `checkin` | 15-minute check-in |
-| `pulse` | Quick status update |
-| `also` | Log off-task work without derailing |
+| `add(title, areaCode)` | Add feature with workflow sub-tasks |
+| `add_child(parentId, title)` | Add sub-task to existing item |
+| `add_task(title)` | Add sub-task to current working item |
+| `tag(itemId, tags)` | Set tags on an item |
+| `list(type?, area?, status?)` | List items with filters |
 
-**Bugs:**
+### Quick Wins
+
 | Tool | What it does |
 |------|--------------|
-| `bug` | Log a bug without derailing |
-| `bugs` | List all open bugs |
-| `bugfix` | Start working on a bug |
-| `fix` | Signal fix ready for verification |
-| `resolve` | Close bug after user verified |
+| `CreateQuickWin(title, files, test)` | Add quick fix with planning |
+| `ListQuickWins()` | List all quick wins |
+| `CompleteQuickWin(id)` | Mark quick win done |
 
-**Quick Wins:**
+### Sessions
+
 | Tool | What it does |
 |------|--------------|
-| `win` | Add a quick win |
-| `wins` | List quick wins |
-| `won` | Mark quick win done |
+| `impromptu(description)` | Start ad-hoc work session |
 
-**Epics:**
+### Epics
+
 | Tool | What it does |
 |------|--------------|
-| `epic` | Create epic for large features |
-| `epics` | List all epics with progress |
-| `tag` | Link item to epic via tag |
+| `epic(name, description)` | Create epic for large features |
+| `epics()` | List all epics with progress |
 
-**Resources** (Claude reads these for context):
+### Utilities
+
+| Tool | What it does |
+|------|--------------|
+| `upgrade_mcp()` | Check server version, get upgrade instructions |
+| `attach(itemType, itemId, filePath)` | Attach file to item |
+| `attachments(itemType?, itemId?)` | List attachments |
+
+### Resources
+
+Claude reads these automatically for context:
 - `chkd://conscience` - Session state, guidance, habits
 - `chkd://spec` - Current spec with progress
 
 ---
 
-## Skills (in Claude Code)
-
-| Skill | Purpose |
-|-------|---------|
-| `/chkd FE.1` | Build task FE.1 from the spec |
-| `/epic "Name"` | Plan and create a large feature (interview → design → stories) |
-| `/story` | Plan features, refine specs |
-| `/bugfix` | Fix bugs with minimal changes |
-
----
-
-## Daily Workflow
-
-```
-1. Start chkd server     →  cd ~/chkd && npm run dev
-2. Open Claude Code      →  claude
-3. Check status          →  Claude runs status
-4. Build a task          →  /chkd FE.1
-5. Review and commit     →  /commit
-6. Repeat
-```
-
----
-
 ## Spec Format
 
-```markdown
-## Area Name
+Features are stored in the database, but follow this structure:
 
-- [ ] **CODE.1 Feature title** - Description
-  - [ ] Sub-task 1
-  - [ ] Sub-task 2
+```
+FE.1 Login page
+├── FE.1.1 Explore
+├── FE.1.2 Design  
+├── FE.1.3 Prototype
+├── FE.1.4 Wire-up
+├── FE.1.5 Feedback
+├── FE.1.6 Polish
+├── FE.1.7 Document
+└── FE.1.8 Commit
 ```
 
-**Area codes:** FE (Frontend), BE (Backend), SD (Site Design), FUT (Future)
+**Area codes:** FE (Frontend), BE (Backend), SD (System Design), FUT (Future/Quick)
 
-**Markers:**
-- `[ ]` - Not started
-- `[~]` - In progress
-- `[x]` - Complete
-- `[!]` - Blocked
+---
+
+## Workflow Types
+
+| Type | Steps | Use for |
+|------|-------|---------|
+| `default` | 8 steps | Normal features |
+| `quickwin` | 5 steps | Small fixes (<30 min) |
+| `refactor` | 7 steps | Code cleanup (no behavior change) |
+| `debug` | 6 steps | Bug investigation |
+| `audit` | 5 steps | Investigation only |
+| `remove` | 5 steps | Deleting code |
 
 ---
 
@@ -284,322 +224,88 @@ When the MCP server is connected, Claude has these tools:
 
 When working on a task:
 
-1. **Notice a bug?** → `bug("description")` then continue
-2. **Want to refactor?** → Log it, don't do it
-3. **Something seems off?** → Log it, stay on track
+1. **Small fix?** → `CreateQuickWin()` then continue
+2. **Want to refactor?** → Log it, don't do it now
+3. **Something seems off?** → Note it, stay on track
 
-The bugs/quick wins lists exist so nothing gets lost. Fix them later.
+Quick wins exist so nothing gets lost. Fix them later.
 
 ---
 
 ## Epics (Large Features)
 
-For features that span multiple spec items, use the `/epic` skill:
+For features that span multiple spec items:
 
 ```
-/epic "Auth Overhaul"
+epic("Auth Overhaul", "Complete authentication rewrite")
 ```
 
-### What the Skill Does
+Creates `docs/epics/auth-overhaul.md` with:
+- Overview and goals
+- Scope checklist
+- Tag for linking items
 
-1. **Interview** - Asks questions to understand the feature
-2. **Design** - Breaks down into stories, identifies areas (FE/BE/SD)
-3. **Create epic** - Makes `docs/epics/auth-overhaul.md` with scope and checklist
-4. **Create stories** - Adds spec items linked to the epic tag
-
-### Manual Epic Management
-
-If you need to manage epics manually:
+Link items to epic:
 
 ```
-epic("Name", "description", ["scope items"])   # Create epic doc
-add("Story", areaCode="BE", epic="auth-overhaul")  # Add linked item
-tag("BE.3", ["auth-overhaul"])                 # Tag existing item
-epics                                           # List all epics
+add("Login API", areaCode="BE", epic="auth-overhaul")
+tag("BE.3", ["auth-overhaul"])
 ```
 
-### Track Epic Progress
+Track progress:
 
 ```
-epics
+epics()
 ```
-
-Shows all epics with linked item counts and completion status.
 
 ---
 
 ## Multi-Worker System
 
-Run multiple Claude instances in parallel to build faster. One "Manager" Claude coordinates while "Worker" Claudes execute tasks on separate branches.
+Run multiple Claude instances in parallel. One "Manager" coordinates while "Workers" execute on separate branches.
 
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        MANAGER CLAUDE                            │
-│                     (your main terminal)                         │
-│                                                                  │
-│   Responsibilities:                                              │
-│   • Assign tasks to workers                                      │
-│   • Monitor progress via chkd_workers()                          │
-│   • Review completed work                                        │
-│   • Merge branches when ready                                    │
-│   • Resolve conflicts if any                                     │
-└─────────────────────────────────────────────────────────────────┘
-                           │
-            ┌──────────────┼──────────────┐
-            │              │              │
-            ▼              ▼              ▼
-    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-    │   WORKER 1   │ │   WORKER 2   │ │   WORKER 3   │
-    │              │ │              │ │              │
-    │ Task: FE.11  │ │ Task: BE.24  │ │ Task: SD.28  │
-    │ Branch:      │ │ Branch:      │ │ Branch:      │
-    │ feature/fe11 │ │ feature/be24 │ │ feature/sd28 │
-    │              │ │              │ │              │
-    │ Worktree:    │ │ Worktree:    │ │ Worktree:    │
-    │ ../proj-w1/  │ │ ../proj-w2/  │ │ ../proj-w3/  │
-    └──────────────┘ └──────────────┘ └──────────────┘
-```
-
-Each worker runs in its own **git worktree** - a separate directory with its own branch, sharing the same git history.
-
-### When to Use Workers
+### When to Use
 
 **Good for:**
 - Independent tasks (FE while you do BE)
 - Parallel features that don't overlap
-- Speeding up large feature builds
 
 **Avoid when:**
-- Tasks modify the same files
+- Tasks modify same files
 - Deep dependencies between tasks
-- You need tight coordination
-
-### First-Time Setup
-
-#### Step 1: Pick Independent Tasks
-
-Look at your spec and find 2-3 tasks that don't overlap:
-
-```
-Good pairing:
-  • FE.11 (App shell)     - touches src/routes/
-  • BE.24 (Chat API)      - touches src/lib/server/
-
-Bad pairing:
-  • FE.11 (App shell)     - touches src/routes/+page.svelte
-  • FE.12 (Chat UI)       - ALSO touches src/routes/+page.svelte
-```
-
-#### Step 2: Spawn Your First Worker
-
-In your main Claude session (the Manager), run:
-
-```
-chkd_spawn_worker(
-  taskId: "FE.11",
-  taskTitle: "App shell & navigation"
-)
-```
-
-You'll see output like:
-
-```
-✅ Worker spawned: worker-alex-fe11
-
-📂 Worktree: /Users/alex/project-worker-alex-fe11
-🌿 Branch: feature/fe11-app-shell-navigation
-
-To start the worker, run in a NEW terminal:
-────────────────────────────────────────
-cd /Users/alex/project-worker-alex-fe11 && claude
-────────────────────────────────────────
-```
-
-#### Step 3: Start the Worker
-
-Open a **new terminal window** and run the command:
-
-```bash
-cd /Users/alex/project-worker-alex-fe11 && claude
-```
-
-The worker Claude will automatically:
-1. Detect it's a worker (from `.chkd-worker.json`)
-2. Know its assigned task
-3. Start working with `chkd_working("FE.11")`
-
-#### Step 4: Monitor from Manager
-
-Back in your Manager terminal, check on workers:
-
-```
-chkd_workers()
-```
-
-Output:
-```
-🔨 Active Workers (1)
-─────────────────────
-worker-alex-fe11
-  Task: FE.11 App shell & navigation
-  Status: WORKING
-  Progress: 35%
-  Last heartbeat: 2 min ago
-```
-
-### Worker Lifecycle
-
-```
-┌──────────┐    spawn     ┌──────────┐    start    ┌──────────┐
-│ PENDING  │ ──────────▶  │ WORKING  │ ──────────▶ │ MERGING  │
-└──────────┘              └──────────┘              └──────────┘
-     │                         │                         │
-     │                         │                         │
-     ▼                         ▼                         ▼
-  Created,                  Actively                  Task done,
-  waiting                   building                  ready to
-  to start                  the task                  merge
-                                                         │
-                                                         ▼
-                                                   ┌──────────┐
-                                                   │   DONE   │
-                                                   └──────────┘
-                                                         │
-                                                         ▼
-                                                    Merged to
-                                                    main, worker
-                                                    cleaned up
-```
 
 ### Manager Commands
 
-| Command | What it does |
-|---------|--------------|
-| `chkd_spawn_worker(taskId, taskTitle)` | Create new worker |
-| `chkd_workers()` | List all active workers |
-| `chkd_merge_worker(workerId)` | Merge worker's branch |
-| `chkd_pause_worker(workerId)` | Pause a worker |
-| `chkd_resume_worker(workerId)` | Resume paused worker |
-| `chkd_stop_worker(workerId)` | Cancel and cleanup |
-| `chkd_dead_workers()` | Find stuck workers |
+| Tool | What it does |
+|------|--------------|
+| `spawn_worker(taskId, taskTitle)` | Create new worker |
+| `workers()` | List active workers |
+| `merge_worker(workerId)` | Merge worker's branch |
+| `pause_worker(workerId)` | Pause a worker |
+| `resume_worker(workerId)` | Resume paused worker |
+| `stop_worker(workerId)` | Cancel and cleanup |
+| `dead_workers()` | Find stuck workers |
 
 ### Worker Commands
 
-Workers use these automatically, but for reference:
-
-| Command | What it does |
-|---------|--------------|
-| `chkd_worker_heartbeat(id, msg, %)` | Report progress |
-| `chkd_worker_complete(id, summary)` | Signal task done |
-| `chkd_worker_status(id)` | Check for instructions |
-
-### Merging Completed Work
-
-When a worker finishes:
-
-```
-chkd_merge_worker(workerId: "worker-alex-fe11")
-```
-
-**If no conflicts:**
-```
-✅ Merged successfully!
-Branch feature/fe11-app-shell-navigation merged to main.
-Worker cleaned up.
-```
-
-**If conflicts exist:**
-```
-⚠️ Conflicts detected in:
-  - src/routes/+page.svelte
-  - src/lib/api.ts
-
-Options:
-  1. Keep worker changes
-  2. Keep main changes
-  3. Manual resolution needed
-```
-
-### Example Session
-
-```
-YOU (Manager Claude):
-────────────────────────────────────────
-1. chkd_status()           # See what's available
-2. Pick FE.11 and BE.24    # Independent tasks
-
-3. chkd_spawn_worker(taskId: "FE.11", taskTitle: "App shell")
-   → Opens worker in new terminal
-
-4. chkd_spawn_worker(taskId: "BE.24", taskTitle: "Chat API")
-   → Opens worker in another terminal
-
-5. Work on something else, or coordinate
-
-6. chkd_workers()          # Check progress
-   → Worker 1: 80% done
-   → Worker 2: 45% done
-
-7. chkd_merge_worker("worker-alex-fe11")  # Merge first one
-   → ✅ Merged!
-
-8. Continue monitoring Worker 2...
-────────────────────────────────────────
-
-WORKER 1 (separate terminal):
-────────────────────────────────────────
-# Automatically starts with task context
-1. Builds FE.11 following the spec
-2. Sends heartbeats every few minutes
-3. When done: chkd_worker_complete()
-────────────────────────────────────────
-```
-
-### Troubleshooting Workers
-
-**Worker not responding:**
-```
-chkd_dead_workers()           # Find stuck workers
-chkd_stop_worker(id, force: true)  # Force cleanup
-```
-
-**Merge conflicts:**
-- Option 1: Resolve manually in the worktree directory
-- Option 2: Stop worker, cherry-pick specific commits
-- Option 3: Abort and reassign task
-
-**Worktree issues:**
-```bash
-# List all worktrees
-git worktree list
-
-# Remove orphaned worktree
-git worktree remove ../proj-worker-old --force
-```
-
-### Best Practices
-
-1. **Keep tasks small** - Easier to merge, less conflict risk
-2. **Different areas** - FE + BE is better than FE + FE
-3. **Merge often** - Don't let branches diverge too long
-4. **Monitor progress** - Check `chkd_workers()` regularly
-5. **One manager** - Don't run multiple manager sessions
+| Tool | What it does |
+|------|--------------|
+| `worker_heartbeat(id, msg, %)` | Report progress |
+| `worker_complete(id, summary)` | Signal task done |
+| `worker_status(id)` | Check for instructions |
 
 ---
 
-## Files chkd Creates
+## Files
 
 | File | Purpose |
 |------|---------|
-| `docs/SPEC.md` | Feature checklist (source of truth) |
-| `docs/GUIDE.md` | This guide |
-| `docs/QUICKWINS.md` | Small improvements to do later |
-| `docs/epics/` | Epic definitions for large features |
-| `docs/attachments/` | File attachments for bugs/items |
 | `CLAUDE.md` | Instructions for Claude |
-| `.claude/skills/` | Build skills |
+| `docs/GUIDE.md` | This guide |
+| `docs/PHILOSOPHY.md` | Why chkd exists |
+| `docs/FILING.md` | Code organization guide |
+| `docs/epics/` | Epic definitions |
+| `docs/attachments/` | File attachments |
 
 ---
 
@@ -610,17 +316,15 @@ git worktree remove ../proj-worker-old --force
 cd ~/chkd && npm run dev
 ```
 
-**MCP tools not showing up**
-- Check Claude Code MCP settings
+**MCP tools not showing**
+- Check: `claude mcp list`
 - Restart Claude Code after config changes
-- Verify the path in config is correct
 
-**"Task not found"**
-- Check `docs/SPEC.md` has the task with correct format
-- Format: `- [ ] **FE.1 Title** - Description`
+**Project not registered**
+- Run `sync()` in the project
 
 ---
 
-## Need Help?
+## UI
 
-- UI: `http://localhost:3847`
+Dashboard: `http://localhost:3847`
