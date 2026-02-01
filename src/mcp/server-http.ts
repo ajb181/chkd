@@ -1553,7 +1553,7 @@ server.tool(
 
 // quickwin - Add quick win (requires planning)
 server.tool(
-  "StartQuickWin",
+  "CreateQuickWin",
   "Add a quick win with required planning. Creates a FUT task with 5-step workflow: Scope → Align → Fix → Verify → Commit.",
   {
     title: z.string().describe("Quick win title (e.g., 'Fix button alignment')"),
@@ -1620,7 +1620,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `📝 No quick wins yet\n\n💡 Add one with StartQuickWin(title, files, test)`
+          text: `📝 No quick wins yet\n\n💡 Add one with CreateQuickWin(title, files, test)`
         }]
       };
     }
