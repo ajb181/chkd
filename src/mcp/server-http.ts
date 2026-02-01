@@ -456,6 +456,31 @@ server.tool(
       text += `⚠️ docs/ error: ${err}\n`;
     }
     
+    // 4. Update .gitignore to exclude chkd-managed files
+    const gitignorePath = path.join(repoPath, '.gitignore');
+    const chkdIgnoreBlock = `
+# chkd managed files (synced from templates, not committed)
+CLAUDE.md
+docs/GUIDE.md
+docs/PHILOSOPHY.md
+docs/FILING.md`;
+    
+    try {
+      let gitignoreContent = '';
+      try {
+        gitignoreContent = fs.readFileSync(gitignorePath, 'utf-8');
+      } catch {}
+      
+      if (!gitignoreContent.includes('# chkd managed files')) {
+        fs.appendFileSync(gitignorePath, chkdIgnoreBlock + '\n');
+        text += `✅ .gitignore updated\n`;
+      } else {
+        text += `✓ .gitignore already configured\n`;
+      }
+    } catch (err) {
+      text += `⚠️ .gitignore error: ${err}\n`;
+    }
+    
     text += `\n───────────────────────────────────────\n`;
     text += `✅ Sync complete!\n\n`;
     text += `Next: status() to see current state\n`;
