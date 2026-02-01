@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRepoByPath, getSession, saveItemDuration, updateSession, clearSession } from '$lib/server/db/queries';
-import { clearQueue } from '$lib/server/proposal';
+import { clearQueue } from '$lib/server/queue';
 import {
   findItemByQuery,
   getItem,

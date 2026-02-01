@@ -2,7 +2,6 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRepoByPath, startSession, createRepo } from '$lib/server/db/queries';
 import { findItemByQuery, updateItem } from '$lib/server/db/items';
-import { getHandoverNote, clearHandoverNote } from '$lib/server/proposal';
 import path from 'path';
 
 // POST /api/session/start - Start working on a task
@@ -78,16 +77,8 @@ export const POST: RequestHandler = async ({ request }) => {
       updateItem(dbItem.id, { status: 'open' });
     }
 
-    // Check for handover note from previous session
-    const handover = await getHandoverNote(repoPath, dbItem.id);
-
-    // Start the session (use 0 for phase since we now use areas)
+    // Start the session
     startSession(repo.id, dbItem.id, dbItem.title, 0);
-
-    // Clear the handover note after retrieving it
-    if (handover) {
-      await clearHandoverNote(repoPath, dbItem.id);
-    }
 
     return json({
       success: true,
@@ -98,11 +89,6 @@ export const POST: RequestHandler = async ({ request }) => {
         iteration: 1,
         startTime: new Date().toISOString(),
         reopened: wasDone,
-        handoverNote: handover ? {
-          note: handover.note,
-          pausedBy: handover.pausedBy,
-          pausedAt: handover.createdAt,
-        } : null,
         // Task context for display
         context: {
           story: dbItem.story,
