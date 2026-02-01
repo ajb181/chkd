@@ -8,7 +8,7 @@ import type { AreaCode } from '$lib/types';
 // Known parameters for validation
 const KNOWN_PARAMS = [
   'repoPath', 'title', 'description', 'areaCode',
-  'withWorkflow', 'workflowType', 'tasks', 'dryRun', 'confirmLarge',
+  'workflowType', 'tasks', 'dryRun', 'confirmLarge',
   'story', 'keyRequirements', 'filesToChange', 'testing', 'fileLink'
 ];
 
@@ -21,7 +21,6 @@ export const POST: RequestHandler = async ({ request }) => {
       title,
       description,
       areaCode,
-      withWorkflow = true,
       workflowType,
       tasks,
       dryRun = false,
@@ -184,8 +183,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Create workflow sub-tasks with nested children (ALWAYS - no bypass)
     // This is the core of chkd: every task gets the full workflow with checkpoints
-    if (withWorkflow) {
-      workflowSteps.forEach((step, stepIndex: number) => {
+    workflowSteps.forEach((step, stepIndex: number) => {
         const stepItem = createItem({
           repoId: repo.id,
           displayId: `${displayId}.${stepIndex + 1}`,
@@ -215,13 +213,10 @@ export const POST: RequestHandler = async ({ request }) => {
           });
         }
       });
-    }
 
     // Calculate total items created (steps + their children)
-    const totalSteps = withWorkflow ? workflowSteps.length : 0;
-    const totalChildren = withWorkflow 
-      ? workflowSteps.reduce((sum, step) => sum + (step.children?.length || 0), 0)
-      : 0;
+    const totalSteps = workflowSteps.length;
+    const totalChildren = workflowSteps.reduce((sum, step) => sum + (step.children?.length || 0), 0);
     const totalCreated = totalSteps + totalChildren;
 
     return json({
