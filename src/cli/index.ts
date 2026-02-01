@@ -1667,14 +1667,24 @@ async function win(title: string) {
     console.log(`\n  Examples:`);
     console.log(`    chkd win "Add loading spinner to save button"`);
     console.log(`    chkd win "Fix typo in footer"`);
-    console.log(`\n  Quick wins are stored in docs/QUICKWINS.md\n`);
+    console.log(`\n  Creates a task with quickwin workflow (5 steps).\n`);
     return;
   }
 
   const cwd = process.cwd();
-  const res = await api('/api/quickwins', {
+  
+  // Create task with quickwin workflow
+  const res = await api('/api/spec/add', {
     method: 'POST',
-    body: JSON.stringify({ repoPath: cwd, title }),
+    body: JSON.stringify({
+      repoPath: cwd,
+      title,
+      areaCode: 'FUT',
+      workflowType: 'quickwin',
+      keyRequirements: ['Quick fix - should take <30 min'],
+      filesToChange: ['TBD during scope'],
+      testing: ['Manual verification']
+    }),
   });
 
   if (!res.success) {
@@ -1682,22 +1692,27 @@ async function win(title: string) {
     return;
   }
 
-  console.log(`\n  ⚡ Quick win added: ${title}`);
+  console.log(`\n  ⚡ Quick win created: ${res.data.sectionId} ${title}`);
   console.log(`  ─────────────────────────────────`);
-  console.log(`  💡 Complete it with: chkd won "${title.slice(0, 20)}..."\n`);
+  console.log(`  📋 5-step workflow: Scope → Align → Fix → Verify → Commit`);
+  console.log(`  💡 Start it with: chkd start ${res.data.sectionId}\n`);
 }
 
 async function wins() {
   const cwd = process.cwd();
-  const res = await api(`/api/quickwins?repoPath=${encodeURIComponent(cwd)}`);
+  
+  // Get all items and filter by FUT area (where quickwins live)
+  const res = await api(`/api/spec/items?repoPath=${encodeURIComponent(cwd)}`);
 
   if (!res.success) {
     console.log(`\n  ❌ ${res.error}\n`);
     return;
   }
 
-  const winList = res.data || [];
-  const openWins = winList.filter((w: any) => w.status === 'open');
+  // Filter to FUT items (quickwins) - only top-level items, not workflow children
+  const allItems = res.data || [];
+  const winList = allItems.filter((w: any) => w.areaCode === 'FUT' && !w.parentId);
+  const openWins = winList.filter((w: any) => w.status === 'open' || w.status === 'in-progress');
   const doneWins = winList.filter((w: any) => w.status === 'done');
 
   if (winList.length === 0) {
@@ -1710,29 +1725,47 @@ async function wins() {
   console.log(`  ─────────────────`);
 
   for (const w of openWins) {
-    console.log(`  ○ ${w.title}`);
+    const status = w.status === 'in-progress' ? '◐' : '○';
+    console.log(`  ${status} ${w.displayId} ${w.title.replace(/^FUT\.\d+\s*/, '')}`);
   }
   for (const w of doneWins) {
-    console.log(`  ✓ ${w.title}`);
+    console.log(`  ✓ ${w.displayId} ${w.title.replace(/^FUT\.\d+\s*/, '')}`);
   }
 
-  console.log(`\n  Use: chkd win "title" to add, chkd won "query" to complete\n`);
+  console.log(`\n  Use: chkd win "title" to add, chkd start FUT.X to work on one\n`);
 }
 
 async function won(query: string) {
   if (!query) {
     console.log(`\n  Usage: chkd won "query"`);
-    console.log(`\n  Mark a quick win as complete by title or ID.`);
+    console.log(`\n  Mark a quick win as complete by ID (e.g., FUT.1).`);
     console.log(`\n  Examples:`);
-    console.log(`    chkd won "loading spinner"     # By partial title`);
-    console.log(`    chkd won "a1b2c3"              # By ID\n`);
+    console.log(`    chkd won FUT.1`);
+    console.log(`    chkd won "loading spinner"     # By partial title\n`);
     return;
   }
 
   const cwd = process.cwd();
-  const res = await api('/api/quickwins', {
-    method: 'PATCH',
-    body: JSON.stringify({ repoPath: cwd, query }),
+  
+  // Find the item
+  const findRes = await api(`/api/spec/item?repoPath=${encodeURIComponent(cwd)}&query=${encodeURIComponent(query)}`);
+  
+  if (!findRes.success || !findRes.data) {
+    console.log(`\n  ❌ Quick win not found: "${query}"`);
+    console.log(`\n  Run 'chkd wins' to see available quick wins.\n`);
+    return;
+  }
+
+  const item = findRes.data;
+  
+  // Mark as done
+  const res = await api('/api/spec/update', {
+    method: 'POST',
+    body: JSON.stringify({
+      repoPath: cwd,
+      itemId: item.id,
+      status: 'done'
+    }),
   });
 
   if (!res.success) {
@@ -1740,10 +1773,7 @@ async function won(query: string) {
     return;
   }
 
-  const newStatus = res.data.status;
-  const icon = newStatus === 'done' ? '✓' : '○';
-  const action = newStatus === 'done' ? 'Done' : 'Reopened';
-  console.log(`\n  ${icon} ${action}: ${res.data.title}\n`);
+  console.log(`\n  ✓ Done: ${item.displayId} ${item.title.replace(/^FUT\.\d+\s*/, '')}\n`);
 }
 
 // Helper for confirmation prompts
@@ -1763,107 +1793,17 @@ async function confirm(question: string): Promise<string> {
 }
 
 async function quickwin(query: string) {
+  // quickwin is now just an alias for start - quickwins are regular tasks
   if (!query) {
-    console.log(`\n  Usage: chkd quickwin "query"`);
-    console.log(`\n  Start working on a quick win with confirmation.`);
-    console.log(`\n  Examples:`);
-    console.log(`    chkd quickwin "loading spinner"   # By partial title`);
-    console.log(`    chkd quickwin "a1b2c3"            # By ID\n`);
+    console.log(`\n  Usage: chkd quickwin FUT.1`);
+    console.log(`\n  Start working on a quick win (alias for 'chkd start').`);
+    console.log(`\n  Quick wins are now regular tasks with a 5-step workflow.`);
+    console.log(`  Use 'chkd wins' to see them, 'chkd start FUT.X' to begin.\n`);
     return;
   }
 
-  const cwd = process.cwd();
-
-  // First, find the quick win
-  const listRes = await api(`/api/quickwins?repoPath=${encodeURIComponent(cwd)}`);
-  if (!listRes.success) {
-    console.log(`\n  ❌ ${listRes.error}\n`);
-    return;
-  }
-
-  const wins = listRes.data || [];
-  const queryLower = query.toLowerCase();
-
-  // Find by ID or title
-  const win = wins.find((w: any) =>
-    w.id === query ||
-    w.id.startsWith(query) ||
-    w.title.toLowerCase().includes(queryLower)
-  );
-
-  if (!win) {
-    console.log(`\n  ❌ Quick win not found: "${query}"`);
-    console.log(`\n  Run 'chkd wins' to see available quick wins.\n`);
-    return;
-  }
-
-  if (win.status === 'done') {
-    console.log(`\n  ⚠ This quick win is already done: ${win.title}\n`);
-    return;
-  }
-
-  // Show the quick win and confirm
-  console.log(`\n  ⚡ Quick Win: ${win.title}`);
-  console.log(`  ─────────────────────────────────`);
-  console.log(`\n  Is this actually quick (<30 min)?`);
-  console.log(`    y = Yes, start working on it`);
-  console.log(`    n = No, cancel`);
-  console.log(`    c = Convert to a proper story/task\n`);
-
-  const answer = await confirm('  Your choice [y/n/c]: ');
-
-  if (answer === 'c' || answer === 'convert') {
-    // Convert to story
-    console.log(`\n  Converting to story...\n`);
-
-    const addRes = await api('/api/spec/add', {
-      method: 'POST',
-      body: JSON.stringify({
-        repoPath: cwd,
-        title: win.title,
-        withWorkflow: true,
-      }),
-    });
-
-    if (addRes.success) {
-      // Delete from quick wins
-      await api(`/api/quickwins?repoPath=${encodeURIComponent(cwd)}&id=${win.id}`, {
-        method: 'DELETE',
-      });
-
-      console.log(`  ✓ Created story: ${addRes.data.itemId}`);
-      console.log(`  ✓ Removed from quick wins`);
-      console.log(`\n  Run '/chkd ${addRes.data.itemId}' to start building it.\n`);
-    } else {
-      console.log(`  ❌ ${addRes.error}\n`);
-    }
-    return;
-  }
-
-  if (answer !== 'y' && answer !== 'yes') {
-    console.log(`\n  Cancelled.\n`);
-    return;
-  }
-
-  // Start quickwin session
-  const sessionRes = await api('/api/session/adhoc', {
-    method: 'POST',
-    body: JSON.stringify({
-      repoPath: cwd,
-      mode: 'quickwin',
-      description: win.title,
-      quickwinId: win.id,
-    }),
-  });
-
-  if (!sessionRes.success) {
-    console.log(`\n  ❌ ${sessionRes.error}\n`);
-    return;
-  }
-
-  console.log(`\n  ⚡ Started: ${win.title}`);
-  console.log(`  ─────────────────────────────────`);
-  console.log(`  💡 Run 'chkd done' when finished (auto-completes the quick win)\n`);
+  // Delegate to start
+  await start(query);
 }
 
 async function status() {

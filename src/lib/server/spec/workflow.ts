@@ -120,8 +120,47 @@ export const DEBUG_WORKFLOW: WorkflowStep[] = [
   DEFAULT_WORKFLOW_STEPS[7], // Commit
 ];
 
+/** Quick Win workflow: Scope → Align → Fix → Verify → Commit */
+export const QUICKWIN_WORKFLOW: WorkflowStep[] = [
+  {
+    task: 'Scope: identify the problem and draft solution',
+    children: [
+      'Problem: what exactly needs fixing?',
+      'Solution: how will you fix it?'
+    ]
+  },
+  {
+    task: 'Align: confirm approach with user before starting',
+    children: [
+      'Share: explain the problem and proposed fix to user',
+      'Confirm: get user approval to proceed'
+    ]
+  },
+  {
+    task: 'Fix: implement the change',
+    children: [
+      'Implement: make the fix',
+      'Test: verify it works'
+    ]
+  },
+  {
+    task: 'Verify: show user, confirm they are happy',
+    children: [
+      'Demo: show user the fix',
+      'Confirm: user approves the result'
+    ]
+  },
+  {
+    task: 'Commit: commit with descriptive message',
+    children: [
+      'Stage: review changes',
+      'Commit: push with clear description of what was fixed and why'
+    ]
+  }
+];
+
 /** Valid workflow types */
-export type WorkflowType = 'remove' | 'refactor' | 'audit' | 'debug';
+export type WorkflowType = 'remove' | 'refactor' | 'audit' | 'debug' | 'quickwin';
 
 /** Get workflow steps by type - default handles FE/BE/full-stack via Assess checkpoints */
 export function getWorkflowByType(type?: string, _areaCode?: string): WorkflowStep[] {
@@ -130,6 +169,7 @@ export function getWorkflowByType(type?: string, _areaCode?: string): WorkflowSt
     case 'refactor': return REFACTOR_WORKFLOW;
     case 'audit': return AUDIT_WORKFLOW;
     case 'debug': return DEBUG_WORKFLOW;
+    case 'quickwin': return QUICKWIN_WORKFLOW;
     default: return DEFAULT_WORKFLOW_STEPS;
   }
 }
