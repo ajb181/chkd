@@ -292,6 +292,10 @@ export async function getRepoByPath(repoPath: string): Promise<ApiResponse & { r
   return { success: true, repo: undefined };
 }
 
+export async function createRepo(repoPath: string, name: string, branch?: string): Promise<ApiResponse> {
+  return request('POST', '/api/repos', { path: repoPath, name, branch });
+}
+
 // ============================================
 // Workers API (Multi-Worker System)
 // ============================================

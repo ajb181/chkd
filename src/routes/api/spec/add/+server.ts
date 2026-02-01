@@ -176,6 +176,7 @@ export const POST: RequestHandler = async ({ request }) => {
       testing: Array.isArray(testing) ? testing : undefined,
       areaCode: areaCode as any,
       sectionNumber,
+      workflowType: workflowType || undefined,
       sortOrder: sectionNumber - 1,
       status: 'open',
       priority: 'medium'

@@ -30,6 +30,7 @@ export const GET: RequestHandler = async ({ url }) => {
     // Check what kind of query
     const status = url.searchParams.get('status') as ItemStatus | null;
     const area = url.searchParams.get('area') as AreaCode | null;
+    const workflowType = url.searchParams.get('workflowType');
     const query = url.searchParams.get('query');
     const topLevel = url.searchParams.get('topLevel') === 'true';
     const withProgress = url.searchParams.get('withProgress') === 'true';
@@ -54,6 +55,16 @@ export const GET: RequestHandler = async ({ url }) => {
     // Optionally filter by area
     if (area && !query) {
       items = items.filter(i => i.areaCode === area);
+    }
+
+    // Optionally filter by workflow type
+    if (workflowType && !query) {
+      if (workflowType === 'default') {
+        // Default workflow = null workflowType
+        items = items.filter(i => !i.workflowType);
+      } else {
+        items = items.filter(i => i.workflowType === workflowType);
+      }
     }
 
     // Optionally add children to each item

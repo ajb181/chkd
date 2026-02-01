@@ -327,6 +327,102 @@ const server = new McpServer({
 // TOOLS
 // ============================================
 
+// sync - Register project and sync CLAUDE.md
+server.tool(
+  "sync",
+  "Register this project with chkd and sync CLAUDE.md from template. Run this first in a new project.",
+  {
+    force: z.boolean().optional().describe("Force overwrite CLAUDE.md even if it exists")
+  },
+  async ({ force }) => {
+    const repoPath = getRepoPath();
+    const projectName = path.basename(repoPath);
+    
+    let text = `🔄 SYNC: ${projectName}\n`;
+    text += `═══════════════════════════════════════\n\n`;
+    
+    // Check if project is registered
+    const repoResponse = await api.getRepoByPath(repoPath);
+    
+    if (!repoResponse.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Cannot connect to chkd server.\n\n${repoResponse.error}\n${repoResponse.hint || ''}`
+        }]
+      };
+    }
+    
+    // Register if not found
+    if (!repoResponse.repo) {
+      const createResponse = await api.createRepo(repoPath, projectName);
+      if (!createResponse.success) {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ Failed to register project: ${createResponse.error}`
+          }]
+        };
+      }
+      text += `✅ Project registered with chkd\n`;
+    } else {
+      text += `✓ Project already registered\n`;
+    }
+    
+    // Check CLAUDE.md
+    const claudePath = path.join(repoPath, 'CLAUDE.md');
+    const templatePath = path.join(path.dirname(new URL(import.meta.url).pathname), '../../templates/CLAUDE.md.template');
+    
+    let claudeExists = false;
+    try {
+      fs.accessSync(claudePath);
+      claudeExists = true;
+    } catch {}
+    
+    if (claudeExists && !force) {
+      text += `✓ CLAUDE.md exists (use force=true to overwrite)\n`;
+    } else {
+      try {
+        let template = fs.readFileSync(templatePath, 'utf-8');
+        template = template.replace(/\{\{PROJECT_NAME\}\}/g, projectName);
+        fs.writeFileSync(claudePath, template);
+        text += claudeExists ? `✅ CLAUDE.md updated from template\n` : `✅ CLAUDE.md created from template\n`;
+      } catch (err) {
+        text += `⚠️ Could not create CLAUDE.md: ${err}\n`;
+      }
+    }
+    
+    // Check docs folder
+    const docsPath = path.join(repoPath, 'docs');
+    let docsExists = false;
+    try {
+      fs.accessSync(docsPath);
+      docsExists = true;
+    } catch {}
+    
+    if (!docsExists) {
+      try {
+        fs.mkdirSync(docsPath, { recursive: true });
+        text += `✅ Created docs/ folder\n`;
+      } catch {}
+    }
+    
+    text += `\n───────────────────────────────────────\n`;
+    text += `✅ Project ready!\n\n`;
+    text += `Next steps:\n`;
+    text += `• status() - see current state\n`;
+    text += `• add("feature", areaCode="XX") - create a task\n`;
+    text += `• CreateQuickWin("fix", files="...", test="...") - quick fix\n`;
+    
+    return {
+      content: [{
+        type: "text",
+        text
+      }]
+    };
+  }
+);
+
 // status - Get current project status
 server.tool(
   "status",

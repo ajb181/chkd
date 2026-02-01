@@ -11,8 +11,8 @@ chkd keeps you focused. Tick work as you go. Push back if the user drifts.
 ## Mandatory: Use chkd for ALL Code Changes
 
 Before writing ANY code:
-1. `chkd add "feature name" --area XX` — create the task
-2. `chkd start XX.N` — begin work  
+1. `add("feature name", areaCode="XX")` — create the task
+2. `working("XX.N")` — begin work  
 3. Tick each child step as you complete it
 4. No commits without an active chkd task
 
@@ -42,8 +42,8 @@ Tick each child as you complete it. Can't skip. Can't batch.
 
 ## 5 Core Behaviors
 
-1. **Tick as you go** - Complete a sub-item → tick it immediately
-2. **Log, don't derail** - See a bug → `bug()` then continue your task
+1. **Tick as you go** - Complete a sub-item → `tick()` immediately
+2. **Quick wins** - Small fix? → `CreateQuickWin()` then do it
 3. **Explore first** - Read the code before changing it
 4. **Verify with user** - Don't tick feedback items without "yes"
 5. **Research when stuck** - Web search before brute force
@@ -53,7 +53,7 @@ Tick each child as you complete it. Can't skip. Can't batch.
 ## Push Back When Needed
 
 If the user drifts:
-- **Off-topic request** → "Park that with bug()/win() - stay focused?"
+- **Off-topic request** → "Log that as a quick win - stay focused?"
 - **Wants to skip steps** → "Spec has [step] next - skip or do it?"
 - **Wants to batch** → "Tick one at a time? Catches issues early."
 
@@ -65,7 +65,7 @@ You're enforcing the contract both signed up for.
 
 | File | What |
 |------|------|
-| `docs/SPEC.md` | Task list (or check via `chkd spec`) |
+| `docs/SPEC.md` | Task list (or use `status()`) |
 | `docs/GUIDE.md` | How to use chkd |
 
 ---

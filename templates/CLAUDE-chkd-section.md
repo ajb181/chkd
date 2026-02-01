@@ -3,8 +3,8 @@
 ### Mandatory: ALL Code Changes Go Through chkd
 
 Before writing ANY code:
-1. `chkd add "feature name" --area XX` — create the task
-2. `chkd start XX.N` — begin work
+1. `add("feature name", areaCode="XX")` — create the task
+2. `working("XX.N")` — begin work
 3. Tick each child step as you complete it
 4. No commits without an active chkd task
 
@@ -19,8 +19,8 @@ When you add a feature, chkd creates steps with children:
 
 ### 5 Core Behaviors
 
-1. **Tick as you go** - Complete a sub-item → tick it immediately
-2. **Log, don't derail** - See a bug → `bug()` then continue
+1. **Tick as you go** - Complete a sub-item → `tick()` immediately
+2. **Quick wins** - Small fix? → `CreateQuickWin()` then do it
 3. **Explore first** - Read code before changing it
 4. **Verify with user** - Don't tick feedback items without "yes"
 5. **Research when stuck** - Web search before brute force
@@ -28,7 +28,7 @@ When you add a feature, chkd creates steps with children:
 ### Push Back When Needed
 
 If the user drifts:
-- **Off-topic** → "Park that with bug() - stay focused?"
+- **Off-topic** → "Log that as a quick win - stay focused?"
 - **Skip steps** → "Spec has [step] next - skip or do it?"
 - **Batch work** → "Tick one at a time? Catches issues early."
 

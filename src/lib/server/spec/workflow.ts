@@ -158,52 +158,6 @@ export const AUDIT_WORKFLOW: WorkflowStep[] = [
   DEFAULT_WORKFLOW_STEPS[7], // Commit
 ];
 
-/** Debug workflow: Reproduce → Investigate → Share → Fix → Test → Commit */
-export const DEBUG_WORKFLOW: WorkflowStep[] = [
-  {
-    task: 'Reproduce: confirm the bug exists',
-    children: [
-      'Steps: what triggers the bug?',
-      'Evidence: screenshot/log showing the bug'
-    ]
-  },
-  {
-    task: 'Investigate: find the root cause',
-    children: [
-      'Trace: follow the code path',
-      'Cause: identify why it breaks'
-    ]
-  },
-  {
-    task: 'Share: present findings to user',
-    children: [
-      'Explain: what is broken and why',
-      'Propose: how you will fix it'
-    ]
-  },
-  {
-    task: 'Fix: implement the fix',
-    children: [
-      'Change: make the fix',
-      'Verify: confirm bug is gone'
-    ]
-  },
-  {
-    task: 'Test: check for regressions',
-    children: [
-      'Run: ALL existing tests',
-      'Check: related functionality still works'
-    ]
-  },
-  {
-    task: 'Commit: descriptive message',
-    children: [
-      'Stage: review changes',
-      'Commit: what was broken, why, how fixed'
-    ]
-  }
-];
-
 /** Quick Win workflow: Scope → Align → Fix → Verify → Commit */
 export const QUICKWIN_WORKFLOW: WorkflowStep[] = [
   {
@@ -244,7 +198,7 @@ export const QUICKWIN_WORKFLOW: WorkflowStep[] = [
 ];
 
 /** Valid workflow types */
-export type WorkflowType = 'remove' | 'refactor' | 'audit' | 'debug' | 'quickwin';
+export type WorkflowType = 'remove' | 'refactor' | 'audit' | 'quickwin';
 
 /** Get workflow steps by type - default handles FE/BE/full-stack via Assess checkpoints */
 export function getWorkflowByType(type?: string, _areaCode?: string): WorkflowStep[] {
@@ -252,7 +206,6 @@ export function getWorkflowByType(type?: string, _areaCode?: string): WorkflowSt
     case 'remove': return REMOVE_WORKFLOW;
     case 'refactor': return REFACTOR_WORKFLOW;
     case 'audit': return AUDIT_WORKFLOW;
-    case 'debug': return DEBUG_WORKFLOW;
     case 'quickwin': return QUICKWIN_WORKFLOW;
     default: return DEFAULT_WORKFLOW_STEPS;
   }

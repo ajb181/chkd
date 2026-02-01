@@ -270,6 +270,7 @@ function initSchema(db: Database.Database): void {
       -- Classification
       area_code TEXT NOT NULL,          -- 'SD', 'FE', 'BE', 'FUT'
       section_number INTEGER NOT NULL,  -- 37 from SD.37
+      workflow_type TEXT,               -- 'quickwin', 'refactor', 'audit', 'remove', or NULL for default
 
       -- Hierarchy
       parent_id TEXT,                   -- UUID of parent, NULL for top-level
@@ -357,6 +358,13 @@ function runMigrations(db: Database.Database): void {
       ALTER TABLE sessions ADD COLUMN worker_id TEXT;
       ALTER TABLE sessions ADD COLUMN is_master INTEGER DEFAULT 0;
     `);
+  }
+
+  // Workflow type migration for spec_items
+  const specItemsInfo = db.prepare("PRAGMA table_info(spec_items)").all() as any[];
+  const specItemsCols = specItemsInfo.map(c => c.name);
+  if (!specItemsCols.includes('workflow_type')) {
+    db.exec(`ALTER TABLE spec_items ADD COLUMN workflow_type TEXT;`);
   }
 }
 

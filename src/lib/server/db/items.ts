@@ -27,6 +27,7 @@ function rowToItem(row: any): SpecItem {
     testing: JSON.parse(row.testing || '[]'),
     areaCode: row.area_code as AreaCode,
     sectionNumber: row.section_number,
+    workflowType: row.workflow_type || null,
     parentId: row.parent_id,
     sortOrder: row.sort_order || 0,
     status: row.status as ItemStatus,
@@ -48,9 +49,9 @@ export function createItem(data: CreateItemInput): SpecItem {
     INSERT INTO spec_items (
       id, repo_id, display_id, title, description, story,
       key_requirements, files_to_change, testing,
-      area_code, section_number, parent_id, sort_order,
+      area_code, section_number, workflow_type, parent_id, sort_order,
       status, priority
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.repoId,
@@ -63,6 +64,7 @@ export function createItem(data: CreateItemInput): SpecItem {
     JSON.stringify(data.testing || []),
     data.areaCode,
     data.sectionNumber,
+    data.workflowType || null,
     data.parentId || null,
     data.sortOrder || 0,
     data.status || 'open',
