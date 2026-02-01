@@ -1551,59 +1551,89 @@ server.tool(
   }
 );
 
-// win - Add quick win
+// quickwin - Add quick win (requires planning)
 server.tool(
-  "win",
-  "Add a quick win - small improvement or task to do later. Stored in docs/QUICKWINS.md.",
+  "quickwin",
+  "Add a quick win with required planning. Creates a FUT task with 5-step workflow: Scope → Align → Fix → Verify → Commit.",
   {
-    title: z.string().describe("Quick win title (e.g., 'Add syntax highlighting to code blocks')")
+    title: z.string().describe("Quick win title (e.g., 'Fix button alignment')"),
+    files: z.string().describe("File(s) you'll change (comma-separated)"),
+    test: z.string().describe("How you'll verify it works"),
+    why: z.string().optional().describe("Why this fix is needed")
   },
-  async ({ title }) => {
+  async ({ title, files, test, why }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    await api.createQuickWin(repoPath, title);
+    const filesToChange = files.split(',').map(f => f.trim()).filter(Boolean);
+    if (filesToChange.length === 0) {
+      return { content: [{ type: "text", text: "❌ files cannot be empty" }] };
+    }
+
+    const response = await fetch(`${API_BASE}/api/spec/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repoPath,
+        title,
+        areaCode: 'FUT',
+        workflowType: 'quickwin',
+        keyRequirements: [why || `Quick fix: ${title}`],
+        filesToChange,
+        testing: [test]
+      })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+      return { content: [{ type: "text", text: `❌ ${result.error}` }] };
+    }
 
     return {
       content: [{
         type: "text",
-        text: `✅ Quick win added: ${title}\n\n💡 View all with wins()`
+        text: `⚡ Quick win created: ${result.data.sectionId} ${title}\n📁 Files: ${filesToChange.join(', ')}\n✓ Test: ${test}\n📋 Workflow: Scope → Align → Fix → Verify → Commit\n💡 Start: chkd_start("${result.data.sectionId}")`
       }]
     };
   }
 );
 
-// wins - List quick wins
+// quickwins - List quick wins
 server.tool(
-  "wins",
-  "List all quick wins from docs/QUICKWINS.md.",
+  "quickwins",
+  "List all quick wins (FUT area tasks).",
   {},
   async () => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    const response = await api.getQuickWins(repoPath);
-    const wins = response.data || [];
+    const response = await fetch(`${API_BASE}/api/spec/items?repoPath=${encodeURIComponent(repoPath)}`);
+    const result = await response.json();
+    const allItems = result.data || [];
+    
+    // Filter to FUT items (quickwins) - only top-level items
+    const wins = allItems.filter((w: any) => w.areaCode === 'FUT' && !w.parentId);
+    const pending = wins.filter((w: any) => w.status === 'open' || w.status === 'in-progress');
+    const completed = wins.filter((w: any) => w.status === 'done');
 
     if (wins.length === 0) {
       return {
         content: [{
           type: "text",
-          text: `📝 No quick wins yet\n\n💡 Add one with win("title")`
+          text: `📝 No quick wins yet\n\n💡 Add one with quickwin(title, files, test)`
         }]
       };
     }
 
-    const pending = wins.filter((w: any) => w.status !== 'done');
-    const completed = wins.filter((w: any) => w.status === 'done');
-
-    let text = `📝 Quick Wins\n`;
+    let text = `⚡ Quick Wins\n`;
     text += `═══════════════════════════════════════\n\n`;
 
     if (pending.length > 0) {
       text += `⬜ PENDING (${pending.length}):\n`;
       pending.forEach((w: any) => {
-        text += `  • ${w.title}\n`;
+        const status = w.status === 'in-progress' ? '◐' : '○';
+        const title = w.title.replace(/^FUT\.\d+\s*/, '');
+        text += `  ${status} ${w.displayId} ${title}\n`;
       });
       text += `\n`;
     }
@@ -1611,11 +1641,12 @@ server.tool(
     if (completed.length > 0) {
       text += `✅ COMPLETED (${completed.length}):\n`;
       completed.forEach((w: any) => {
-        text += `  • ${w.title}\n`;
+        const title = w.title.replace(/^FUT\.\d+\s*/, '');
+        text += `  ✓ ${w.displayId} ${title}\n`;
       });
     }
 
-    text += `\n💡 Complete with won("title")`;
+    text += `\n💡 Start with chkd_start("FUT.X")`;
 
     return {
       content: [{
@@ -1626,32 +1657,44 @@ server.tool(
   }
 );
 
-// won - Complete a quick win
+// quickwin_done - Complete a quick win
 server.tool(
-  "won",
-  "Mark a quick win as done (or reopen if already done). Use title or ID to find it.",
+  "quickwin_done",
+  "Mark a quick win as done. Use FUT.X ID to find it.",
   {
-    query: z.string().describe("Quick win title or ID")
+    id: z.string().describe("Quick win ID (e.g., FUT.1)")
   },
-  async ({ query }) => {
+  async ({ id }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    const response = await api.completeQuickWin(repoPath, query);
-
-    if (!response.success) {
-      return {
-        content: [{
-          type: "text",
-          text: `❌ ${response.error}`
-        }]
-      };
+    // Find the item
+    const findRes = await fetch(`${API_BASE}/api/spec/item?repoPath=${encodeURIComponent(repoPath)}&query=${encodeURIComponent(id)}`);
+    const findResult = await findRes.json();
+    
+    if (!findResult.success || !findResult.data) {
+      return { content: [{ type: "text", text: `❌ Quick win not found: ${id}` }] };
     }
 
+    const item = findResult.data;
+
+    // Mark as done
+    const response = await fetch(`${API_BASE}/api/spec/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoPath, itemId: item.id, status: 'done' })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+      return { content: [{ type: "text", text: `❌ ${result.error}` }] };
+    }
+
+    const title = item.title.replace(/^FUT\.\d+\s*/, '');
     return {
       content: [{
         type: "text",
-        text: `✅ Quick win completed: ${query}\n\n📦 Before committing:\n   1. Review docs - update if behavior changed:\n      - CLAUDE.md, README.md, GUIDE.md\n      - CLI help text, API docs\n   2. Commit with descriptive message (what + why)\n   3. Push to remote\n\n💡 Nice! Keep knocking them out.`
+        text: `✅ Quick win done: ${item.displayId} ${title}\n\n📦 Before committing:\n   1. Review docs if behavior changed\n   2. Commit with descriptive message\n   3. Push to remote`
       }]
     };
   }
