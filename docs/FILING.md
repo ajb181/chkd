@@ -8,9 +8,9 @@ Rules for organizing docs so they're findable later.
 
 ```
 docs/
-├── SPEC.md              # Task checklist (don't move)
-├── GUIDE.md             # Workflow guide (don't move)
-├── QUICKWINS.md         # Small improvements (don't move)
+├── GUIDE.md             # Workflow guide (synced by chkd)
+├── PHILOSOPHY.md        # Why chkd exists (synced by chkd)
+├── FILING.md            # This file (synced by chkd)
 ├── designs/             # Design & architecture docs
 ├── plans/               # Implementation plans
 ├── handovers/           # Session context for continuity
@@ -19,6 +19,9 @@ docs/
 ├── epics/               # Epic definitions
 └── attachments/         # File attachments
 ```
+
+Note: Spec items and quick wins are stored in the database, not markdown files.
+Use `status()` to see current items.
 
 ---
 
