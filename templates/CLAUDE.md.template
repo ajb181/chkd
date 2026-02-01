@@ -2,31 +2,41 @@
 
 ## TL;DR
 
+**ALL code changes go through chkd. No exceptions.**
+
 chkd keeps you focused. Tick work as you go. Push back if the user drifts.
 
 ---
 
-## Philosophy
+## Mandatory: Use chkd for ALL Code Changes
 
-**The problem:** Humans want AI to run at 100mph. AI wants to comply. Both skip steps.
+Before writing ANY code:
+1. `chkd add "feature name" --area XX` — create the task
+2. `chkd start XX.N` — begin work  
+3. Tick each child step as you complete it
+4. No commits without an active chkd task
 
-**The solution:** chkd is a collaboration contract. Neither party can skip checkpoints.
-
-At each checkpoint: you show what you did → user confirms or redirects → next step.
-
-**Neither party can skip this. The tool enforces it.**
+If you find yourself coding without a chkd task, **STOP**. Create the task first.
 
 ---
 
-## You Can Push Back
+## How chkd Works
 
-The constraint applies to BOTH parties. If the user drifts:
+When you add a feature, chkd creates steps with children:
 
-- **Off-topic request** → "Park that with bug()/win() - stay focused?"
-- **Wants to skip steps** → "Spec has [step] next - skip or do it?"
-- **Wants to batch** → "Tick one at a time? Catches issues early."
+```
+FE.1 Login page
+├── FE.1.1 Explore
+│   ├── FE.1.1.1 Research: investigate codebase
+│   ├── FE.1.1.2 Questions: ask if unclear
+│   └── FE.1.1.3 Share: inform user
+├── FE.1.2 Design
+│   ├── FE.1.2.1 Draft: create approach
+│   └── FE.1.2.2 Review: user approves
+└── ... (6-8 steps, each with 2-3 children)
+```
 
-You're enforcing the contract both signed up for.
+Tick each child as you complete it. Can't skip. Can't batch.
 
 ---
 
@@ -40,30 +50,37 @@ You're enforcing the contract both signed up for.
 
 ---
 
+## Push Back When Needed
+
+If the user drifts:
+- **Off-topic request** → "Park that with bug()/win() - stay focused?"
+- **Wants to skip steps** → "Spec has [step] next - skip or do it?"
+- **Wants to batch** → "Tick one at a time? Catches issues early."
+
+You're enforcing the contract both signed up for.
+
+---
+
 ## Source of Truth
 
 | File | What |
 |------|------|
-| `docs/SPEC.md` | Task list |
+| `docs/SPEC.md` | Task list (or check via `chkd spec`) |
 | `docs/GUIDE.md` | How to use chkd |
 
 ---
 
-## Project Overview
+## Project: {{PROJECT_NAME}}
 
-{{PROJECT_NAME}} - [describe your project here]
-
-### Development Commands
+### Commands
 
 ```bash
-npm run dev     # Start development server
+npm run dev     # Start development
 npm test        # Run tests
 npm run build   # Build for production
 ```
 
 ### Architecture
-
-[Describe your folder structure]
 
 ```
 src/
@@ -71,9 +88,3 @@ src/
 ├── lib/           # Shared utilities
 └── routes/        # Pages/routes
 ```
-
-### Conventions
-
-- Files: `kebab-case.ts`
-- Components: `PascalCase`
-- Functions: `camelCase`
