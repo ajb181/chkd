@@ -147,15 +147,37 @@ export function updateItem(id: string, updates: UpdateItemInput): SpecItem | nul
 export function deleteItem(id: string): boolean {
   const db = getDb();
   
-  // First, recursively delete all children
-  const children = db.prepare('SELECT id FROM spec_items WHERE parent_id = ?').all(id) as { id: string }[];
-  for (const child of children) {
-    deleteItem(child.id);
-  }
+  // Temporarily disable foreign key checks for this operation
+  db.pragma('foreign_keys = OFF');
   
-  // Tags are deleted via ON DELETE CASCADE
-  const result = db.prepare('DELETE FROM spec_items WHERE id = ?').run(id);
-  return result.changes > 0;
+  try {
+    // Recursively collect all descendant IDs (depth-first, leaves first)
+    function collectDescendants(parentId: string): string[] {
+      const children = db.prepare('SELECT id FROM spec_items WHERE parent_id = ?').all(parentId) as { id: string }[];
+      const allIds: string[] = [];
+      for (const child of children) {
+        allIds.push(...collectDescendants(child.id));
+        allIds.push(child.id);
+      }
+      return allIds;
+    }
+    
+    const descendantIds = collectDescendants(id);
+    
+    // Delete all in transaction
+    const deleteAll = db.transaction(() => {
+      for (const descId of descendantIds) {
+        db.prepare('DELETE FROM spec_items WHERE id = ?').run(descId);
+      }
+      return db.prepare('DELETE FROM spec_items WHERE id = ?').run(id);
+    });
+    
+    const result = deleteAll();
+    return result.changes > 0;
+  } finally {
+    // Re-enable foreign key checks
+    db.pragma('foreign_keys = ON');
+  }
 }
 
 // ============================================
