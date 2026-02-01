@@ -1322,28 +1322,27 @@ async function add(title: string, flags: Record<string, string | boolean>) {
                 typeof flags.desc === 'string' ? flags.desc : undefined;
   const workflowType = typeof flags.type === 'string' ? flags.type.toLowerCase() : undefined;
   const dryRun = Boolean(flags['dry-run'] || flags.dryRun);
-  const noWorkflow = Boolean(flags['no-workflow'] || flags.noWorkflow);
   const confirmLarge = Boolean(flags['confirm-large'] || flags.confirmLarge);
 
+  // --no-workflow flag removed - workflow is ALWAYS used
+  if (flags['no-workflow'] || flags.noWorkflow) {
+    console.log(`\n  ⚠️  --no-workflow is no longer supported.`);
+    console.log(`     chkd always uses the standard workflow with checkpoints.\n`);
+  }
+
   // Validate workflow type
-  const validTypes = ['remove', 'backend', 'refactor', 'audit', 'debug'];
+  const validTypes = ['remove', 'backend', 'refactor', 'audit', 'debug', 'frontend'];
   if (workflowType && !validTypes.includes(workflowType)) {
     console.log(`\n  ❌ Invalid workflow type: ${workflowType}`);
     console.log(`  💡 Valid types: ${validTypes.join(', ')}\n`);
     return;
   }
 
-  // Parse explicit tasks if provided
-  let tasks: string[] | undefined;
-  if (typeof flags.tasks === 'string') {
-    tasks = flags.tasks.split(',').map(t => t.trim()).filter(Boolean);
-  }
-
-  // Build request body - workflow is always used (no bypass)
+  // Build request body - workflow is ALWAYS used (no bypass allowed)
   const body: Record<string, unknown> = {
     repoPath: cwd,
     title,
-    withWorkflow: !noWorkflow,  // Always uses standard workflow with checkpoints
+    withWorkflow: true,  // Always - this is the core of chkd
     dryRun,
     confirmLarge,
   };
