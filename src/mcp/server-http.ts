@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { execSync } from 'child_process';
 
 // HTTP client for API calls
@@ -293,7 +294,47 @@ function getTickGuidance(ctx: TypeAreaContext): string[] {
 
 // Server version identifier
 const SERVER_TYPE = "http-based";
-const SERVER_VERSION = "2.1.0";  // Bump when adding new tools!
+const SERVER_VERSION = "0.3.1";  // Auto-bumped by pre-commit hook
+
+// Version sync check - compares local file hash with server's expected hash
+let versionCheckDone = false;
+let versionMismatch: { local: string; server: string } | null = null;
+
+function getLocalMcpHash(): string {
+  try {
+    const mcpPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'server-http.ts');
+    const content = fs.readFileSync(mcpPath, 'utf-8');
+    return crypto.createHash('md5').update(content).digest('hex').slice(0, 8);
+  } catch {
+    return 'unknown';
+  }
+}
+
+async function checkVersionSync(): Promise<void> {
+  if (versionCheckDone) return;
+  versionCheckDone = true;
+  
+  try {
+    const response = await fetch(`${HTTP_BASE}/api/version`);
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    if (!data.success) return;
+    
+    const localHash = getLocalMcpHash();
+    const serverHash = data.data.mcpHash;
+    
+    if (localHash !== serverHash && localHash !== 'unknown' && serverHash !== 'unknown') {
+      versionMismatch = { local: localHash, server: serverHash };
+    }
+  } catch {
+    // Server not reachable, skip check
+  }
+}
+
+function getVersionWarning(): string {
+  if (!versionMismatch) return '';
+  return `\n⚠️ MCP OUT OF SYNC (local: ${versionMismatch.local}, server: ${versionMismatch.server})\n   Restart Claude Code to pick up latest changes.\n`;
 
 // Track when this server instance started (for stale detection)
 const SERVER_START_TIME = Date.now();
@@ -502,6 +543,9 @@ server.tool(
   async () => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
+    
+    // Check version sync (runs once)
+    await checkVersionSync();
 
     // Check if we're a worker
     const workerInfo = await getWorkerContext();
@@ -545,7 +589,9 @@ server.tool(
     } else {
       statusText += `📁 ${path.basename(repoPath)}\n`;
       statusText += `Progress: ${progress.percentage}% (${progress.completed}/${progress.total})\n`;
-      statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}\n\n`;
+      statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}`;
+      statusText += getVersionWarning();
+      statusText += `\n`;
     }
 
     // Main session info (not shown for workers)
