@@ -147,19 +147,15 @@ export function updateItem(id: string, updates: UpdateItemInput): SpecItem | nul
 export function deleteItem(id: string): boolean {
   const db = getDb();
   
-  // First, orphan all children by setting their parent_id to NULL
-  db.prepare('UPDATE spec_items SET parent_id = NULL WHERE parent_id = ?').run(id);
-  
-  // Now recursively delete all former children (now orphaned)
-  const orphans = db.prepare('SELECT id FROM spec_items WHERE parent_id IS NULL AND id != ?').all(id) as { id: string }[];
-  // Actually, we want to delete THESE specific items that were children
-  // Let's do it differently - collect IDs first, orphan, then delete all
+  console.log(`[deleteItem] Starting delete for id: ${id}`);
   
   // Collect all descendant IDs first
   function collectDescendants(parentId: string): string[] {
-    const children = db.prepare('SELECT id FROM spec_items WHERE parent_id = ?').all(parentId) as { id: string }[];
+    const children = db.prepare('SELECT id, display_id FROM spec_items WHERE parent_id = ?').all(parentId) as { id: string, display_id: string }[];
+    console.log(`[deleteItem] Found ${children.length} children for ${parentId}`);
     const allIds: string[] = [];
     for (const child of children) {
+      console.log(`[deleteItem]   - child: ${child.display_id} (${child.id})`);
       allIds.push(child.id);
       allIds.push(...collectDescendants(child.id));
     }
@@ -167,23 +163,28 @@ export function deleteItem(id: string): boolean {
   }
   
   const descendantIds = collectDescendants(id);
+  console.log(`[deleteItem] Total descendants to delete: ${descendantIds.length}`);
   
-  // Now orphan them all and delete
-  const deleteAll = db.transaction(() => {
-    // Orphan all descendants
-    for (const descId of descendantIds) {
-      db.prepare('UPDATE spec_items SET parent_id = NULL WHERE id = ?').run(descId);
+  try {
+    // Delete in reverse order (deepest first) without transaction first
+    const allToDelete = [...descendantIds, id];
+    console.log(`[deleteItem] Deleting ${allToDelete.length} items total`);
+    
+    for (const delId of allToDelete) {
+      console.log(`[deleteItem] Deleting: ${delId}`);
+      // First clear any parent references TO this item
+      db.prepare('UPDATE spec_items SET parent_id = NULL WHERE parent_id = ?').run(delId);
+      // Then delete
+      db.prepare('DELETE FROM spec_items WHERE id = ?').run(delId);
+      console.log(`[deleteItem] Deleted: ${delId}`);
     }
-    // Delete all descendants
-    for (const descId of descendantIds) {
-      db.prepare('DELETE FROM spec_items WHERE id = ?').run(descId);
-    }
-    // Delete the item itself
-    return db.prepare('DELETE FROM spec_items WHERE id = ?').run(id);
-  });
-  
-  const result = deleteAll();
-  return result.changes > 0;
+    
+    console.log(`[deleteItem] Success!`);
+    return true;
+  } catch (err) {
+    console.error(`[deleteItem] Error:`, err);
+    throw err;
+  }
 }
 
 // ============================================
