@@ -185,24 +185,22 @@ export interface AddFeatureOptions {
   filesToChange?: string[];
   testing?: string[];
   fileLink?: string;  // Link to detailed design doc, Figma, etc.
-  tasks?: string[];
-  withWorkflow?: boolean;
+  // tasks removed - chkd always uses standard workflow
+  // withWorkflow removed - always true
 }
 
 export async function addFeature(
   repoPath: string,
   title: string,
   areaCode: string,
-  description?: string,
-  tasks?: string[]
+  description?: string
 ) {
   return request('POST', '/api/spec/add', {
     repoPath,
     title,
     areaCode,
     description,
-    withWorkflow: true,
-    tasks
+    withWorkflow: true  // Always uses standard workflow with checkpoints
   });
 }
 
@@ -220,8 +218,7 @@ export async function addFeatureWithMetadata(
     filesToChange: opts.filesToChange,
     testing: opts.testing,
     fileLink: opts.fileLink,
-    tasks: opts.tasks,
-    withWorkflow: opts.withWorkflow !== false
+    withWorkflow: true  // Always uses standard workflow with checkpoints
   });
 }
 

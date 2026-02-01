@@ -1339,11 +1339,11 @@ async function add(title: string, flags: Record<string, string | boolean>) {
     tasks = flags.tasks.split(',').map(t => t.trim()).filter(Boolean);
   }
 
-  // Build request body - pass through exactly what was specified
+  // Build request body - workflow is always used (no bypass)
   const body: Record<string, unknown> = {
     repoPath: cwd,
     title,
-    withWorkflow: !noWorkflow && !tasks, // Only default workflow if no explicit tasks
+    withWorkflow: !noWorkflow,  // Always uses standard workflow with checkpoints
     dryRun,
     confirmLarge,
   };
@@ -1351,10 +1351,7 @@ async function add(title: string, flags: Record<string, string | boolean>) {
   if (areaCode) body.areaCode = areaCode;
   if (story) body.description = story;
   if (workflowType) body.workflowType = workflowType;
-  if (tasks && tasks.length > 0) {
-    body.tasks = tasks;
-    body.withWorkflow = true; // Has explicit tasks
-  }
+  // Note: custom tasks parameter removed - chkd always uses standard workflow
 
   // Warn if --story alone - will create TBC fields that block start
   if (story && !tasks) {

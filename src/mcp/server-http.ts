@@ -1307,10 +1307,10 @@ server.tool(
     keyRequirements: z.array(z.string()).optional().describe("Key requirements for this feature - REQUIRED, don't leave empty"),
     filesToChange: z.array(z.string()).optional().describe("Files that will be modified - REQUIRED, don't leave empty"),
     testing: z.array(z.string()).optional().describe("How to test this feature - REQUIRED, don't leave empty"),
-    tasks: z.array(z.string()).optional().describe("Optional custom sub-tasks (defaults to standard workflow)"),
+    // tasks parameter removed - chkd always uses standard workflow with checkpoints
     epic: z.string().optional().describe("Epic tag to link this item to (e.g., 'auth-overhaul')")
   },
-  async ({ title, areaCode, description, keyRequirements, filesToChange, testing, tasks, epic }) => {
+  async ({ title, areaCode, description, keyRequirements, filesToChange, testing, epic }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
@@ -1321,8 +1321,7 @@ server.tool(
       keyRequirements,
       filesToChange,
       testing,
-      tasks,
-      withWorkflow: true
+      withWorkflow: true  // Always uses standard workflow with checkpoints
     });
 
     if (!response.success) {
@@ -1337,11 +1336,7 @@ server.tool(
     const specCode = response.data.sectionId || response.data.itemId;
     let text = `✅ Added: ${specCode} ${title}\n`;
     text += `Area: ${areaCode}\n`;
-    if (tasks && tasks.length > 0) {
-      text += `Tasks: ${tasks.length} custom sub-tasks\n`;
-    } else {
-      text += `Tasks: Standard workflow (6 phases)\n`;
-    }
+    text += `Workflow: ${response.data.stepCount || 0} steps, ${response.data.checkpointCount || 0} checkpoints\n`;
 
     // If epic specified, tag the item
     if (epic) {
