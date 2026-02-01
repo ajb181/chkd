@@ -146,6 +146,13 @@ export function updateItem(id: string, updates: UpdateItemInput): SpecItem | nul
 
 export function deleteItem(id: string): boolean {
   const db = getDb();
+  
+  // First, recursively delete all children
+  const children = db.prepare('SELECT id FROM spec_items WHERE parent_id = ?').all(id) as { id: string }[];
+  for (const child of children) {
+    deleteItem(child.id);
+  }
+  
   // Tags are deleted via ON DELETE CASCADE
   const result = db.prepare('DELETE FROM spec_items WHERE id = ?').run(id);
   return result.changes > 0;
