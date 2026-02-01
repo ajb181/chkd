@@ -48,7 +48,33 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({
         success: false,
         error: 'repoPath, title, and areaCode are required',
-        hint: 'Required: repoPath, title, areaCode (SD/FE/BE/FUT). Optional: description, story, keyRequirements[], filesToChange[], testing[], tasks[], withWorkflow, dryRun'
+        hint: 'Required: repoPath, title, areaCode, keyRequirements[], filesToChange[], testing[]'
+      }, { status: 400 });
+    }
+
+    // Strict validation: require planning fields upfront
+    // This is the core principle of chkd - think before you code
+    const missingFields: string[] = [];
+    if (!keyRequirements || !Array.isArray(keyRequirements) || keyRequirements.length === 0) {
+      missingFields.push('keyRequirements[]');
+    }
+    if (!filesToChange || !Array.isArray(filesToChange) || filesToChange.length === 0) {
+      missingFields.push('filesToChange[]');
+    }
+    if (!testing || !Array.isArray(testing) || testing.length === 0) {
+      missingFields.push('testing[]');
+    }
+
+    if (missingFields.length > 0) {
+      return json({
+        success: false,
+        error: `Missing required planning fields: ${missingFields.join(', ')}`,
+        hint: 'chkd requires upfront planning. Provide: keyRequirements (what this must do), filesToChange (files you\'ll touch), testing (how you\'ll verify it works)',
+        example: {
+          keyRequirements: ['Must handle edge case X', 'Must validate input Y'],
+          filesToChange: ['src/lib/foo.ts', 'src/routes/bar/+page.svelte'],
+          testing: ['Unit test for X', 'Manual test: do Y, expect Z']
+        }
       }, { status: 400 });
     }
 
@@ -119,9 +145,9 @@ export const POST: RequestHandler = async ({ request }) => {
             areaCode,
             areaName: area.name,
             story: story || null,
-            keyRequirements: keyRequirements || ['TBC'],
-            filesToChange: filesToChange || ['TBC'],
-            testing: testing || ['TBC'],
+            keyRequirements,
+            filesToChange,
+            testing,
             workflow: workflowSteps.map(s => ({
               step: s.task,
               checkpoints: s.children || []
