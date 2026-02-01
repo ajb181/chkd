@@ -118,16 +118,18 @@ export const REFACTOR_WORKFLOW: WorkflowStep[] = [
     ]
   },
   {
-    task: 'Confirm: get user approval before changing',
+    task: 'Confirm: write plan and get user approval',
     children: [
-      'Share: present plan to user',
-      'Approve: get explicit go-ahead'
+      'Plan file: write detailed refactor plan to docs/refactor-{name}.md',
+      'Checklist: list each change as checkbox item in the plan',
+      'Share: show plan file to user',
+      'Approve: get explicit go-ahead before any changes'
     ]
   },
   {
     task: 'Refactor: make the changes',
     children: [
-      'Change: restructure the code',
+      'Change: restructure the code, tick each item in plan file as done',
       'Preserve: keep behavior exactly the same'
     ]
   },
