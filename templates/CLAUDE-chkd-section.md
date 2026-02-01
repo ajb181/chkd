@@ -1,3 +1,4 @@
+<!-- chkd:start -->
 ## Working with chkd
 
 ### Mandatory: ALL Code Changes Go Through chkd
@@ -38,3 +39,4 @@ If the user drifts:
 |------|------|
 | `docs/SPEC.md` | Task list |
 | `docs/GUIDE.md` | How to use chkd |
+<!-- chkd:end -->

@@ -327,21 +327,20 @@ const server = new McpServer({
 // TOOLS
 // ============================================
 
-// sync - Register project and sync CLAUDE.md
+// sync - Register project and sync files from templates
 server.tool(
   "sync",
-  "Register this project with chkd and sync CLAUDE.md from template. Run this first in a new project.",
-  {
-    force: z.boolean().optional().describe("Force overwrite CLAUDE.md even if it exists")
-  },
-  async ({ force }) => {
+  "Register project with chkd and sync files from templates. Updates chkd section in CLAUDE.md (preserves your content), overwrites docs/ files.",
+  {},
+  async () => {
     const repoPath = getRepoPath();
     const projectName = path.basename(repoPath);
+    const templatesDir = path.join(path.dirname(new URL(import.meta.url).pathname), '../../templates');
     
     let text = `🔄 SYNC: ${projectName}\n`;
     text += `═══════════════════════════════════════\n\n`;
     
-    // Check if project is registered
+    // 1. Check/register project
     const repoResponse = await api.getRepoByPath(repoPath);
     
     if (!repoResponse.success) {
@@ -353,7 +352,6 @@ server.tool(
       };
     }
     
-    // Register if not found
     if (!repoResponse.repo) {
       const createResponse = await api.createRepo(repoPath, projectName);
       if (!createResponse.success) {
@@ -364,55 +362,103 @@ server.tool(
           }]
         };
       }
-      text += `✅ Project registered with chkd\n`;
+      text += `✅ Project registered\n`;
     } else {
-      text += `✓ Project already registered\n`;
+      text += `✓ Project registered\n`;
     }
     
-    // Check CLAUDE.md
+    // 2. CLAUDE.md - merge chkd section or create new
     const claudePath = path.join(repoPath, 'CLAUDE.md');
-    const templatePath = path.join(path.dirname(new URL(import.meta.url).pathname), '../../templates/CLAUDE.md.template');
+    const sectionPath = path.join(templatesDir, 'CLAUDE-chkd-section.md');
+    const fullTemplatePath = path.join(templatesDir, 'CLAUDE.md.template');
     
-    let claudeExists = false;
     try {
-      fs.accessSync(claudePath);
-      claudeExists = true;
-    } catch {}
-    
-    if (claudeExists && !force) {
-      text += `✓ CLAUDE.md exists (use force=true to overwrite)\n`;
-    } else {
+      const chkdSection = fs.readFileSync(sectionPath, 'utf-8');
+      let claudeExists = false;
+      let existingContent = '';
+      
       try {
-        let template = fs.readFileSync(templatePath, 'utf-8');
+        existingContent = fs.readFileSync(claudePath, 'utf-8');
+        claudeExists = true;
+      } catch {}
+      
+      if (claudeExists) {
+        // Merge: replace section between markers, or append if no markers
+        const startMarker = '<!-- chkd:start -->';
+        const endMarker = '<!-- chkd:end -->';
+        
+        if (existingContent.includes(startMarker) && existingContent.includes(endMarker)) {
+          // Replace existing section
+          const before = existingContent.substring(0, existingContent.indexOf(startMarker));
+          const after = existingContent.substring(existingContent.indexOf(endMarker) + endMarker.length);
+          const newContent = before + chkdSection + after;
+          fs.writeFileSync(claudePath, newContent);
+          text += `✅ CLAUDE.md chkd section updated\n`;
+        } else {
+          // Append section at the top (after title if present)
+          const lines = existingContent.split('\n');
+          let insertIndex = 0;
+          
+          // Skip past the title and any immediate blank lines
+          if (lines[0]?.startsWith('# ')) {
+            insertIndex = 1;
+            while (insertIndex < lines.length && lines[insertIndex].trim() === '') {
+              insertIndex++;
+            }
+          }
+          
+          lines.splice(insertIndex, 0, '', chkdSection, '');
+          fs.writeFileSync(claudePath, lines.join('\n'));
+          text += `✅ CLAUDE.md chkd section added\n`;
+        }
+      } else {
+        // Create new from full template
+        let template = fs.readFileSync(fullTemplatePath, 'utf-8');
         template = template.replace(/\{\{PROJECT_NAME\}\}/g, projectName);
         fs.writeFileSync(claudePath, template);
-        text += claudeExists ? `✅ CLAUDE.md updated from template\n` : `✅ CLAUDE.md created from template\n`;
-      } catch (err) {
-        text += `⚠️ Could not create CLAUDE.md: ${err}\n`;
+        text += `✅ CLAUDE.md created\n`;
       }
+    } catch (err) {
+      text += `⚠️ CLAUDE.md error: ${err}\n`;
     }
     
-    // Check docs folder
+    // 3. docs/ files - copy/overwrite from templates
     const docsPath = path.join(repoPath, 'docs');
-    let docsExists = false;
-    try {
-      fs.accessSync(docsPath);
-      docsExists = true;
-    } catch {}
+    const templateDocsPath = path.join(templatesDir, 'docs');
     
-    if (!docsExists) {
-      try {
-        fs.mkdirSync(docsPath, { recursive: true });
-        text += `✅ Created docs/ folder\n`;
-      } catch {}
+    try {
+      fs.mkdirSync(docsPath, { recursive: true });
+      
+      // Copy each file from templates/docs/
+      const copyFile = (src: string, dest: string) => {
+        try {
+          const content = fs.readFileSync(src, 'utf-8');
+          fs.writeFileSync(dest, content);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      
+      const docFiles = ['GUIDE.md', 'PHILOSOPHY.md', 'FILING.md'];
+      let copiedCount = 0;
+      
+      for (const file of docFiles) {
+        const src = path.join(templateDocsPath, file);
+        const dest = path.join(docsPath, file);
+        if (copyFile(src, dest)) {
+          copiedCount++;
+        }
+      }
+      
+      text += `✅ docs/ synced (${copiedCount} files)\n`;
+    } catch (err) {
+      text += `⚠️ docs/ error: ${err}\n`;
     }
     
     text += `\n───────────────────────────────────────\n`;
-    text += `✅ Project ready!\n\n`;
-    text += `Next steps:\n`;
-    text += `• status() - see current state\n`;
-    text += `• add("feature", areaCode="XX") - create a task\n`;
-    text += `• CreateQuickWin("fix", files="...", test="...") - quick fix\n`;
+    text += `✅ Sync complete!\n\n`;
+    text += `Next: status() to see current state\n`;
     
     return {
       content: [{
