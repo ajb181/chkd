@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { execSync } from 'child_process';
 
 // HTTP client for API calls
@@ -293,7 +294,47 @@ function getTickGuidance(ctx: TypeAreaContext): string[] {
 
 // Server version identifier
 const SERVER_TYPE = "http-based";
-const SERVER_VERSION = "2.1.0";  // Bump when adding new tools!
+const SERVER_VERSION = "0.3.2";  // Auto-bumped by pre-commit hook
+
+// Version sync check - compares local file hash with server's expected hash
+let versionCheckDone = false;
+let versionMismatch: { local: string; server: string } | null = null;
+
+function getLocalMcpHash(): string {
+  try {
+    const mcpPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'server-http.ts');
+    const content = fs.readFileSync(mcpPath, 'utf-8');
+    return crypto.createHash('md5').update(content).digest('hex').slice(0, 8);
+  } catch {
+    return 'unknown';
+  }
+}
+
+async function checkVersionSync(): Promise<void> {
+  if (versionCheckDone) return;
+  versionCheckDone = true;
+  
+  try {
+    const response = await fetch(`${HTTP_BASE}/api/version`);
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    if (!data.success) return;
+    
+    const localHash = getLocalMcpHash();
+    const serverHash = data.data.mcpHash;
+    
+    if (localHash !== serverHash && localHash !== 'unknown' && serverHash !== 'unknown') {
+      versionMismatch = { local: localHash, server: serverHash };
+    }
+  } catch {
+    // Server not reachable, skip check
+  }
+}
+
+function getVersionWarning(): string {
+  if (!versionMismatch) return '';
+  return `\n⚠️ MCP OUT OF SYNC (local: ${versionMismatch.local}, server: ${versionMismatch.server})\n   Restart Claude Code to pick up latest changes.\n`;
 
 // Track when this server instance started (for stale detection)
 const SERVER_START_TIME = Date.now();
@@ -456,6 +497,31 @@ server.tool(
       text += `⚠️ docs/ error: ${err}\n`;
     }
     
+    // 4. Update .gitignore to exclude chkd-managed files
+    const gitignorePath = path.join(repoPath, '.gitignore');
+    const chkdIgnoreBlock = `
+# chkd managed files (synced from templates, not committed)
+CLAUDE.md
+docs/GUIDE.md
+docs/PHILOSOPHY.md
+docs/FILING.md`;
+    
+    try {
+      let gitignoreContent = '';
+      try {
+        gitignoreContent = fs.readFileSync(gitignorePath, 'utf-8');
+      } catch {}
+      
+      if (!gitignoreContent.includes('# chkd managed files')) {
+        fs.appendFileSync(gitignorePath, chkdIgnoreBlock + '\n');
+        text += `✅ .gitignore updated\n`;
+      } else {
+        text += `✓ .gitignore already configured\n`;
+      }
+    } catch (err) {
+      text += `⚠️ .gitignore error: ${err}\n`;
+    }
+    
     text += `\n───────────────────────────────────────\n`;
     text += `✅ Sync complete!\n\n`;
     text += `Next: status() to see current state\n`;
@@ -477,6 +543,9 @@ server.tool(
   async () => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
+    
+    // Check version sync (runs once)
+    await checkVersionSync();
 
     // Check if we're a worker
     const workerInfo = await getWorkerContext();
@@ -520,7 +589,9 @@ server.tool(
     } else {
       statusText += `📁 ${path.basename(repoPath)}\n`;
       statusText += `Progress: ${progress.percentage}% (${progress.completed}/${progress.total})\n`;
-      statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}\n\n`;
+      statusText += `MCP: ${SERVER_TYPE} v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE' : ' ✓'}`;
+      statusText += getVersionWarning();
+      statusText += `\n`;
     }
 
     // Main session info (not shown for workers)
@@ -1027,6 +1098,37 @@ server.tool(
       content: [{
         type: "text",
         text: `🏷️ Tags set on ${itemId}: ${tagList}\n\n💡 Filter by tag in the UI`
+      }]
+    };
+  }
+);
+
+// delete - Delete a spec item
+server.tool(
+  "delete",
+  "Delete a spec item or quick win. Use with caution - this is permanent.",
+  {
+    itemId: z.string().describe("Item ID or title to delete (e.g., 'FE.1' or 'Login page')")
+  },
+  async ({ itemId }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const response = await api.deleteItem(repoPath, itemId);
+
+    if (!response.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${response.error}`
+        }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `🗑️ Deleted: ${itemId}\n\nThis action cannot be undone.`
       }]
     };
   }
