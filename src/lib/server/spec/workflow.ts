@@ -63,7 +63,7 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     task: 'Polish: error states, edge cases, second-order effects',
     children: [
       'Consider: wider impact, what else could this affect',
-      'Tests: run ALL existing tests - do not skip. Write new tests if needed',
+      'Tests: run ALL existing tests. If any fail: show user EXACT failure output, get approval before changing ANY test. Never rewrite a test just to make it pass',
       'Review: inspect the work thoroughly',
       'Confirm: verify against discovery assumptions if any, show user findings, get approval'
     ]
