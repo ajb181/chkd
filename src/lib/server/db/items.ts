@@ -187,6 +187,63 @@ export function deleteItem(id: string): boolean {
   }
 }
 
+/**
+ * Flatten 3-level hierarchy to 2-level
+ * Before: Parent -> Phase -> Checkpoint
+ * After: Parent -> Checkpoint (phases deleted)
+ */
+export function flattenHierarchy(repoId?: string): { reparented: number; deleted: number } {
+  const db = getDb();
+
+  console.log(`[flattenHierarchy] Starting migration${repoId ? ` for repo ${repoId}` : ' for all repos'}...`);
+
+  // Find all "middle generation" items: items that have both a parent AND children
+  // These are the phase items (FE.19.1, FE.19.2) that need to be removed
+  const middleGenQuery = repoId
+    ? `SELECT DISTINCT p.id, p.display_id, p.parent_id as grandparent_id
+       FROM spec_items p
+       WHERE p.repo_id = ?
+         AND p.parent_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM spec_items c WHERE c.parent_id = p.id)`
+    : `SELECT DISTINCT p.id, p.display_id, p.parent_id as grandparent_id
+       FROM spec_items p
+       WHERE p.parent_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM spec_items c WHERE c.parent_id = p.id)`;
+
+  const middleItems = repoId
+    ? db.prepare(middleGenQuery).all(repoId) as { id: string; display_id: string; grandparent_id: string }[]
+    : db.prepare(middleGenQuery).all() as { id: string; display_id: string; grandparent_id: string }[];
+
+  console.log(`[flattenHierarchy] Found ${middleItems.length} middle-generation items to flatten`);
+
+  let reparented = 0;
+  let deleted = 0;
+
+  for (const middle of middleItems) {
+    console.log(`[flattenHierarchy] Processing: ${middle.display_id} (${middle.id})`);
+
+    // Get all children of this middle item
+    const children = db.prepare('SELECT id, display_id FROM spec_items WHERE parent_id = ?')
+      .all(middle.id) as { id: string; display_id: string }[];
+
+    // Reparent children to grandparent
+    for (const child of children) {
+      db.prepare('UPDATE spec_items SET parent_id = ? WHERE id = ?')
+        .run(middle.grandparent_id, child.id);
+      console.log(`[flattenHierarchy]   Reparented: ${child.display_id} -> grandparent`);
+      reparented++;
+    }
+
+    // Delete the middle item (now has no children)
+    db.prepare('DELETE FROM spec_items WHERE id = ?').run(middle.id);
+    console.log(`[flattenHierarchy]   Deleted: ${middle.display_id}`);
+    deleted++;
+  }
+
+  console.log(`[flattenHierarchy] Done! Reparented: ${reparented}, Deleted: ${deleted}`);
+  return { reparented, deleted };
+}
+
 // ============================================
 // Query Operations
 // ============================================
@@ -293,18 +350,23 @@ export function findItemByQuery(repoId: string, query: string): SpecItem | null 
 
 export function searchItems(repoId: string, query: string, limit: number = 20): SpecItem[] {
   const db = getDb();
-  const queryLower = `%${query.toLowerCase()}%`;
+  const queryLower = query.toLowerCase();
+  const queryLike = `%${queryLower}%`;
 
+  // Prioritize exact display_id match, then fuzzy matches
+  // CASE puts exact matches first (0), then fuzzy (1)
   const rows = db.prepare(`
-    SELECT * FROM spec_items
+    SELECT *,
+      CASE WHEN LOWER(display_id) = ? THEN 0 ELSE 1 END as match_priority
+    FROM spec_items
     WHERE repo_id = ? AND (
       LOWER(display_id) LIKE ? OR
       LOWER(title) LIKE ? OR
       LOWER(description) LIKE ?
     )
-    ORDER BY area_code, section_number, sort_order
+    ORDER BY match_priority, area_code, section_number, sort_order
     LIMIT ?
-  `).all(repoId, queryLower, queryLower, queryLower, limit) as any[];
+  `).all(queryLower, repoId, queryLike, queryLike, queryLike, limit) as any[];
 
   return rows.map(rowToItem);
 }
@@ -490,6 +552,11 @@ export function checkItemTbc(repoId: string, itemQuery: string): TbcCheckResult 
 
   if (!item) {
     return { hasTbc: false, tbcFields: [], itemTitle: itemQuery };
+  }
+
+  // Child checkpoints inherit context from parent - skip TBC check
+  if (item.parentId) {
+    return { hasTbc: false, tbcFields: [], itemTitle: item.title };
   }
 
   const tbcFields: string[] = [];

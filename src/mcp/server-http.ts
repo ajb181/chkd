@@ -294,7 +294,7 @@ function getTickGuidance(ctx: TypeAreaContext): string[] {
 
 // Server version identifier
 const SERVER_TYPE = "http-based";
-const SERVER_VERSION = "0.3.3";  // Auto-bumped by pre-commit hook
+const SERVER_VERSION = "0.3.5";  // Auto-bumped by pre-commit hook
 
 // Version sync check - compares local file hash with server's expected hash
 let versionCheckDone = false;
@@ -749,66 +749,75 @@ server.tool(
     item: z.string().describe("Item title or ID to mark complete")
   },
   async ({ item }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
+    try {
+      const repoPath = getRepoPath();
+      await requireRepo(repoPath);
 
-    // Get full title and context from DB
-    let fullTitle = item;
-    let workflowType: string | null = null;
-    let areaCode = 'SD';
-    const findResponse = await api.findSpecItem(repoPath, item);
-    if (findResponse.success && findResponse.data?.items?.length > 0) {
-      const foundItem = findResponse.data.items[0];
-      fullTitle = foundItem.title;
-      workflowType = foundItem.workflowType || null;
-      areaCode = foundItem.areaCode || 'SD';
-    }
-    // If not found, use the input as-is - the tick API will error if invalid
+      // Get full title and context from DB
+      let fullTitle = item;
+      let workflowType: string | null = null;
+      let areaCode = 'SD';
+      const findResponse = await api.findSpecItem(repoPath, item);
+      if (findResponse.success && findResponse.data?.items?.length > 0) {
+        const foundItem = findResponse.data.items[0];
+        fullTitle = foundItem.title;
+        workflowType = foundItem.workflowType || null;
+        areaCode = foundItem.areaCode || 'SD';
+      }
+      // If not found, use the input as-is - the tick API will error if invalid
 
-    const response = await api.tickItem(repoPath, item);
+      const response = await api.tickItem(repoPath, item);
 
-    if (!response.success) {
+      if (!response.success) {
+        return {
+          content: [{
+            type: "text",
+            text: `❌ ${response.error}`
+          }]
+        };
+      }
+
+      const queueResponse = await api.getQueue(repoPath);
+      const queue = queueResponse.data?.items || [];
+
+      let text = `✅ Completed: ${fullTitle}`;
+
+      // Check if this was a Confirm step - remind about user approval
+      const lowerTitle = fullTitle.toLowerCase();
+      if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
+        text += `\n\n⚠️  CHECKPOINT: Did you get explicit user approval?`;
+        text += `\n   If not, discuss with user before proceeding.`;
+      }
+
+      // Add type/area-specific guidance
+      const tickGuidance = getTickGuidance({ workflowType, areaCode });
+      if (tickGuidance && tickGuidance.length > 0) {
+        text += `\n\n` + tickGuidance.join('\n');
+      }
+
+      if (queue && queue.length > 0) {
+        text += `\n\n📬 Queue (${queue.length}):\n`;
+        queue.forEach((q: any) => {
+          text += `  • ${q.title}\n`;
+        });
+      }
+
+      text += `\n\n💭 Tick as you go - don't batch at the end.`;
+
       return {
         content: [{
           type: "text",
-          text: `❌ ${response.error}`
+          text
+        }]
+      };
+    } catch (err) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${err instanceof Error ? err.message : String(err)}`
         }]
       };
     }
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    let text = `✅ Completed: ${fullTitle}`;
-    
-    // Check if this was a Confirm step - remind about user approval
-    const lowerTitle = fullTitle.toLowerCase();
-    if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
-      text += `\n\n⚠️  CHECKPOINT: Did you get explicit user approval?`;
-      text += `\n   If not, discuss with user before proceeding.`;
-    }
-
-    // Add type/area-specific guidance
-    const tickGuidance = getTickGuidance({ workflowType, areaCode });
-    if (tickGuidance.length > 0) {
-      text += `\n\n` + tickGuidance.join('\n');
-    }
-
-    if (queue.length > 0) {
-      text += `\n\n📬 Queue (${queue.length}):\n`;
-      queue.forEach((q: any) => {
-        text += `  • ${q.title}\n`;
-      });
-    }
-
-    text += `\n\n💭 Tick as you go - don't batch at the end.`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
   }
 );
 
@@ -820,87 +829,173 @@ server.tool(
     item: z.string().describe("Item title or ID you're starting")
   },
   async ({ item }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    // Check for TBC fields first - block work if not properly defined
     try {
-      const tbcResponse = await api.checkItemTbc(repoPath, item);
-      if (tbcResponse.success && tbcResponse.data?.hasTbc) {
+      const repoPath = getRepoPath();
+      await requireRepo(repoPath);
+
+      // Check for TBC fields first - block work if not properly defined
+      try {
+        const tbcResponse = await api.checkItemTbc(repoPath, item);
+        if (tbcResponse.success && tbcResponse.data?.hasTbc) {
+          return {
+            content: [{
+              type: "text",
+              text: `⚠️ Cannot start work on "${tbcResponse.data.itemTitle}"\n\n` +
+                `📋 These fields still have TBC (to be confirmed):\n` +
+                (tbcResponse.data.tbcFields || []).map((f: string) => `  • ${f}`).join('\n') + '\n\n' +
+                `💡 Fill in these fields first during Explore phase or ask user for details.`
+            }]
+          };
+        }
+      } catch (e) {
+        // If TBC check fails, continue anyway (might be a sub-item without metadata)
+      }
+
+      const response = await api.markInProgress(repoPath, item);
+
+      if (!response.success) {
         return {
           content: [{
             type: "text",
-            text: `⚠️ Cannot start work on "${tbcResponse.data.itemTitle}"\n\n` +
-              `📋 These fields still have TBC (to be confirmed):\n` +
-              tbcResponse.data.tbcFields.map((f: string) => `  • ${f}`).join('\n') + '\n\n' +
-              `💡 Fill in these fields first during Explore phase or ask user for details.`
+            text: `❌ ${response.error}`
           }]
         };
       }
-    } catch (e) {
-      // If TBC check fails, continue anyway (might be a sub-item without metadata)
-    }
 
-    const response = await api.markInProgress(repoPath, item);
+      // Get full title and context from DB
+      let fullTitle = item;
+      let workflowType: string | null = null;
+      let areaCode = 'SD';
+      const findResponse = await api.findSpecItem(repoPath, item);
+      if (findResponse.success && findResponse.data?.items?.length > 0) {
+        const foundItem = findResponse.data.items[0];
+        fullTitle = foundItem.title;
+        workflowType = foundItem.workflowType || null;
+        areaCode = foundItem.areaCode || 'SD';
+      }
+      // If not found, use the input as-is
 
-    if (!response.success) {
+      const queueResponse = await api.getQueue(repoPath);
+      const queue = queueResponse.data?.items || [];
+
+      // Check if this is a parent item with children
+      let children: any[] = [];
+      let isParent = false;
+      let firstIncomplete: any = null;
+
+      if (findResponse.success && findResponse.data?.items?.length > 0) {
+        const foundItem = findResponse.data.items[0];
+        const allItemsResponse = await api.getSpecItems(repoPath, {});
+        if (allItemsResponse.success && allItemsResponse.data?.items) {
+          children = allItemsResponse.data.items.filter(
+            (i: any) => i.parentId === foundItem.id
+          );
+          isParent = children.length > 0;
+          // Sort by displayId for consistent ordering
+          children.sort((a: any, b: any) => a.displayId.localeCompare(b.displayId));
+          firstIncomplete = children.find((c: any) => c.status !== 'done');
+        }
+      }
+
+      let text = '';
+
+      if (isParent) {
+        // Parent item - show overview with full context
+        const foundItem = findResponse.data.items[0];
+        const doneCount = children.filter((c: any) => c.status === 'done').length;
+        const totalCount = children.length;
+        text = `📋 ${fullTitle}`;
+        text += `\n   Progress: ${doneCount}/${totalCount} checkpoints complete`;
+
+        // Show description/story if available
+        if (foundItem.description) {
+          text += `\n\n📝 DESCRIPTION:\n${foundItem.description}`;
+        }
+        if (foundItem.story && foundItem.story !== foundItem.description) {
+          text += `\n\n📖 USER STORY:\n${foundItem.story}`;
+        }
+
+        // Show key requirements
+        if (foundItem.keyRequirements && foundItem.keyRequirements.length > 0) {
+          text += `\n\n✅ KEY REQUIREMENTS:`;
+          foundItem.keyRequirements.forEach((req: string) => {
+            text += `\n  • ${req}`;
+          });
+        }
+
+        // Show files to change
+        if (foundItem.filesToChange && foundItem.filesToChange.length > 0) {
+          text += `\n\n📁 FILES TO CHANGE:`;
+          foundItem.filesToChange.forEach((file: string) => {
+            text += `\n  • ${file}`;
+          });
+        }
+
+        // Show testing criteria
+        if (foundItem.testing && foundItem.testing.length > 0) {
+          text += `\n\n🧪 TESTING:`;
+          foundItem.testing.forEach((test: string) => {
+            text += `\n  • ${test}`;
+          });
+        }
+
+        if (firstIncomplete) {
+          text += `\n\n▶ NEXT: working("${firstIncomplete.displayId}")`;
+          text += `\n   ${firstIncomplete.title}`;
+        } else {
+          text += `\n\n✅ All checkpoints complete! Run tick("${item}") to finish.`;
+        }
+
+        // Show remaining checkpoints
+        const incomplete = children.filter((c: any) => c.status !== 'done');
+        if (incomplete.length > 0) {
+          text += `\n\n📋 REMAINING CHECKPOINTS:`;
+          incomplete.forEach((child: any, idx: number) => {
+            const marker = idx === 0 ? '▶' : '○';
+            text += `\n  ${marker} ${child.displayId} ${child.title}`;
+          });
+        }
+      } else {
+        // Leaf checkpoint - show working state
+        text = `🔨 Working on: ${fullTitle}`;
+
+        // Add type/area-specific guidance
+        const workingGuidance = getWorkingGuidance({ workflowType, areaCode });
+        if (workingGuidance && workingGuidance.length > 0) {
+          text += `\n\n` + workingGuidance.join('\n');
+        }
+
+        // Check if this is a Confirm/Verify step
+        const lowerTitle = fullTitle.toLowerCase();
+        if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
+          text += `\n\n🛑 USER APPROVAL REQUIRED`;
+          text += `\n   Show your findings → wait for user "yes" → then tick.`;
+        }
+
+        text += `\n\n💭 When done, run tick("${item}")`;
+      }
+
+      if (queue && queue.length > 0) {
+        text += `\n\n📬 Queue (${queue.length}):\n`;
+        queue.forEach((q: any) => {
+          text += `  • ${q.title}\n`;
+        });
+      }
+
       return {
         content: [{
           type: "text",
-          text: `❌ ${response.error}`
+          text
+        }]
+      };
+    } catch (err) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${err instanceof Error ? err.message : String(err)}`
         }]
       };
     }
-
-    // Get full title and context from DB
-    let fullTitle = item;
-    let workflowType: string | null = null;
-    let areaCode = 'SD';
-    const findResponse = await api.findSpecItem(repoPath, item);
-    if (findResponse.success && findResponse.data?.items?.length > 0) {
-      const foundItem = findResponse.data.items[0];
-      fullTitle = foundItem.title;
-      workflowType = foundItem.workflowType || null;
-      areaCode = foundItem.areaCode || 'SD';
-    }
-    // If not found, use the input as-is
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    let text = `🔨 Working on: ${fullTitle}`;
-    
-    // Add type/area-specific guidance FIRST (most important context)
-    const workingGuidance = getWorkingGuidance({ workflowType, areaCode });
-    if (workingGuidance.length > 0) {
-      text += `\n\n` + workingGuidance.join('\n');
-    }
-    
-    // Check if this is a Confirm/Verify step - warn about user approval requirement
-    const lowerTitle = fullTitle.toLowerCase();
-    if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
-      text += `\n\n🛑 USER APPROVAL REQUIRED`;
-      text += `\n   This step needs explicit user approval before ticking.`;
-      text += `\n   Show your findings → wait for user "yes" → then tick.`;
-    }
-
-    if (queue.length > 0) {
-      text += `\n\n📬 Queue (${queue.length}):\n`;
-      queue.forEach((q: any) => {
-        text += `  • ${q.title}\n`;
-      });
-    }
-
-    text += `\n\n⚠️ IMPORTANT: Tick each sub-item as you complete it.`;
-    text += `\n   Do NOT batch ticks at the end - tick as you go!`;
-    text += `\n\n💭 When done, run tick() immediately.`;
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
   }
 );
 
@@ -1130,6 +1225,61 @@ server.tool(
       content: [{
         type: "text",
         text: `🗑️ Deleted: ${itemId}\n\nThis action cannot be undone.`
+      }]
+    };
+  }
+);
+
+// update_item - Update a spec item's metadata
+server.tool(
+  "update_item",
+  "Update a spec item's metadata (title, description, requirements, files, testing).",
+  {
+    itemId: z.string().describe("Item ID (e.g., 'BE.43')"),
+    title: z.string().optional().describe("New title"),
+    description: z.string().optional().describe("New description"),
+    story: z.string().optional().describe("New user story"),
+    keyRequirements: z.array(z.string()).optional().describe("Key requirements array"),
+    filesToChange: z.array(z.string()).optional().describe("Files to change array"),
+    testing: z.array(z.string()).optional().describe("Testing criteria array")
+  },
+  async ({ itemId, title, description, story, keyRequirements, filesToChange, testing }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const updates: any = {};
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    if (story !== undefined) updates.story = story;
+    if (keyRequirements !== undefined) updates.keyRequirements = keyRequirements;
+    if (filesToChange !== undefined) updates.filesToChange = filesToChange;
+    if (testing !== undefined) updates.testing = testing;
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: "❌ At least one field required: title, description, story, keyRequirements, filesToChange, testing"
+        }]
+      };
+    }
+
+    const response = await api.editItem(repoPath, itemId, updates);
+
+    if (!response.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${response.error}`
+        }]
+      };
+    }
+
+    const updatedFields = Object.keys(updates).join(', ');
+    return {
+      content: [{
+        type: "text",
+        text: `✅ Updated ${itemId}\n   Fields: ${updatedFields}`
       }]
     };
   }

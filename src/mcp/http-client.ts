@@ -238,6 +238,21 @@ export async function checkItemTbc(repoPath: string, item: string) {
   return request('GET', '/api/spec/check-tbc', undefined, { repoPath, item });
 }
 
+export async function editItem(
+  repoPath: string,
+  itemId: string,
+  updates: {
+    title?: string;
+    description?: string;
+    story?: string;
+    keyRequirements?: string[];
+    filesToChange?: string[];
+    testing?: string[];
+  }
+) {
+  return request('POST', '/api/spec/edit', { repoPath, itemId, ...updates });
+}
+
 // ============================================
 // Quick Wins API
 // ============================================
