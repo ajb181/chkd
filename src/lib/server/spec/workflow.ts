@@ -8,80 +8,67 @@
 import type { WorkflowStep } from '$lib/types';
 
 /**
- * Default workflow steps for new features with nested checkpoint children
+ * Streamlined workflow steps for new features (11 checkpoints)
  *
- * Philosophy: 
+ * Philosophy:
  * - Get user feedback BEFORE investing in real implementation
- * - Each phase has fixed sub-tasks that force human+AI checkpoints
- * - Works for FE, BE, or full-stack via "Assess" checkpoints
+ * - Minimal checkpoints that enforce human+AI collaboration
+ * - FE/SD: 11 checkpoints, BE: 9 checkpoints (no Prototype)
  */
 export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   {
-    task: 'Explore: research problem, check existing code/patterns & files',
+    task: 'Explore: research problem and existing code',
     children: [
-      'Research: investigate codebase, problem space, and any discovery docs',
-      'Reuse: identify existing functions/patterns to extend rather than build from scratch',
-      'Questions: consider if clarification needed - ask user if unclear',
-      'Share: inform user of findings before continuing'
+      'Research: investigate codebase, find reusable patterns',
+      'Share: discuss findings with user, clarify if unclear'
     ]
   },
   {
-    task: 'Design: plan approach + define endpoint contracts',
+    task: 'Design: plan the approach',
     children: [
-      'Reference: check wireframes, style guide, or similar elements for styling reference',
-      'Draft: create initial design/approach',
-      'Review: show user, iterate if needed'
+      'Draft: create approach (reference existing patterns)',
+      'Review: show user, get approval to proceed'
     ]
   },
   {
-    task: 'Prototype: build UI with mock data (if applicable)',
+    task: 'Prototype: define contracts and build UI',
     children: [
-      'Assess: does this task involve UI? If pure backend, note "N/A" and continue',
-      'Contract: define API/function signatures and data structures (the mock is the spec)',
-      'Build: create UI using those contracts with mock data',
-      'Test: verify UI renders correctly, all states work',
-      'Demo: show user, get feedback before building backend'
+      'Contract: define API/function signatures',
+      'Build: create UI with mock data, verify it works'
     ]
   },
   {
-    task: 'Wire-up: implement backend and connect',
+    task: 'Implement: build and test',
     children: [
-      'Assess: backend needed? If frontend-only, note "N/A" and continue',
-      'Implement: build backend to match the contracts defined in Prototype',
-      'Connect: replace mocks with real calls',
-      'Verify: test end-to-end flow'
+      'Build: implement the feature/fix',
+      'Test: verify, run tests, demo to user, iterate if needed'
     ]
   },
   {
-    task: 'Feedback: user tests the real working feature',
+    task: 'Polish: assess code quality',
     children: [
-      'Demo: show user the working feature end-to-end',
-      'Iterate: make changes based on feedback'
+      'Score: scan code touched, rate quality, flag hacky/weird bits needing further testing'
     ]
   },
   {
-    task: 'Polish: error states, edge cases, second-order effects',
+    task: 'Finish: commit and document',
     children: [
-      'Consider: wider impact, what else could this affect',
-      'Tests: run ALL existing tests. If any fail: show user EXACT failure output, get approval before changing ANY test. Never rewrite a test just to make it pass',
-      'Review: inspect the work thoroughly',
-      'Confirm: verify against discovery assumptions if any, show user findings, get approval'
-    ]
-  },
-  {
-    task: 'Document: update docs, guides, and CLAUDE.md if needed',
-    children: [
-      'Write: update relevant documentation',
-      'Review: confirm docs match implementation'
-    ]
-  },
-  {
-    task: 'Commit: commit code to git with descriptive message',
-    children: [
-      'Stage: review changes, stage files',
-      'Commit: summary line (what), body (why + assumptions), push to remote'
+      'Commit: stage, commit, push',
+      'Document: create/update documentation and guides if required'
     ]
   }
+];
+
+/**
+ * Backend workflow (9 checkpoints) - skips Prototype phase
+ */
+export const BE_WORKFLOW_STEPS: WorkflowStep[] = [
+  DEFAULT_WORKFLOW_STEPS[0], // Explore
+  DEFAULT_WORKFLOW_STEPS[1], // Design
+  // Skip Prototype (index 2)
+  DEFAULT_WORKFLOW_STEPS[3], // Implement
+  DEFAULT_WORKFLOW_STEPS[4], // Polish
+  DEFAULT_WORKFLOW_STEPS[5], // Finish
 ];
 
 // Shorter workflows for specific task types
@@ -200,13 +187,16 @@ export const QUICKWIN_WORKFLOW: WorkflowStep[] = [
 /** Valid workflow types */
 export type WorkflowType = 'remove' | 'refactor' | 'audit' | 'quickwin';
 
-/** Get workflow steps by type - default handles FE/BE/full-stack via Assess checkpoints */
-export function getWorkflowByType(type?: string, _areaCode?: string): WorkflowStep[] {
+/** Get workflow steps by type and area code */
+export function getWorkflowByType(type?: string, areaCode?: string): WorkflowStep[] {
   switch (type) {
     case 'remove': return REMOVE_WORKFLOW;
     case 'refactor': return REFACTOR_WORKFLOW;
     case 'audit': return AUDIT_WORKFLOW;
     case 'quickwin': return QUICKWIN_WORKFLOW;
-    default: return DEFAULT_WORKFLOW_STEPS;
+    default:
+      // BE tasks skip Prototype phase
+      if (areaCode === 'BE') return BE_WORKFLOW_STEPS;
+      return DEFAULT_WORKFLOW_STEPS;
   }
 }
