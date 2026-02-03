@@ -240,7 +240,7 @@ export interface ConflictInfo {
 
 export type ItemStatus = 'open' | 'in-progress' | 'done' | 'skipped' | 'blocked';
 export type ItemPriority = 'low' | 'medium' | 'high' | 'critical';
-export type AreaCode = 'SD' | 'FE' | 'BE' | 'FUT';
+export type AreaCode = 'SD' | 'FE' | 'BE' | 'FUT' | 'BUG';
 
 export interface SpecItem {
   id: string;                       // UUID

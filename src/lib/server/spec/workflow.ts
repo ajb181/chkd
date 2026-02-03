@@ -71,6 +71,39 @@ export const BE_WORKFLOW_STEPS: WorkflowStep[] = [
   DEFAULT_WORKFLOW_STEPS[5], // Finish
 ];
 
+/**
+ * Bug/Debug workflow (7 checkpoints) - focused on investigation and fix
+ */
+export const BUG_WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    task: 'Investigate: understand and reproduce the bug',
+    children: [
+      'Reproduce: replicate the bug, document exact steps to trigger it',
+      'Root cause: find why it happens (logs, stack traces, bisect)'
+    ]
+  },
+  {
+    task: 'Fix: implement the solution',
+    children: [
+      'Implement: fix the root cause',
+      'Test: check fix works, look for regressions'
+    ]
+  },
+  {
+    task: 'Check: ensure fix is solid',
+    children: [
+      'Validate: run tests, check for side effects'
+    ]
+  },
+  {
+    task: 'Finish: commit and document',
+    children: [
+      'Commit: stage, commit with bug reference',
+      'Document: update docs if behavior changed'
+    ]
+  }
+];
+
 // Shorter workflows for specific task types
 
 /** Remove workflow: Explore → Wire-up → Commit (deletion tasks) */
@@ -195,8 +228,9 @@ export function getWorkflowByType(type?: string, areaCode?: string): WorkflowSte
     case 'audit': return AUDIT_WORKFLOW;
     case 'quickwin': return QUICKWIN_WORKFLOW;
     default:
-      // BE tasks skip Prototype phase
+      // Area-specific workflows
       if (areaCode === 'BE') return BE_WORKFLOW_STEPS;
+      if (areaCode === 'BUG') return BUG_WORKFLOW_STEPS;
       return DEFAULT_WORKFLOW_STEPS;
   }
 }

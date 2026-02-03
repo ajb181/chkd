@@ -255,8 +255,17 @@ function getWorkingGuidance(ctx: TypeAreaContext): string[] {
     case 'SD':
       guidance.push(`📐 SYSTEM DESIGN: Think architecture. Consider scale, failure modes, edge cases.`);
       break;
+    case 'BUG':
+      guidance.push(`🐛 DEBUG MODE — You are an expert debugger. Slow down.`);
+      guidance.push(``);
+      guidance.push(`• Don't rush to solutions — understand the problem first`);
+      guidance.push(`• If 1st/2nd attempt fails → web search, ask user for help`);
+      guidance.push(`• Ask user to help debug — they know the codebase`);
+      guidance.push(`• Collaborate on testing — you don't need to do it all`);
+      guidance.push(`• Share your hypothesis before implementing fixes`);
+      break;
   }
-  
+
   return guidance;
 }
 

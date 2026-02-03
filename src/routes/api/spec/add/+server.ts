@@ -78,12 +78,13 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Validate area code
-    const validAreas: AreaCode[] = ['SD', 'FE', 'BE', 'FUT'];
+    const validAreas: AreaCode[] = ['SD', 'FE', 'BE', 'FUT', 'BUG'];
     const areaNames: Record<string, string> = {
       'SD': 'Site Design',
       'FE': 'Frontend',
       'BE': 'Backend',
-      'FUT': 'Future Areas'
+      'FUT': 'Future Areas',
+      'BUG': 'Bug/Debug'
     };
 
     if (!validAreas.includes(areaCode as AreaCode)) {
@@ -182,32 +183,25 @@ export const POST: RequestHandler = async ({ request }) => {
       priority: 'medium'
     });
 
-    // Create workflow sub-tasks with nested children (ALWAYS - no bypass)
-    // This is the core of chkd: every task gets the full workflow with checkpoints
+    // Create workflow checkpoints FLAT under parent (no middle generation)
+    // Structure: FE.19 -> FE.19.1.1, FE.19.1.2, FE.19.2.1, etc.
+    // The .X.Y numbering shows phase grouping but all are direct children
+    let sortOrder = 0;
     workflowSteps.forEach((step, stepIndex: number) => {
-        const stepItem = createItem({
-          repoId: repo.id,
-          displayId: `${displayId}.${stepIndex + 1}`,
-          title: step.task,
-          areaCode: areaCode as any,
-          sectionNumber,
-          parentId: newItem.id,
-          sortOrder: stepIndex,
-          status: 'open',
-          priority: 'medium'
-        });
-
-        // Create children as nested checkpoints (MANDATORY)
+        // Skip creating the phase item (FE.19.1, FE.19.2) - just create checkpoints
         if (step.children && step.children.length > 0) {
           step.children.forEach((childTitle: string, childIndex: number) => {
+            // Prefix with phase name for context: "Explore: investigate codebase"
+            const phasePrefix = step.task.split(':')[0]; // "Explore" from "Explore: research..."
+            const fullChildTitle = `${phasePrefix}: ${childTitle}`;
             createItem({
               repoId: repo.id,
               displayId: `${displayId}.${stepIndex + 1}.${childIndex + 1}`,
-              title: childTitle,
+              title: fullChildTitle,
               areaCode: areaCode as any,
               sectionNumber,
-              parentId: stepItem.id,
-              sortOrder: childIndex,
+              parentId: newItem.id,  // All children directly under parent
+              sortOrder: sortOrder++,
               status: 'open',
               priority: 'medium'
             });
@@ -215,10 +209,8 @@ export const POST: RequestHandler = async ({ request }) => {
         }
       });
 
-    // Calculate total items created (steps + their children)
-    const totalSteps = workflowSteps.length;
-    const totalChildren = workflowSteps.reduce((sum, step) => sum + (step.children?.length || 0), 0);
-    const totalCreated = totalSteps + totalChildren;
+    // Calculate total checkpoints created (flat list)
+    const totalCheckpoints = workflowSteps.reduce((sum, step) => sum + (step.children?.length || 0), 0);
 
     return json({
       success: true,
@@ -229,14 +221,14 @@ export const POST: RequestHandler = async ({ request }) => {
         areaName: area.name,
         title: fullTitle,
         description: description || null,
-        workflow: workflowSteps.map(s => ({
-          step: s.task,
-          checkpoints: s.children || []
-        })),
-        stepCount: totalSteps,
-        checkpointCount: totalChildren,
-        totalItemsCreated: totalCreated,
-        message: `Added "${title}" to ${area.name} with ${totalSteps} steps and ${totalChildren} checkpoints`
+        checkpoints: workflowSteps.flatMap((s, stepIdx) =>
+          (s.children || []).map((c, childIdx) => ({
+            displayId: `${displayId}.${stepIdx + 1}.${childIdx + 1}`,
+            title: `${s.task.split(':')[0]}: ${c}`
+          }))
+        ),
+        checkpointCount: totalCheckpoints,
+        message: `Added "${title}" to ${area.name} with ${totalCheckpoints} checkpoints`
       },
       warnings: warnings.length > 0 ? warnings : undefined
     });
