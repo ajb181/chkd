@@ -963,6 +963,18 @@ server.tool(
             const marker = idx === 0 ? '▶' : '○';
             text += `\n  ${marker} ${child.displayId} ${child.title}`;
           });
+
+          // Emit TaskCreate prompts for Claude's native task system
+          text += `\n\n🔧 ADD TO YOUR TASK LIST:`;
+          text += `\nUse TaskCreate to track these checkpoints:`;
+          incomplete.forEach((child: any) => {
+            // Short description for task
+            const shortTitle = child.title.length > 60
+              ? child.title.substring(0, 57) + '...'
+              : child.title;
+            text += `\n  → TaskCreate("${shortTitle}")`;
+          });
+          text += `\n\nThen work through them. Use tick("ID") as you complete each.`;
         }
       } else {
         // Leaf checkpoint - show working state
