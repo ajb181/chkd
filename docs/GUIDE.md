@@ -214,19 +214,97 @@ FE.1 Login page
 | `default` | 8 steps | Normal features |
 | `quickwin` | 5 steps | Small fixes (<30 min) |
 | `refactor` | 7 steps | Code cleanup (no behavior change) |
-| `debug` | 6 steps | Bug investigation |
+| `debug` | 8 steps | Bug investigation with root cause analysis |
 | `audit` | 5 steps | Investigation only |
 | `remove` | 5 steps | Deleting code |
 
 ---
 
+## How-To: Common Scenarios
+
+### Found a bug while working on something else?
+
+**Simple fix?** Log as quick win:
+
+```
+CreateQuickWin(
+  title="Fix typo in error message",
+  files="src/auth/login.ts",
+  test="Error shows 'Invalid email' not 'Invlaid email'"
+)
+```
+
+**Needs investigation?** Use bug workflow:
+
+```
+CreateBug(
+  title="Login crashes with empty email",
+  reproduce="Click login without entering email",
+  files="src/auth/login.ts",
+  expected="Should show validation error, not crash"
+)
+```
+
+Then continue your current task. Fix later with `working("BUG.X")` or `working("FUT.X")`.
+
+### Want to refactor something you see?
+
+Same pattern - log it, don't do it now:
+
+```
+CreateQuickWin(
+  title="Refactor duplicate validation logic",
+  files="src/forms/signup.ts, src/forms/profile.ts",
+  test="Both forms still validate correctly"
+)
+```
+
+### Small fix that's blocking your current work?
+
+If it's truly blocking (can't proceed without fixing):
+
+```
+CreateQuickWin(title="Fix import path", files="src/index.ts", test="Build passes")
+working("FUT.1")  # Start the quick win
+# Fix it
+tick("Scope")
+tick("Align")
+# etc...
+```
+
+Then return to your original task.
+
+### Need to add a subtask to your current work?
+
+While working on FE.1:
+
+```
+add_task("Handle edge case for empty arrays")
+```
+
+This adds FE.1.9 (or next number) under your current item.
+
+### Want to note something for later?
+
+Quick wins are your scratch pad:
+
+```
+CreateQuickWin(
+  title="Consider caching API responses",
+  files="src/api/client.ts",
+  test="Measure response times before/after"
+)
+```
+
+---
+
 ## Staying Focused
 
-When working on a task:
+The pattern is always the same:
 
-1. **Small fix?** → `CreateQuickWin()` then continue
-2. **Want to refactor?** → Log it, don't do it now
-3. **Something seems off?** → Note it, stay on track
+1. **See something?** → `CreateQuickWin()` to log it
+2. **Stay on task** → Continue what you were doing
+3. **Fix later** → Use `ListQuickWins()` when ready
 
 Quick wins exist so nothing gets lost. Fix them later.
 

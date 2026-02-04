@@ -378,170 +378,62 @@ const server = new McpServer({
 // TOOLS
 // ============================================
 
-// sync - Register project and sync files from templates
+// sync - Register project and sync files from templates (delegates to API)
 server.tool(
   "sync",
-  "Register project with chkd and sync files from templates. Updates chkd section in CLAUDE.md (preserves your content), overwrites docs/ files.",
+  "Register project with chkd and sync files from templates. Updates CLAUDE.md, docs/, and skills/.",
   {},
   async () => {
     const repoPath = getRepoPath();
     const projectName = path.basename(repoPath);
-    const templatesDir = path.join(path.dirname(new URL(import.meta.url).pathname), '../../templates');
-    
-    let text = `🔄 SYNC: ${projectName}\n`;
-    text += `═══════════════════════════════════════\n\n`;
-    
-    // 1. Check/register project
-    const repoResponse = await api.getRepoByPath(repoPath);
-    
-    if (!repoResponse.success) {
-      return {
-        content: [{
-          type: "text",
-          text: `❌ Cannot connect to chkd server.\n\n${repoResponse.error}\n${repoResponse.hint || ''}`
-        }]
-      };
-    }
-    
-    if (!repoResponse.repo) {
-      const createResponse = await api.createRepo(repoPath, projectName);
-      if (!createResponse.success) {
+
+    // Call the API endpoint which has the canonical sync logic
+    try {
+      const response = await fetch(`${HTTP_BASE}/api/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoPath })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
         return {
           content: [{
             type: "text",
-            text: `❌ Failed to register project: ${createResponse.error}`
+            text: `❌ Sync failed: ${result.error}`
           }]
         };
       }
-      text += `✅ Project registered\n`;
-    } else {
-      text += `✓ Project registered\n`;
-    }
-    
-    // 2. CLAUDE.md - merge chkd section or create new
-    const claudePath = path.join(repoPath, 'CLAUDE.md');
-    const sectionPath = path.join(templatesDir, 'CLAUDE-chkd-section.md');
-    const fullTemplatePath = path.join(templatesDir, 'CLAUDE.md.template');
-    
-    try {
-      const chkdSection = fs.readFileSync(sectionPath, 'utf-8');
-      let claudeExists = false;
-      let existingContent = '';
-      
-      try {
-        existingContent = fs.readFileSync(claudePath, 'utf-8');
-        claudeExists = true;
-      } catch {}
-      
-      if (claudeExists) {
-        // Merge: replace section between markers, or append if no markers
-        const startMarker = '<!-- chkd:start -->';
-        const endMarker = '<!-- chkd:end -->';
-        
-        if (existingContent.includes(startMarker) && existingContent.includes(endMarker)) {
-          // Replace existing section
-          const before = existingContent.substring(0, existingContent.indexOf(startMarker));
-          const after = existingContent.substring(existingContent.indexOf(endMarker) + endMarker.length);
-          const newContent = before + chkdSection + after;
-          fs.writeFileSync(claudePath, newContent);
-          text += `✅ CLAUDE.md chkd section updated\n`;
-        } else {
-          // Append section at the top (after title if present)
-          const lines = existingContent.split('\n');
-          let insertIndex = 0;
-          
-          // Skip past the title and any immediate blank lines
-          if (lines[0]?.startsWith('# ')) {
-            insertIndex = 1;
-            while (insertIndex < lines.length && lines[insertIndex].trim() === '') {
-              insertIndex++;
-            }
-          }
-          
-          lines.splice(insertIndex, 0, '', chkdSection, '');
-          fs.writeFileSync(claudePath, lines.join('\n'));
-          text += `✅ CLAUDE.md chkd section added\n`;
-        }
-      } else {
-        // Create new from full template
-        let template = fs.readFileSync(fullTemplatePath, 'utf-8');
-        template = template.replace(/\{\{PROJECT_NAME\}\}/g, projectName);
-        fs.writeFileSync(claudePath, template);
-        text += `✅ CLAUDE.md created\n`;
+
+      let text = `🔄 SYNC: ${projectName}\n`;
+      text += `═══════════════════════════════════════\n\n`;
+
+      // Show results from API
+      if (result.data?.results) {
+        result.data.results.forEach((r: string) => {
+          text += `${r}\n`;
+        });
       }
-    } catch (err) {
-      text += `⚠️ CLAUDE.md error: ${err}\n`;
-    }
-    
-    // 3. docs/ files - copy/overwrite from templates
-    const docsPath = path.join(repoPath, 'docs');
-    const templateDocsPath = path.join(templatesDir, 'docs');
-    
-    try {
-      fs.mkdirSync(docsPath, { recursive: true });
-      
-      // Copy each file from templates/docs/
-      const copyFile = (src: string, dest: string) => {
-        try {
-          const content = fs.readFileSync(src, 'utf-8');
-          fs.writeFileSync(dest, content);
-          return true;
-        } catch {
-          return false;
-        }
+
+      text += `\n───────────────────────────────────────\n`;
+      text += `✅ Sync complete!\n\n`;
+      text += `Next: status() to see current state\n`;
+
+      return {
+        content: [{
+          type: "text",
+          text
+        }]
       };
-      
-      const docFiles = ['GUIDE.md', 'PHILOSOPHY.md', 'FILING.md'];
-      let copiedCount = 0;
-      
-      for (const file of docFiles) {
-        const src = path.join(templateDocsPath, file);
-        const dest = path.join(docsPath, file);
-        if (copyFile(src, dest)) {
-          copiedCount++;
-        }
-      }
-      
-      text += `✅ docs/ synced (${copiedCount} files)\n`;
-    } catch (err) {
-      text += `⚠️ docs/ error: ${err}\n`;
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Cannot connect to chkd server.\n\nMake sure the web server is running (npm run dev or npm run stable)`
+        }]
+      };
     }
-    
-    // 4. Update .gitignore to exclude chkd-managed files
-    const gitignorePath = path.join(repoPath, '.gitignore');
-    const chkdIgnoreBlock = `
-# chkd managed files (synced from templates, not committed)
-CLAUDE.md
-docs/GUIDE.md
-docs/PHILOSOPHY.md
-docs/FILING.md`;
-    
-    try {
-      let gitignoreContent = '';
-      try {
-        gitignoreContent = fs.readFileSync(gitignorePath, 'utf-8');
-      } catch {}
-      
-      if (!gitignoreContent.includes('# chkd managed files')) {
-        fs.appendFileSync(gitignorePath, chkdIgnoreBlock + '\n');
-        text += `✅ .gitignore updated\n`;
-      } else {
-        text += `✓ .gitignore already configured\n`;
-      }
-    } catch (err) {
-      text += `⚠️ .gitignore error: ${err}\n`;
-    }
-    
-    text += `\n───────────────────────────────────────\n`;
-    text += `✅ Sync complete!\n\n`;
-    text += `Next: status() to see current state\n`;
-    
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
   }
 );
 
@@ -965,16 +857,23 @@ server.tool(
           });
 
           // Emit TaskCreate prompts for Claude's native task system
-          text += `\n\n🔧 ADD TO YOUR TASK LIST:`;
-          text += `\nUse TaskCreate to track these checkpoints:`;
+          text += `\n\n⚠️ REQUIRED: Create tasks NOW before proceeding.`;
+          text += `\n\nCall TaskCreate for each checkpoint:`;
           incomplete.forEach((child: any) => {
-            // Short description for task
-            const shortTitle = child.title.length > 60
-              ? child.title.substring(0, 57) + '...'
-              : child.title;
-            text += `\n  → TaskCreate("${shortTitle}")`;
+            // Generate activeForm from title (present continuous)
+            const titlePart = child.title.split(': ').slice(1).join(': ') || child.title;
+            const activeForm = titlePart.length > 30
+              ? titlePart.substring(0, 27) + '...'
+              : titlePart;
+            text += `\n`;
+            text += `\nTaskCreate({`;
+            text += `\n  subject: "${child.displayId} ${child.title.substring(0, 50)}${child.title.length > 50 ? '...' : ''}",`;
+            text += `\n  description: "${child.title}",`;
+            text += `\n  activeForm: "${activeForm}"`;
+            text += `\n})`;
           });
-          text += `\n\nThen work through them. Use tick("ID") as you complete each.`;
+          text += `\n\n👆 Create ALL of these tasks NOW. Then work through them.`;
+          text += `\nUse tick("${foundItem.displayId}.X.Y") as you complete each checkpoint.`;
         }
       } else {
         // Leaf checkpoint - show working state
@@ -1402,7 +1301,110 @@ server.tool(
     return {
       content: [{
         type: "text",
-        text: `⚡ Quick win created: ${result.data.sectionId} ${title}\n📁 Files: ${filesToChange.join(', ')}\n✓ Test: ${test}\n📋 Workflow: Scope → Align → Fix → Verify → Commit\n💡 Start: chkd_start("${result.data.sectionId}")`
+        text: `⚡ Quick win created: ${result.data.sectionId} ${title}\n📁 Files: ${filesToChange.join(', ')}\n✓ Test: ${test}\n📋 Workflow: Scope → Align → Fix → Verify → Commit\n💡 Start: working("${result.data.sectionId}")`
+      }]
+    };
+  }
+);
+
+// bug - Add bug for debugging
+server.tool(
+  "CreateBug",
+  "Add a bug for investigation. Creates a BUG task with 8-checkpoint debug workflow: Investigate → Fix → Review → Finish.",
+  {
+    title: z.string().describe("Bug title (e.g., 'Null check missing in login handler')"),
+    reproduce: z.string().describe("How to reproduce the bug"),
+    files: z.string().describe("File(s) affected (comma-separated)"),
+    expected: z.string().describe("What should happen instead")
+  },
+  async ({ title, reproduce, files, expected }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const filesToChange = files.split(',').map(f => f.trim()).filter(Boolean);
+    if (filesToChange.length === 0) {
+      return { content: [{ type: "text", text: "❌ files cannot be empty" }] };
+    }
+
+    const response = await fetch(`${HTTP_BASE}/api/spec/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repoPath,
+        title,
+        areaCode: 'BUG',
+        keyRequirements: [reproduce],
+        filesToChange,
+        testing: [expected]
+      })
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+      return { content: [{ type: "text", text: `❌ ${result.error}` }] };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `🐛 Bug created: ${result.data.sectionId} ${title}\n📁 Files: ${filesToChange.join(', ')}\n✓ Expected: ${expected}\n📋 Workflow: Investigate → Fix → Review → Finish\n💡 Start: working("${result.data.sectionId}")`
+      }]
+    };
+  }
+);
+
+// bugs - List bugs
+server.tool(
+  "ListBugs",
+  "List all bugs (BUG area tasks).",
+  {},
+  async () => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const response = await fetch(`${HTTP_BASE}/api/spec/items?repoPath=${encodeURIComponent(repoPath)}`);
+    const result = await response.json();
+    const allItems = result.data || [];
+
+    // Filter to BUG items - only top-level items
+    const bugs = allItems.filter((b: any) => b.areaCode === 'BUG' && !b.parentId);
+    const pending = bugs.filter((b: any) => b.status === 'open' || b.status === 'in-progress');
+    const completed = bugs.filter((b: any) => b.status === 'done');
+
+    if (bugs.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: `📝 No bugs logged yet\n\n💡 Add one with CreateBug(title, reproduce, files, expected)`
+        }]
+      };
+    }
+
+    let text = `🐛 Bugs\n`;
+    text += `═══════════════════════════════════════\n\n`;
+
+    if (pending.length > 0) {
+      text += `⬜ PENDING (${pending.length}):\n`;
+      pending.forEach((b: any) => {
+        const status = b.status === 'in-progress' ? '◐' : '○';
+        const title = b.title.replace(/^BUG\.\d+\s*/, '');
+        text += `  ${status} ${b.displayId} ${title}\n`;
+      });
+      text += `\n`;
+    }
+
+    if (completed.length > 0) {
+      text += `✅ FIXED (${completed.length}):\n`;
+      completed.forEach((b: any) => {
+        const title = b.title.replace(/^BUG\.\d+\s*/, '');
+        text += `  ✓ ${b.displayId} ${title}\n`;
+      });
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text
       }]
     };
   }
@@ -1561,7 +1563,8 @@ server.tool(
       pending.forEach((i: any) => {
         const statusIcon = i.status === 'in-progress' ? '◐' : '○';
         const typeTag = i.workflowType ? ` [${i.workflowType}]` : '';
-        text += `  ${statusIcon} ${i.displayId} ${i.title.replace(/^[A-Z]+\.\d+\s*/, '')}${typeTag}\n`;
+        const tagsStr = i.tags && i.tags.length > 0 ? ` #${i.tags.join(' #')}` : '';
+        text += `  ${statusIcon} ${i.displayId} ${i.title.replace(/^[A-Z]+\.\d+\s*/, '')}${typeTag}${tagsStr}\n`;
       });
       text += `\n`;
     }
@@ -1569,7 +1572,8 @@ server.tool(
     if (completed.length > 0 && !status) {
       text += `✅ COMPLETED (${completed.length}):\n`;
       completed.slice(0, 5).forEach((i: any) => {
-        text += `  ✓ ${i.displayId} ${i.title.replace(/^[A-Z]+\.\d+\s*/, '')}\n`;
+        const tagsStr = i.tags && i.tags.length > 0 ? ` #${i.tags.join(' #')}` : '';
+        text += `  ✓ ${i.displayId} ${i.title.replace(/^[A-Z]+\.\d+\s*/, '')}${tagsStr}\n`;
       });
       if (completed.length > 5) {
         text += `  ... and ${completed.length - 5} more\n`;
@@ -2550,7 +2554,197 @@ server.resource(
 );
 
 // ============================================
-// SPEC MAINTENANCE TOOLS
+// GOVERNANCE TOOLS
+// ============================================
+
+// Minimum characters for a meaningful justification reason
+const MIN_JUSTIFY_REASON_LENGTH = 20;
+
+// Helper to log decisions to .chkd/decisions.json
+function logDecision(repoPath: string, decision: Record<string, any>): { success: boolean; error?: string } {
+  try {
+    const chkdDir = path.join(repoPath, '.chkd');
+    const decisionsFile = path.join(chkdDir, 'decisions.json');
+
+    // Ensure .chkd directory exists
+    if (!fs.existsSync(chkdDir)) {
+      fs.mkdirSync(chkdDir, { recursive: true });
+    }
+
+    // Append as JSONL
+    const entry = JSON.stringify({ ts: new Date().toISOString(), ...decision }) + '\n';
+    fs.appendFileSync(decisionsFile, entry);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// assume - Surface assumptions explicitly
+server.tool(
+  "assume",
+  "Surface an assumption you're making. Creates audit trail. Use when uncertain about requirements, APIs, or behavior.",
+  {
+    assumption: z.string().describe("The assumption you're making"),
+    confidence: z.enum(['low', 'medium', 'high']).describe("How confident are you?"),
+    evidence: z.string().describe("Why is this assumption reasonable?"),
+    impact: z.string().describe("What breaks if this assumption is wrong?")
+  },
+  async ({ assumption, confidence, evidence, impact }) => {
+    const repoPath = getRepoPath();
+
+    // Log to decisions.json
+    logDecision(repoPath, {
+      type: 'assume',
+      assumption,
+      confidence,
+      evidence,
+      impact
+    });
+
+    let text = '';
+
+    if (confidence === 'low') {
+      text += `🚨 LOW CONFIDENCE ASSUMPTION:\n`;
+      text += `"${assumption}"\n\n`;
+      text += `Evidence: ${evidence}\n`;
+      text += `Impact if wrong: ${impact}\n\n`;
+      text += `⚠️ Consider asking user before proceeding.\n`;
+      text += `Logged to .chkd/decisions.json`;
+    } else if (confidence === 'medium') {
+      text += `⚠️ Assumption logged (${confidence} confidence):\n`;
+      text += `"${assumption}"\n\n`;
+      text += `Evidence: ${evidence}\n`;
+      text += `Impact if wrong: ${impact}\n\n`;
+      text += `Consider confirming with user if critical path.\n`;
+      text += `Logged to .chkd/decisions.json`;
+    } else {
+      text += `✓ Assumption logged (${confidence} confidence):\n`;
+      text += `"${assumption}"\n\n`;
+      text += `Evidence: ${evidence}\n`;
+      text += `Impact if wrong: ${impact}\n`;
+      text += `Logged to .chkd/decisions.json`;
+    }
+
+    return { content: [{ type: "text", text }] };
+  }
+);
+
+// justify - Document why you're creating something new instead of reusing
+server.tool(
+  "justify",
+  "Document why you're creating new code instead of reusing existing. Use before creating any new function, component, type, or file.",
+  {
+    createType: z.enum(['function', 'component', 'type', 'constant', 'file', 'hook', 'utility']).describe("What type of thing are you creating?"),
+    name: z.string().describe("Name of the thing you're creating"),
+    searched: z.array(z.string()).describe("What search terms did you use to find existing code?"),
+    found: z.array(z.string()).describe("What similar things did you find? (empty if none)"),
+    inUse: z.boolean().optional().describe("Are the found items actually in use in the codebase?"),
+    reason: z.string().describe("Why create new instead of reusing found items?")
+  },
+  async ({ createType, name, searched, found, inUse, reason }) => {
+    const repoPath = getRepoPath();
+
+    // Log to decisions.json
+    logDecision(repoPath, {
+      type: 'justify',
+      createType,
+      name,
+      searched,
+      found,
+      inUse,
+      reason
+    });
+
+    const warnings: string[] = [];
+
+    // Check for weak justification
+    if (searched.length < 3) {
+      warnings.push(`Search seems narrow (${searched.length} terms). Consider broader search.`);
+    }
+
+    if (found.length > 0 && inUse === false) {
+      warnings.push(`Found existing code that's not in use. Consider reviving instead of creating new.`);
+    }
+
+    if (reason.length < MIN_JUSTIFY_REASON_LENGTH) {
+      warnings.push(`Reason is brief (${reason.length} chars). Be more specific about why reuse isn't viable.`);
+    }
+
+    let text = `✓ Justified: ${createType} ${name}\n`;
+    text += `  Searched: ${searched.join(', ')}\n`;
+    text += `  Found: ${found.length > 0 ? found.join(', ') + (inUse ? ' (in use)' : ' (not in use)') : 'none'}\n`;
+    text += `  Reason: ${reason}\n`;
+
+    if (warnings.length > 0) {
+      text += `\n⚠️ Warnings:\n`;
+      warnings.forEach(w => text += `  • ${w}\n`);
+    }
+
+    text += `\nLogged to .chkd/decisions.json`;
+
+    return { content: [{ type: "text", text }] };
+  }
+);
+
+// decisions - View logged decisions
+server.tool(
+  "decisions",
+  "View logged decisions (assumptions, justifications, reviews) from this session.",
+  {
+    type: z.enum(['all', 'assume', 'justify', 'review']).optional().describe("Filter by decision type"),
+    limit: z.number().optional().describe("Max entries to show (default 10)")
+  },
+  async ({ type, limit = 10 }) => {
+    const repoPath = getRepoPath();
+    const decisionsFile = path.join(repoPath, '.chkd', 'decisions.json');
+
+    if (!fs.existsSync(decisionsFile)) {
+      return { content: [{ type: "text", text: "No decisions logged yet." }] };
+    }
+
+    const lines = fs.readFileSync(decisionsFile, 'utf-8').trim().split('\n').filter(Boolean);
+    let entries: Record<string, any>[] = [];
+
+    for (const line of lines) {
+      try {
+        entries.push(JSON.parse(line));
+      } catch {
+        // Skip malformed lines
+      }
+    }
+
+    // Filter by type
+    if (type && type !== 'all') {
+      entries = entries.filter(e => e.type === type);
+    }
+
+    // Take last N
+    entries = entries.slice(-limit);
+
+    if (entries.length === 0) {
+      return { content: [{ type: "text", text: `No ${type || ''} decisions found.` }] };
+    }
+
+    let text = `📋 Decisions (${entries.length}):\n\n`;
+
+    entries.forEach(e => {
+      const time = new Date(e.ts).toLocaleTimeString();
+      if (e.type === 'assume') {
+        const icon = e.confidence === 'low' ? '🚨' : e.confidence === 'medium' ? '⚠️' : '✓';
+        text += `${icon} [${time}] ASSUME (${e.confidence}): "${e.assumption}"\n`;
+      } else if (e.type === 'justify') {
+        text += `✓ [${time}] JUSTIFY: ${e.createType} ${e.name}\n`;
+      } else if (e.type === 'review') {
+        const approved = e.approved ? '✅' : '❌';
+        text += `${approved} [${time}] REVIEW: ${e.files?.join(', ') || 'unknown'}\n`;
+      }
+    });
+
+    return { content: [{ type: "text", text }] };
+  }
+);
+
 // ============================================
 // START SERVER
 // ============================================

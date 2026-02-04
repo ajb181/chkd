@@ -45,9 +45,9 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     ]
   },
   {
-    task: 'Polish: assess code quality',
+    task: 'Review: independent code review',
     children: [
-      'Score: scan code touched, rate quality, flag hacky/weird bits needing further testing'
+      'Review: run /review for sub-agent assessment, address any rating < 3'
     ]
   },
   {
@@ -72,7 +72,7 @@ export const BE_WORKFLOW_STEPS: WorkflowStep[] = [
 ];
 
 /**
- * Bug/Debug workflow (7 checkpoints) - focused on investigation and fix
+ * Bug/Debug workflow (8 checkpoints) - focused on investigation and fix
  */
 export const BUG_WORKFLOW_STEPS: WorkflowStep[] = [
   {
@@ -90,9 +90,10 @@ export const BUG_WORKFLOW_STEPS: WorkflowStep[] = [
     ]
   },
   {
-    task: 'Check: ensure fix is solid',
+    task: 'Review: ensure fix is solid',
     children: [
-      'Validate: run tests, check for side effects'
+      'Test: run tests, check for side effects',
+      'Review: run /review for independent assessment'
     ]
   },
   {
@@ -154,11 +155,10 @@ export const REFACTOR_WORKFLOW: WorkflowStep[] = [
     ]
   },
   {
-    task: 'Tests After: verify nothing broke',
+    task: 'Verify: ensure refactor is solid',
     children: [
-      'Run: ALL tests again (unit + e2e)',
-      'Verify: same behavior, all passing',
-      'Add: write new tests if coverage gaps found'
+      'Test: ALL tests again (unit + e2e), same behavior',
+      'Review: run /review for independent assessment'
     ]
   },
   {
@@ -202,10 +202,10 @@ export const QUICKWIN_WORKFLOW: WorkflowStep[] = [
     ]
   },
   {
-    task: 'Verify: show user, confirm they are happy',
+    task: 'Verify: review and confirm',
     children: [
-      'Demo: show user the fix',
-      'Confirm: user approves the result'
+      'Review: run /review for independent check',
+      'Demo: show user the fix, get approval'
     ]
   },
   {
