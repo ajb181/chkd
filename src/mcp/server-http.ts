@@ -642,6 +642,43 @@ server.tool(
   }
 );
 
+// ReviewDone - Log completed code review
+server.tool(
+  "ReviewDone",
+  "Log completed code review. Required before ticking main item as done.",
+  {
+    itemId: z.string().describe("Item ID (e.g., BE.45)"),
+    summary: z.string().describe("Review summary: what passed, any concerns addressed")
+  },
+  async ({ itemId, summary }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    // Ensure .chkd directory exists
+    const chkdDir = path.join(repoPath, '.chkd');
+    if (!fs.existsSync(chkdDir)) {
+      fs.mkdirSync(chkdDir, { recursive: true });
+    }
+
+    // Save to .chkd/review.log
+    const logEntry = {
+      itemId,
+      timestamp: new Date().toISOString(),
+      summary
+    };
+
+    const logPath = path.join(chkdDir, 'review.log');
+    fs.appendFileSync(logPath, JSON.stringify(logEntry) + '\n');
+
+    return {
+      content: [{
+        type: "text",
+        text: `✅ Review logged for ${itemId}\n\n${summary}\n\n💡 You can now tick("${itemId}") to complete all checkpoints.`
+      }]
+    };
+  }
+);
+
 // tick - Mark item complete
 server.tool(
   "tick",
@@ -667,6 +704,54 @@ server.tool(
       }
       // If not found, use the input as-is - the tick API will error if invalid
 
+      // Check if this is a parent item (e.g., BE.45 not BE.45.1.1)
+      const isParentItem = /^[A-Z]+\.\d+$/.test(item);
+
+      if (isParentItem) {
+        // Parent items require ReviewDone to be called first
+        const chkdDir = path.join(repoPath, '.chkd');
+        const logPath = path.join(chkdDir, 'review.log');
+
+        if (!fs.existsSync(logPath)) {
+          return {
+            content: [{
+              type: "text",
+              text: `❌ Cannot complete ${item}\n\n` +
+                    `REQUIRED: Run code review and call ReviewDone() first.\n\n` +
+                    `Steps:\n` +
+                    `1. Run: Skill("review")\n` +
+                    `2. Review the results with user, get approval\n` +
+                    `3. Call: ReviewDone("${item}", "Passed: [summary of review]")\n` +
+                    `4. Then: tick("${item}")\n\n` +
+                    `This ensures code quality before marking work complete.`
+            }]
+          };
+        }
+
+        // Check if THIS specific item was reviewed
+        const logs = fs.readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
+        const reviewed = logs.some(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.itemId === item;
+          } catch {
+            return false;
+          }
+        });
+
+        if (!reviewed) {
+          return {
+            content: [{
+              type: "text",
+              text: `❌ Cannot complete ${item}\n\n` +
+                    `No review found for this item.\n\n` +
+                    `Run: Skill("review")\n` +
+                    `Then: ReviewDone("${item}", "summary")`
+            }]
+          };
+        }
+      }
+
       const response = await api.tickItem(repoPath, item);
 
       if (!response.success) {
@@ -682,6 +767,11 @@ server.tool(
       const queue = queueResponse.data?.items || [];
 
       let text = `✅ Completed: ${fullTitle}`;
+
+      // If this was a parent item, all children were marked done
+      if (isParentItem) {
+        text += `\n\n🎉 All checkpoints marked complete!`;
+      }
 
       // Check if this was a Confirm step - remind about user approval
       const lowerTitle = fullTitle.toLowerCase();

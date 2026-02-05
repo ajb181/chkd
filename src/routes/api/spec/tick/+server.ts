@@ -32,25 +32,31 @@ export const POST: RequestHandler = async ({ request }) => {
     // Find the item
     let targetId = itemId;
     let targetTitle = '';
+    let targetDisplayId = '';
 
     if (!targetId && itemQuery) {
-      // Try to find item by query in DB
-      const dbItem = findItemByQuery(repo.id, itemQuery);
-      if (dbItem) {
-        targetId = dbItem.id;
-        targetTitle = dbItem.title;
-      } else {
-        // If not found and we have a current task, search its children
-        if (currentTaskId) {
-          const children = getChildren(currentTaskId);
-          const queryLower = itemQuery.toLowerCase();
-          for (const child of children) {
-            if (child.status !== 'done' && child.title.toLowerCase().includes(queryLower)) {
-              targetId = child.id;
-              targetTitle = child.title;
-              break;
-            }
+      // PRIORITY 1: If we have a current task, search its children FIRST
+      // This way "Explore" matches FE.19.1 when working on FE.19, not some other item
+      if (currentTaskId) {
+        const children = getChildren(currentTaskId);
+        const queryLower = itemQuery.toLowerCase();
+        for (const child of children) {
+          if (child.status !== 'done' && child.title.toLowerCase().includes(queryLower)) {
+            targetId = child.id;
+            targetTitle = child.title;
+            targetDisplayId = child.displayId;
+            break;
           }
+        }
+      }
+
+      // PRIORITY 2: If not found in children, search globally
+      if (!targetId) {
+        const dbItem = findItemByQuery(repo.id, itemQuery);
+        if (dbItem) {
+          targetId = dbItem.id;
+          targetTitle = dbItem.title;
+          targetDisplayId = dbItem.displayId;
         }
       }
     } else if (!targetId) {
@@ -89,28 +95,56 @@ export const POST: RequestHandler = async ({ request }) => {
 
     targetId = dbItem.id;
     if (!targetTitle) targetTitle = dbItem.title;
+    if (!targetDisplayId) targetDisplayId = dbItem.displayId;
 
     // Check if item is already complete
     if (dbItem.status === 'done') {
       const shortTitle = targetTitle.length > 40 ? targetTitle.slice(0, 40) + '...' : targetTitle;
       return json({
         success: false,
-        error: `Already complete: ${shortTitle}`,
+        error: `Already complete: ${targetDisplayId} "${shortTitle}"`,
         hint: 'Item is already done'
       }, { status: 400 });
     }
 
     // Check for incomplete children before allowing tick
     const children = getChildren(dbItem.id);
-    const incompleteChildren = children.filter(c => c.status !== 'done').map(c => c.title);
+    const incompleteChildren = children.filter(c => c.status !== 'done');
 
-    if (incompleteChildren.length > 0) {
-      return json({
-        success: false,
-        error: `Cannot complete - ${incompleteChildren.length} sub-item(s) still open`,
-        incompleteItems: incompleteChildren,
-        hint: 'Complete sub-items first, or use chkd done --force to skip'
-      }, { status: 400 });
+    // If this is a parent item with children, check for ReviewDone
+    if (!dbItem.parentId && incompleteChildren.length > 0) {
+      // Check if ReviewDone was called for this parent
+      const fs = await import('fs');
+      const path = await import('path');
+      const reviewLogPath = path.join(repoPath, '.chkd', 'review.log');
+
+      let reviewExists = false;
+      if (fs.existsSync(reviewLogPath)) {
+        const logs = fs.readFileSync(reviewLogPath, 'utf-8').trim().split('\n').filter(Boolean);
+        reviewExists = logs.some(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.itemId === dbItem.displayId;
+          } catch {
+            return false;
+          }
+        });
+      }
+
+      if (reviewExists) {
+        // ReviewDone was called - mark all children as done automatically
+        for (const child of incompleteChildren) {
+          markItemDone(child.id);
+        }
+      } else {
+        // No ReviewDone - block with error
+        return json({
+          success: false,
+          error: `Cannot complete - must call ReviewDone() first`,
+          incompleteItems: incompleteChildren.map(c => c.title),
+          hint: `Run: Skill("review"), then ReviewDone("${dbItem.displayId}", "summary")`
+        }, { status: 400 });
+      }
     }
 
     // DEBOUNCE: Block tick if working was called less than 2 seconds ago

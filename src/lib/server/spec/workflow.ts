@@ -27,7 +27,7 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     task: 'Design: plan the approach',
     children: [
       'Draft: create approach (reference existing patterns)',
-      'Review: show user, get approval to proceed'
+      'Review: show user, WAIT FOR EXPLICIT APPROVAL before proceeding'
     ]
   },
   {
@@ -41,13 +41,13 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     task: 'Implement: build and test',
     children: [
       'Build: implement the feature/fix',
-      'Test: verify, run tests, demo to user, iterate if needed'
+      'Test: verify, run tests, DEMO TO USER, GET APPROVAL before continuing'
     ]
   },
   {
     task: 'Review: independent code review',
     children: [
-      'Review: run /review for sub-agent assessment, address any rating < 3'
+      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
     ]
   },
   {
@@ -93,7 +93,7 @@ export const BUG_WORKFLOW_STEPS: WorkflowStep[] = [
     task: 'Review: ensure fix is solid',
     children: [
       'Test: run tests, check for side effects',
-      'Review: run /review for independent assessment'
+      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
     ]
   },
   {
@@ -158,7 +158,7 @@ export const REFACTOR_WORKFLOW: WorkflowStep[] = [
     task: 'Verify: ensure refactor is solid',
     children: [
       'Test: ALL tests again (unit + e2e), same behavior',
-      'Review: run /review for independent assessment'
+      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
     ]
   },
   {
@@ -204,8 +204,8 @@ export const QUICKWIN_WORKFLOW: WorkflowStep[] = [
   {
     task: 'Verify: review and confirm',
     children: [
-      'Review: run /review for independent check',
-      'Demo: show user the fix, get approval'
+      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)',
+      'Demo: show user the fix, WAIT FOR EXPLICIT APPROVAL'
     ]
   },
   {
