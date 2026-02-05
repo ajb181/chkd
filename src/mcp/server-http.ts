@@ -1005,23 +1005,16 @@ server.tool(
           });
 
           // Emit TaskCreate prompts for Claude's native task system
-          text += `\n\n⚠️ REQUIRED: Create tasks NOW before proceeding.`;
-          text += `\n\nCall TaskCreate for each checkpoint:`;
+          text += `\n\n⚠️ CREATE TASKS NOW - REQUIRED BEFORE PROCEEDING\n`;
           incomplete.forEach((child: any) => {
-            // Generate activeForm from title (present continuous)
-            const titlePart = child.title.split(': ').slice(1).join(': ') || child.title;
-            const activeForm = titlePart.length > 30
-              ? titlePart.substring(0, 27) + '...'
-              : titlePart;
-            text += `\n`;
-            text += `\nTaskCreate({`;
-            text += `\n  subject: "${child.displayId} ${child.title.substring(0, 50)}${child.title.length > 50 ? '...' : ''}",`;
-            text += `\n  description: "${child.title}",`;
-            text += `\n  activeForm: "${activeForm}"`;
-            text += `\n})`;
+            const shortTitle = child.title.length > 60
+              ? child.title.substring(0, 57) + '...'
+              : child.title;
+            text += `\nTaskCreate("${shortTitle}")`;
           });
-          text += `\n\n👆 Create ALL of these tasks NOW. Then work through them.`;
-          text += `\nUse tick("${foundItem.displayId}.X.Y") as you complete each checkpoint.`;
+          text += `\n\nSTOP. Create ALL tasks above before continuing.`;
+          text += `\n\n📖 THEN: Read docs/AGENT-GOVERNANCE.md before starting work.`;
+          text += `\n\n💡 Use tick("${foundItem.displayId}") when all work complete + review done.`;
         }
       } else {
         // Leaf checkpoint - show working state
