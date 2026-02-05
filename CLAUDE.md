@@ -7,12 +7,15 @@
 ### Mandatory: ALL Code Changes Go Through chkd
 
 Before writing ANY code:
-1. `add("feature name", areaCode="XX")` — create the task
-2. `working("XX.N")` — begin work
-3. Tick each child step as you complete it
-4. No commits without an active chkd task
+1. Write design file to `docs/designs/my-feature.md`
+2. `add("feature name", areaCode="XX", designFile="docs/designs/my-feature.md")` — create the task
+3. `working("XX.N")` — begin work
+4. Work through checkpoints, tick parent when done
+5. No commits without an active chkd task
 
 **If you find yourself coding without a chkd task, STOP. Create the task first.**
+
+**Design file required** - QuickWins and Bugs don't need one, but features do.
 
 ### How It Works
 
@@ -23,7 +26,7 @@ When you add a feature, chkd creates steps with children:
 
 ### 5 Core Behaviors
 
-1. **Tick as you go** - Complete a sub-item → `tick()` immediately
+1. **Tick as you go** - Complete a checkpoint → `tick()` immediately
 2. **Quick wins** - Small fix? → `CreateQuickWin()` then do it
 3. **Explore first** - Read code before changing it
 4. **Verify with user** - Don't tick feedback items without "yes"
@@ -36,21 +39,35 @@ If the user drifts:
 - **Skip steps** → "Spec has [step] next - skip or do it?"
 - **Batch work** → "Tick one at a time? Catches issues early."
 
+### File Organization
+
+When creating docs, plans, or notes:
+- **Design files** → `docs/designs/` (then moved to `docs/{ITEM.ID}/design.md` by chkd)
+- **Task-specific files** → `docs/{ITEM.ID}/` (e.g., `docs/BE.48/notes.md`)
+- **Plans** → `docs/plans/`
+- **Research** → `docs/research/`
+
+See `docs/FILING.md` for full naming conventions.
+
 ### Source of Truth
 
 | Source | What |
 |--------|------|
 | Database | Task list (via MCP tools) |
 | `docs/GUIDE.md` | How to use chkd |
+| `docs/FILING.md` | File organization rules |
+| `docs/AGENT-GOVERNANCE.md` | Agent behavior rules |
 
 ### Key MCP Tools
 
 | Tool | Use |
 |------|-----|
-| `status()` | See current state |
+| `status()` | See current state + version |
+| `sync()` | Sync templates, shows version |
+| `add(title, areaCode, designFile)` | Create task (design file required) |
 | `working("XX.N")` | Start a task - shows full context |
 | `tick("item")` | Complete current item |
-| `add_task("title")` | Add subtask to current item |
+| `CreateQuickWin(title, files, test)` | Quick fix (no design file needed) |
 
 
 

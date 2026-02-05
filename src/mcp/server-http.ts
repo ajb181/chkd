@@ -17,6 +17,7 @@ import { execSync } from 'child_process';
 // HTTP client for API calls
 import * as api from './http-client.js';
 import { BASE_URL as HTTP_BASE } from './http-client.js';
+import { VERSION } from '../lib/version.js';
 
 // Note: Parser removed - DB is source of truth via HTTP API
 
@@ -303,7 +304,7 @@ function getTickGuidance(ctx: TypeAreaContext): string[] {
 
 // Server version identifier
 const SERVER_TYPE = "http-based";
-const SERVER_VERSION = "0.3.5";  // Auto-bumped by pre-commit hook
+const SERVER_VERSION = VERSION;  // From shared src/lib/version.ts
 
 // Version sync check - compares local file hash with server's expected hash
 let versionCheckDone = false;
@@ -407,7 +408,8 @@ server.tool(
       }
 
       let text = `🔄 SYNC: ${projectName}\n`;
-      text += `═══════════════════════════════════════\n\n`;
+      text += `═══════════════════════════════════════\n`;
+      text += `MCP: v${SERVER_VERSION}${isServerStale() ? ' ⚠️ STALE - restart Claude Code' : ''}\n\n`;
 
       // Show results from API
       if (result.data?.results) {
@@ -800,7 +802,7 @@ server.tool(
               text: `❌ Cannot complete ${item}\n\n` +
                     `REQUIRED: Run code review and call ReviewDone() first.\n\n` +
                     `Steps:\n` +
-                    `1. Run: Skill("review")\n` +
+                    `1. Run: /deep-review\n` +
                     `2. Review the results with user, get approval\n` +
                     `3. Call: ReviewDone("${item}", "Passed: [summary of review]")\n` +
                     `4. Then: tick("${item}")\n\n` +
@@ -1015,8 +1017,10 @@ server.tool(
             text += `\nTaskCreate("${shortTitle}")`;
           });
           text += `\n\nSTOP. Create ALL tasks above before continuing.`;
+
           text += `\n\n📖 THEN: Read docs/AGENT-GOVERNANCE.md before starting work.`;
           text += `\n📁 ORGANIZE: Keep task files in docs/${foundItem.displayId}/ (see docs/FILING.md)`;
+
           text += `\n\n💡 Use tick("${foundItem.displayId}") when all work complete + review done.`;
         }
       } else {
@@ -1066,18 +1070,18 @@ server.tool(
 // add - Add a feature to spec
 server.tool(
   "add",
-  "Add a new feature or task to the spec. Creates item with workflow sub-tasks. Use 'epic' param to link to an epic.",
+  "Add a new feature or task to the spec. Creates item with workflow sub-tasks. IMPORTANT: Requires a design file - write your design first, then pass the path.",
   {
     title: z.string().describe("Feature title (e.g., 'User authentication')"),
     areaCode: z.string().describe("Area code: SD, FE, BE, or FUT"),
+    designFile: z.string().describe("Path to design file (REQUIRED). Write your design to docs/designs/my-feature.md first, then pass that path here. File is moved to docs/{ITEM.ID}/design.md"),
     description: z.string().optional().describe("Optional description or user story"),
     keyRequirements: z.array(z.string()).optional().describe("Key requirements for this feature - REQUIRED, don't leave empty"),
     filesToChange: z.array(z.string()).optional().describe("Files that will be modified - REQUIRED, don't leave empty"),
     testing: z.array(z.string()).optional().describe("How to test this feature - REQUIRED, don't leave empty"),
-    // tasks parameter removed - chkd always uses standard workflow with checkpoints
     epic: z.string().optional().describe("Epic tag to link this item to (e.g., 'auth-overhaul')")
   },
-  async ({ title, areaCode, description, keyRequirements, filesToChange, testing, epic }) => {
+  async ({ title, areaCode, designFile, description, keyRequirements, filesToChange, testing, epic }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
@@ -1088,7 +1092,7 @@ server.tool(
       keyRequirements,
       filesToChange,
       testing,
-      withWorkflow: true  // Always uses standard workflow with checkpoints
+      designFile
     });
 
     if (!response.success) {
@@ -1103,6 +1107,9 @@ server.tool(
     const specCode = response.data.sectionId || response.data.itemId;
     let text = `✅ Added: ${specCode} ${title}\n`;
     text += `Area: ${areaCode}\n`;
+    if (response.data.designFile) {
+      text += `Design: ${response.data.designFile}\n`;
+    }
     text += `Workflow: ${response.data.stepCount || 0} steps, ${response.data.checkpointCount || 0} checkpoints\n`;
 
     // If epic specified, tag the item
@@ -1151,8 +1158,9 @@ server.tool(
 
     let text = `✅ Added sub-task: ${title}\n`;
     text += `Parent: ${parentId}\n`;
-    text += `Child ID: ${response.data.childId}\n`;
-    text += `\n💡 Use working("${title}") when ready to start`;
+    text += `ID: ${response.data.displayId}\n`;
+    text += `\n💡 Add to your task list: TaskCreate("${title}")\n`;
+    text += `   When parent complete: tick("${parentId}")`;
 
     return {
       content: [{
@@ -1215,8 +1223,9 @@ server.tool(
     text += `═══════════════════════════════════════\n\n`;
     text += `📝 "${title}"\n`;
     text += `📍 Parent: ${parentId} (${session.anchor.title})\n`;
-    text += `🆔 ID: ${response.data.childId}\n`;
-    text += `\n💡 Use tick("${title}") when done`;
+    text += `🆔 ID: ${response.data.displayId}\n`;
+    text += `\n💡 Add to your task list: TaskCreate("${title}")\n`;
+    text += `   When parent complete: tick("${parentId}")`;
 
     return {
       content: [{
@@ -1297,7 +1306,7 @@ server.tool(
 // update_item - Update a spec item's metadata
 server.tool(
   "update_item",
-  "Update a spec item's metadata (title, description, requirements, files, testing).",
+  "Update a spec item's metadata (title, description, requirements, files, testing, designFile).",
   {
     itemId: z.string().describe("Item ID (e.g., 'BE.43')"),
     title: z.string().optional().describe("New title"),
@@ -1305,9 +1314,10 @@ server.tool(
     story: z.string().optional().describe("New user story"),
     keyRequirements: z.array(z.string()).optional().describe("Key requirements array"),
     filesToChange: z.array(z.string()).optional().describe("Files to change array"),
-    testing: z.array(z.string()).optional().describe("Testing criteria array")
+    testing: z.array(z.string()).optional().describe("Testing criteria array"),
+    designFile: z.string().optional().describe("Path to design file")
   },
-  async ({ itemId, title, description, story, keyRequirements, filesToChange, testing }) => {
+  async ({ itemId, title, description, story, keyRequirements, filesToChange, testing, designFile }) => {
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
@@ -1318,12 +1328,13 @@ server.tool(
     if (keyRequirements !== undefined) updates.keyRequirements = keyRequirements;
     if (filesToChange !== undefined) updates.filesToChange = filesToChange;
     if (testing !== undefined) updates.testing = testing;
+    if (designFile !== undefined) updates.designFile = designFile;
 
     if (Object.keys(updates).length === 0) {
       return {
         content: [{
           type: "text",
-          text: "❌ At least one field required: title, description, story, keyRequirements, filesToChange, testing"
+          text: "❌ At least one field required: title, description, story, keyRequirements, filesToChange, testing, designFile"
         }]
       };
     }
@@ -1344,61 +1355,6 @@ server.tool(
       content: [{
         type: "text",
         text: `✅ Updated ${itemId}\n   Fields: ${updatedFields}`
-      }]
-    };
-  }
-);
-
-// upgrade_mcp - Check server version and get upgrade instructions
-server.tool(
-  "upgrade_mcp",
-  "Check MCP server version, staleness, and get upgrade instructions if needed.",
-  {},
-  async () => {
-    const repoPath = getRepoPath();
-    const chkdPath = repoPath;
-    const stale = isServerStale();
-
-    let text = `╔══════════════════════════════════════╗\n`;
-    text += `║       MCP SERVER VERSION CHECK       ║\n`;
-    text += `╚══════════════════════════════════════╝\n\n`;
-
-    // Version and staleness check
-    text += `Server Type: ${SERVER_TYPE}\n`;
-    text += `Version: ${SERVER_VERSION}\n`;
-    
-    if (stale) {
-      text += `\n⚠️  SERVER IS STALE!\n`;
-      text += `The server code has changed since this session started.\n`;
-      text += `Restart Claude Code to get the latest tools.\n`;
-    } else {
-      text += `Status: ✅ Up to date\n`;
-    }
-    
-    text += `\n───────────────────────────────────────\n`;
-    text += `Benefits of HTTP-based server:\n`;
-    text += `• UI syncs automatically (no refresh!)\n`;
-    text += `• Single source of truth (API)\n`;
-    text += `• No database lock conflicts\n`;
-    text += `• Better error handling\n`;
-    text += `───────────────────────────────────────\n\n`;
-
-    if (stale) {
-      text += `🔄 ACTION REQUIRED:\n`;
-      text += `Restart Claude Code to use the updated MCP server.\n\n`;
-    }
-
-    text += `📋 TO UPGRADE OTHER PROJECTS:\n`;
-    text += `1. Open that project in Claude Code\n`;
-    text += `2. Run:\n`;
-    text += `   claude mcp remove chkd\n`;
-    text += `   claude mcp add chkd -- npx tsx ${chkdPath}/src/mcp/server-http.ts\n`;
-    text += `3. Restart Claude Code`;
-
-    return {
-      content: [{
-        type: "text",
-        text
       }]
     };
   }
@@ -1602,7 +1558,7 @@ server.tool(
       });
     }
 
-    text += `\n💡 Start with chkd_start("FUT.X")`;
+    text += `\n💡 Start with working("FUT.X")`;
 
     return {
       content: [{
@@ -2595,9 +2551,9 @@ server.resource(
 
       // Habits
       text += `┌─ HABITS ────────────────────────────┐\n`;
-      text += `│ • Off-task? → also() to log    │\n`;
-      text += `│ • Progress? → pulse() visible  │\n`;
-      text += `│ • Sub-item done? → tick() NOW  │\n`;
+      text += `│ • Off-task? → also() to log     │\n`;
+      text += `│ • Progress? → pulse() visible   │\n`;
+      text += `│ • Checkpoint done? → tick() NOW │\n`;
       text += `└─────────────────────────────────────┘\n`;
 
       return {

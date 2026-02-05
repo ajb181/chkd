@@ -184,9 +184,7 @@ export interface AddFeatureOptions {
   keyRequirements?: string[];
   filesToChange?: string[];
   testing?: string[];
-  fileLink?: string;  // Link to detailed design doc, Figma, etc.
-  // tasks removed - chkd always uses standard workflow
-  // withWorkflow removed - always true
+  designFile?: string;  // Path to design document (required for features)
 }
 
 export async function addFeature(
@@ -217,8 +215,7 @@ export async function addFeatureWithMetadata(
     keyRequirements: opts.keyRequirements,
     filesToChange: opts.filesToChange,
     testing: opts.testing,
-    fileLink: opts.fileLink,
-    withWorkflow: true  // Always uses standard workflow with checkpoints
+    designFile: opts.designFile
   });
 }
 

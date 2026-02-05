@@ -7,7 +7,7 @@ import { findItemByQuery, updateItem } from '$lib/server/db/items';
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const body = await request.json();
-    const { repoPath, itemId, title, description, story, keyRequirements, filesToChange, testing } = body;
+    const { repoPath, itemId, title, description, story, keyRequirements, filesToChange, testing, designFile } = body;
 
     if (!repoPath) {
       return json({ success: false, error: 'repoPath is required' }, { status: 400 });
@@ -18,10 +18,10 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const hasUpdate = title !== undefined || description !== undefined || story !== undefined ||
-      keyRequirements !== undefined || filesToChange !== undefined || testing !== undefined;
+      keyRequirements !== undefined || filesToChange !== undefined || testing !== undefined || designFile !== undefined;
 
     if (!hasUpdate) {
-      return json({ success: false, error: 'At least one field required: title, description, story, keyRequirements, filesToChange, testing' }, { status: 400 });
+      return json({ success: false, error: 'At least one field required: title, description, story, keyRequirements, filesToChange, testing, designFile' }, { status: 400 });
     }
 
     // Write to DB (no fallback)
@@ -43,6 +43,7 @@ export const POST: RequestHandler = async ({ request }) => {
     if (keyRequirements !== undefined) updates.keyRequirements = keyRequirements;
     if (filesToChange !== undefined) updates.filesToChange = filesToChange;
     if (testing !== undefined) updates.testing = testing;
+    if (designFile !== undefined) updates.designFile = designFile;
 
     updateItem(dbItem.id, updates);
 

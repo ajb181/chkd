@@ -74,6 +74,20 @@ Use `status()` to see current items.
 
 ---
 
+## Design Files for Tasks
+
+**Every feature task requires a design file.** The workflow:
+
+1. **Write design first** to `docs/designs/my-feature.md`
+2. **Call add()** with `designFile="docs/designs/my-feature.md"`
+3. **chkd moves it** to `docs/{ITEM.ID}/design.md` automatically
+
+This ensures you think before coding, and gives deep-review a reference.
+
+**QuickWins and Bugs don't require design files** - they use simplified workflows.
+
+---
+
 ## When Creating Docs
 
 Before writing a new doc:

@@ -254,6 +254,7 @@ export interface SpecItem {
   keyRequirements: string[];        // JSON parsed
   filesToChange: string[];          // JSON parsed
   testing: string[];                // JSON parsed
+  designFile: string | null;        // Path to design document
 
   // Classification
   areaCode: AreaCode;
@@ -286,6 +287,7 @@ export interface CreateItemInput {
   keyRequirements?: string[];
   filesToChange?: string[];
   testing?: string[];
+  designFile?: string;
   areaCode: AreaCode;
   sectionNumber: number;
   workflowType?: string;
@@ -302,6 +304,7 @@ export interface UpdateItemInput {
   keyRequirements?: string[];
   filesToChange?: string[];
   testing?: string[];
+  designFile?: string | null;
   status?: ItemStatus;
   priority?: ItemPriority;
   sortOrder?: number;

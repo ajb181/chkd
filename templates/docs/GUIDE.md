@@ -105,12 +105,32 @@ This:
 
 ### 4. Add a feature
 
-```
-add("Login page", areaCode="FE")
+**Design file required** - Write your design first:
+
+```markdown
+# docs/designs/login-page.md
+
+## Problem
+Users can't log in
+
+## Approach
+Create login form with email/password
+
+## Key Decisions
+- Use existing auth API
+- Redirect to dashboard on success
 ```
 
+Then add the task:
+
+```
+add("Login page", areaCode="FE", designFile="docs/designs/login-page.md")
+```
+
+The design file is moved to `docs/FE.1/design.md` automatically.
+
 This creates a task with workflow steps:
-- Explore → Design → Prototype → Wire-up → Feedback → Polish → Document → Commit
+- Explore → Design → Prototype → Implement → Review → Finish
 
 ### 5. Build it
 
@@ -144,7 +164,7 @@ tick("Design")
 
 | Tool | What it does |
 |------|--------------|
-| `add(title, areaCode)` | Add feature with workflow sub-tasks |
+| `add(title, areaCode, designFile)` | Add feature with workflow (requires design file) |
 | `add_child(parentId, title)` | Add sub-task to existing item |
 | `add_task(title)` | Add sub-task to current working item |
 | `tag(itemId, tags)` | Set tags on an item |
@@ -175,7 +195,6 @@ tick("Design")
 
 | Tool | What it does |
 |------|--------------|
-| `upgrade_mcp()` | Check server version, get upgrade instructions |
 | `attach(itemType, itemId, filePath)` | Attach file to item |
 | `attachments(itemType?, itemId?)` | List attachments |
 

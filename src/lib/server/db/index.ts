@@ -266,6 +266,7 @@ function initSchema(db: Database.Database): void {
       key_requirements TEXT,            -- JSON array
       files_to_change TEXT,             -- JSON array
       testing TEXT,                     -- JSON array
+      design_file TEXT,                 -- Path to design document (required for features)
 
       -- Classification
       area_code TEXT NOT NULL,          -- 'SD', 'FE', 'BE', 'FUT'
@@ -370,6 +371,10 @@ function runMigrations(db: Database.Database): void {
 
   if (!specItemsCols.includes('review_completed')) {
     db.exec(`ALTER TABLE spec_items ADD COLUMN review_completed INTEGER DEFAULT 0;`);
+  }
+
+  if (!specItemsCols.includes('design_file')) {
+    db.exec(`ALTER TABLE spec_items ADD COLUMN design_file TEXT;`);
   }
 
   // Migration: Add ON DELETE CASCADE to parent_id foreign key

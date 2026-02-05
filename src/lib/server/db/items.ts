@@ -25,6 +25,7 @@ function rowToItem(row: any): SpecItem {
     keyRequirements: JSON.parse(row.key_requirements || '[]'),
     filesToChange: JSON.parse(row.files_to_change || '[]'),
     testing: JSON.parse(row.testing || '[]'),
+    designFile: row.design_file || null,
     areaCode: row.area_code as AreaCode,
     sectionNumber: row.section_number,
     workflowType: row.workflow_type || null,
@@ -49,10 +50,10 @@ export function createItem(data: CreateItemInput): SpecItem {
   db.prepare(`
     INSERT INTO spec_items (
       id, repo_id, display_id, title, description, story,
-      key_requirements, files_to_change, testing,
+      key_requirements, files_to_change, testing, design_file,
       area_code, section_number, workflow_type, parent_id, sort_order,
       status, priority
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.repoId,
@@ -63,6 +64,7 @@ export function createItem(data: CreateItemInput): SpecItem {
     JSON.stringify(data.keyRequirements || []),
     JSON.stringify(data.filesToChange || []),
     JSON.stringify(data.testing || []),
+    data.designFile || null,
     data.areaCode,
     data.sectionNumber,
     data.workflowType || null,
@@ -122,6 +124,11 @@ export function updateItem(id: string, updates: UpdateItemInput): SpecItem | nul
   if (updates.testing !== undefined) {
     sets.push('testing = ?');
     values.push(JSON.stringify(updates.testing));
+  }
+
+  if (updates.designFile !== undefined) {
+    sets.push('design_file = ?');
+    values.push(updates.designFile);
   }
 
   if (updates.status !== undefined) {

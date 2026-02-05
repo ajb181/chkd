@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Building from spec. Tick sub-items as you complete them. Verify with user at checkpoints.
+Building from spec. Tick checkpoints as you complete them. Verify with user at review steps.
 
 ---
 
@@ -10,32 +10,34 @@ Building from spec. Tick sub-items as you complete them. Verify with user at che
 
 You're implementing a planned feature. The spec defines what to build.
 
-- Follow the sub-items in order
+- Follow the checkpoints in order
 - Tick each one immediately after completing
 - Don't batch ticks at the end
-- Verify with user at feedback/review steps
+- Verify with user at review steps
 
 ---
 
 ## Workflow
 
 ```
-working("sub-item")  →  do the work  →  tick("sub-item")
+working("item")  →  do checkpoints  →  /deep-review  →  tick("item")
 ```
 
-For each sub-item:
-1. Signal start with `working()`
-2. Actually build it
-3. Mark done with `tick()` (2s minimum between working and tick)
+For each item:
+1. Start with `working("ITEM.ID")` - see checkpoints
+2. Work through each checkpoint
+3. Run `/deep-review` before finishing
+4. Mark done with `tick("ITEM.ID")`
 
 ---
 
-## Checkpoints
+## Review Steps
 
-**Feedback/Review steps require explicit user approval:**
+**Review steps require explicit user approval:**
 - Show what you built
 - Wait for "yes" / "approved" / "looks good"
 - Don't tick until user confirms
+- Run `/deep-review` when workflow asks for review
 
 ---
 
@@ -43,12 +45,12 @@ For each sub-item:
 
 1. Research first - web search, check existing patterns
 2. Ask user for clarification - don't assume
-3. Log blockers with `bug()` if they're blocking progress
+3. Log blockers with `CreateBug()` if they're blocking progress
 
 ---
 
 ## Stay Focused
 
-- Notice a bug? → `bug()` then continue building
-- Want to refactor? → `win()` then continue building
+- Notice a bug? → `CreateBug()` then continue building
+- Quick fix idea? → `CreateQuickWin()` then continue building
 - Tangent idea? → Log it, stay on task

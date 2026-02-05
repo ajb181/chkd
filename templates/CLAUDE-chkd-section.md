@@ -1,19 +1,88 @@
 <!-- chkd:start -->
 ## Working with chkd
 
-### TL;DR
+### Mandatory: ALL Code Changes Go Through chkd
+
+Before writing ANY code:
+1. Write design file to `docs/designs/my-feature.md`
+2. `add("feature name", areaCode="XX", designFile="docs/designs/my-feature.md")` — create the task
+3. `working("XX.N")` — begin work
+4. Work through checkpoints, tick parent when done
+5. No commits without an active chkd task
+
+**If you find yourself coding without a chkd task, STOP. Create the task first.**
+
+**Design file required** - QuickWins and Bugs don't need one, but features do.
+
+### How It Works
+
+When you add a feature, chkd creates steps with children:
+- Each step has 2-3 checkpoints
+- Tick each checkpoint as you complete it
+- Can't skip. Can't batch. One at a time.
+
+### 5 Core Behaviors
+
+1. **Tick as you go** - Complete a checkpoint → `tick()` immediately
+2. **Quick wins** - Small fix? → `CreateQuickWin()` then do it
+3. **Explore first** - Read code before changing it
+4. **Verify with user** - Don't tick feedback items without "yes"
+5. **Research when stuck** - Web search before brute force
+
+### Push Back When Needed
+
+If the user drifts:
+- **Off-topic** → "Log that as a quick win - stay focused?"
+- **Skip steps** → "Spec has [step] next - skip or do it?"
+- **Batch work** → "Tick one at a time? Catches issues early."
+
+### File Organization
+
+When creating docs, plans, or notes:
+- **Design files** → `docs/designs/` (then moved to `docs/{ITEM.ID}/design.md` by chkd)
+- **Task-specific files** → `docs/{ITEM.ID}/` (e.g., `docs/BE.48/notes.md`)
+- **Plans** → `docs/plans/`
+- **Research** → `docs/research/`
+
+See `docs/FILING.md` for full naming conventions.
+
+### Source of Truth
+
+| Source | What |
+|--------|------|
+| Database | Task list (via MCP tools) |
+| `docs/GUIDE.md` | How to use chkd |
+| `docs/FILING.md` | File organization rules |
+| `docs/AGENT-GOVERNANCE.md` | Agent behavior rules |
+
+### Key MCP Tools
+
+| Tool | Use |
+|------|-----|
+| `status()` | See current state + version |
+| `sync()` | Sync templates, shows version |
+| `add(title, areaCode, designFile)` | Create task (design file required) |
+| `working("XX.N")` | Start a task - shows full context |
+| `tick("item")` | Complete current item |
+| `CreateQuickWin(title, files, test)` | Quick fix (no design file needed) |
+
+
+
+## TL;DR
 
 chkd keeps you focused. Tick work as you go. Push back if the user drifts.
 
 ---
 
-### Philosophy
+## Philosophy
 
 **The problem:** Humans want AI to run at 100mph. AI wants to comply. Both skip steps.
 
 **The solution:** chkd is a collaboration contract. Neither party can skip checkpoints.
 
-**Tick → Verify → Tick → Verify**
+```
+Tick → Verify → Tick → Verify
+```
 
 At each checkpoint: you show what you did, user confirms or redirects, then next step. The tool enforces this for both parties.
 
@@ -23,88 +92,14 @@ At each checkpoint: you show what you did, user confirms or redirects, then next
 
 ---
 
-### You Can Push Back
+## You Can Push Back
 
 The constraint applies to BOTH parties. If the user drifts:
 
-- **Off-topic request** → "Park that as a quick win - stay focused?"
+- **Off-topic request** → "Log that with CreateQuickWin() - stay focused?"
 - **Wants to skip steps** → "Spec has [step] next - skip or do it?"
 - **Wants to batch** → "Tick one at a time? Catches issues early."
 
 You're enforcing the contract both signed up for.
 
----
-
-### Mandatory: ALL Code Changes Go Through chkd
-
-Before writing ANY code:
-1. `add("feature name", areaCode="XX")` — create the task
-2. `working("XX.N")` — begin work
-3. Tick each child step as you complete it
-4. No commits without an active chkd task
-
-**If you find yourself coding without a chkd task, STOP. Create the task first.**
-
----
-
-### How It Works
-
-When you add a feature, chkd creates workflow steps:
-
-```
-FE.1 Feature name
-├── FE.1.1 Explore     ← understand before changing
-├── FE.1.2 Design      ← plan the approach
-├── FE.1.3 Prototype   ← build it
-├── FE.1.4 Wire-up     ← integrate
-├── FE.1.5 Feedback    ← USER CHECKPOINT
-├── FE.1.6 Polish      ← refine + test
-├── FE.1.7 Document    ← update docs
-└── FE.1.8 Commit      ← ship it
-```
-
-Tick each step as you complete it. Can't skip. Can't batch. One at a time.
-
----
-
-### Core Behaviors
-
-1. **Tick as you go** — Complete a sub-item → `tick()` immediately
-2. **Log, don't derail** — Found a bug? → `CreateQuickWin()` then continue
-3. **Explore first** — Read code before changing it
-4. **Verify with user** — Don't tick Feedback without user "yes"
-5. **Research when stuck** — Web search before brute force
-
----
-
-### Quick How-To
-
-**Found a bug?** Log it, stay focused:
-```
-CreateQuickWin(title="Fix null check", files="src/auth.ts", test="Login works")
-```
-
-**Need a subtask?** Add to current item:
-```
-add_task("Handle edge case")
-```
-
-**Want to refactor?** Same pattern - log it:
-```
-CreateQuickWin(title="Refactor validation", files="src/forms.ts", test="Forms validate")
-```
-
-Then continue your current task. Fix quick wins later with `ListQuickWins()`.
-
----
-
-### Source of Truth
-
-| Resource | What |
-|----------|------|
-| `status()` | Current state, progress, queue |
-| `docs/GUIDE.md` | How to use chkd |
-| `docs/PHILOSOPHY.md` | Why chkd exists |
-| `docs/WORKFLOW.md` | How to work (subagents, elegance, reuse) |
-| `docs/AGENT-GOVERNANCE.md` | Agent behavior rules (assumptions, scope, simplicity) |
 <!-- chkd:end -->

@@ -62,6 +62,7 @@ export const POST: RequestHandler = async ({ request }) => {
       success: true,
       data: {
         childId: newChild.id,
+        displayId,
         parentId,
         title: title.trim(),
         message: `Added subtask: ${title.trim()}`

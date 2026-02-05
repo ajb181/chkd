@@ -4,12 +4,14 @@ import { getWorkflowByType } from '$lib/server/spec/workflow';
 import { getRepoByPath } from '$lib/server/db/queries';
 import { createItem, getNextSectionNumber, searchItems, getItemsByRepo } from '$lib/server/db/items';
 import type { AreaCode } from '$lib/types';
+import fs from 'fs';
+import path from 'path';
 
 // Known parameters for validation
 const KNOWN_PARAMS = [
   'repoPath', 'title', 'description', 'areaCode',
   'workflowType', 'tasks', 'dryRun', 'confirmLarge',
-  'story', 'keyRequirements', 'filesToChange', 'testing', 'fileLink'
+  'story', 'keyRequirements', 'filesToChange', 'testing', 'designFile'
 ];
 
 // POST /api/spec/add - Add a new item to the spec
@@ -30,7 +32,7 @@ export const POST: RequestHandler = async ({ request }) => {
       keyRequirements,
       filesToChange,
       testing,
-      fileLink
+      designFile
     } = body;
 
     // Collect warnings
@@ -75,6 +77,62 @@ export const POST: RequestHandler = async ({ request }) => {
           testing: ['Unit test for X', 'Manual test: do Y, expect Z']
         }
       }, { status: 400 });
+    }
+
+    // Validate designFile - required for features (not for child items or quickwins)
+    // QuickWins and Bugs use a simplified workflow, design file optional
+    const needsDesignFile = !workflowType || workflowType === 'default' || workflowType === 'refactor';
+    if (needsDesignFile && !designFile) {
+      return json({
+        success: false,
+        error: '📄 Design file required',
+        hint: `Before adding a task, write your design/plan to a file first.
+
+The design file captures your thinking BEFORE you start coding:
+- What problem you're solving
+- Your approach
+- Key decisions
+
+This becomes your reference during implementation and review.`,
+        example: {
+          step1: 'Write design to: docs/designs/my-feature.md',
+          step2: 'Then call add() with designFile="docs/designs/my-feature.md"',
+          template: `# Feature Name
+
+## Problem
+[What are we solving?]
+
+## Approach
+[How will we solve it?]
+
+## Key Decisions
+- [Decision 1]
+- [Decision 2]`
+        },
+        workflow: 'Explore → Write design file → add(designFile="...") → working() → implement'
+      }, { status: 400 });
+    }
+
+    // Validate design file exists (if provided)
+    let designFilePath: string | null = null;
+    if (designFile) {
+      const absoluteDesignPath = path.isAbsolute(designFile)
+        ? designFile
+        : path.join(repoPath, designFile);
+
+      if (!fs.existsSync(absoluteDesignPath)) {
+        return json({
+          success: false,
+          error: `Design file not found: ${designFile}`,
+          hint: 'Create the design file first, then call add(). The file must exist before creating the task.',
+          checkedPath: absoluteDesignPath
+        }, { status: 400 });
+      }
+
+      // Store relative path from repo root
+      designFilePath = path.isAbsolute(designFile)
+        ? path.relative(repoPath, designFile)
+        : designFile;
     }
 
     // Validate area code
@@ -166,6 +224,32 @@ export const POST: RequestHandler = async ({ request }) => {
     const displayId = `${areaCode}.${sectionNumber}`;
     const fullTitle = `${displayId} ${title}`;
 
+    // Move design file to task folder if it exists
+    let finalDesignPath: string | null = null;
+    if (designFilePath) {
+      const taskFolder = path.join(repoPath, 'docs', displayId);
+      const targetPath = path.join(taskFolder, 'design.md');
+      const sourceAbsolute = path.join(repoPath, designFilePath);
+
+      // Create task folder
+      if (!fs.existsSync(taskFolder)) {
+        fs.mkdirSync(taskFolder, { recursive: true });
+      }
+
+      // Move or copy file to task folder
+      // If source is already in the task folder, just use it
+      const sourceRelative = path.relative(repoPath, sourceAbsolute);
+      const targetRelative = path.relative(repoPath, targetPath);
+
+      if (sourceRelative !== targetRelative) {
+        // Copy to new location (keep original for safety)
+        fs.copyFileSync(sourceAbsolute, targetPath);
+        warnings.push(`Design file copied to: docs/${displayId}/design.md`);
+      }
+
+      finalDesignPath = `docs/${displayId}/design.md`;
+    }
+
     const newItem = createItem({
       repoId: repo.id,
       displayId,
@@ -175,6 +259,7 @@ export const POST: RequestHandler = async ({ request }) => {
       keyRequirements: Array.isArray(keyRequirements) ? keyRequirements : undefined,
       filesToChange: Array.isArray(filesToChange) ? filesToChange : undefined,
       testing: Array.isArray(testing) ? testing : undefined,
+      designFile: finalDesignPath || undefined,
       areaCode: areaCode as any,
       sectionNumber,
       workflowType: workflowType || undefined,
@@ -221,6 +306,7 @@ export const POST: RequestHandler = async ({ request }) => {
         areaName: area.name,
         title: fullTitle,
         description: description || null,
+        designFile: finalDesignPath,
         checkpoints: workflowSteps.flatMap((s, stepIdx) =>
           (s.children || []).map((c, childIdx) => ({
             displayId: `${displayId}.${stepIdx + 1}.${childIdx + 1}`,

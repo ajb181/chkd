@@ -24,10 +24,10 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
     ]
   },
   {
-    task: 'Design: plan the approach',
+    task: 'Design: review and finalize approach',
     children: [
-      'Draft: create approach (reference existing patterns)',
-      'Review: show user, WAIT FOR EXPLICIT APPROVAL before proceeding'
+      'Review: read design file (docs/{ITEM.ID}/design.md), update with implementation details',
+      'Approve: show user the finalized approach, WAIT FOR EXPLICIT APPROVAL before proceeding'
     ]
   },
   {
@@ -47,7 +47,7 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   {
     task: 'Review: independent code review',
     children: [
-      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
+      'Review: run /deep-review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
     ]
   },
   {
@@ -93,7 +93,7 @@ export const BUG_WORKFLOW_STEPS: WorkflowStep[] = [
     task: 'Review: ensure fix is solid',
     children: [
       'Test: run tests, check for side effects',
-      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
+      'Review: run /deep-review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
     ]
   },
   {
@@ -158,7 +158,7 @@ export const REFACTOR_WORKFLOW: WorkflowStep[] = [
     task: 'Verify: ensure refactor is solid',
     children: [
       'Test: ALL tests again (unit + e2e), same behavior',
-      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
+      'Review: run /deep-review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)'
     ]
   },
   {
@@ -204,7 +204,7 @@ export const QUICKWIN_WORKFLOW: WorkflowStep[] = [
   {
     task: 'Verify: review and confirm',
     children: [
-      'Review: run /review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)',
+      'Review: run /deep-review skill, GET PASSED RESULT, GET USER APPROVAL, call ReviewDone(itemId, summary)',
       'Demo: show user the fix, WAIT FOR EXPLICIT APPROVAL'
     ]
   },
