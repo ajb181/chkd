@@ -1005,7 +1005,9 @@ server.tool(
           });
 
           // Emit TaskCreate prompts for Claude's native task system
-          text += `\n\n⚠️ CREATE TASKS NOW - REQUIRED BEFORE PROCEEDING\n`;
+          text += `\n\n⚠️ CREATE TASKS NOW - USE EXACT TITLES AS WRITTEN\n`;
+          text += `CRITICAL: Copy task titles EXACTLY. Do NOT simplify, shorten, or rephrase.\n`;
+          text += `Preserve ALL capitalized instructions (WAIT FOR APPROVAL, GET USER APPROVAL, etc.)\n`;
           incomplete.forEach((child: any) => {
             const shortTitle = child.title.length > 60
               ? child.title.substring(0, 57) + '...'
@@ -1506,7 +1508,7 @@ server.tool(
 
     const response = await fetch(`${HTTP_BASE}/api/spec/items?repoPath=${encodeURIComponent(repoPath)}`);
     const result = await response.json();
-    const allItems = result.data || [];
+    const allItems = result.data?.items || [];
 
     // Filter to BUG items - only top-level items
     const bugs = allItems.filter((b: any) => b.areaCode === 'BUG' && !b.parentId);
@@ -1563,8 +1565,8 @@ server.tool(
 
     const response = await fetch(`${HTTP_BASE}/api/spec/items?repoPath=${encodeURIComponent(repoPath)}`);
     const result = await response.json();
-    const allItems = result.data || [];
-    
+    const allItems = result.data?.items || [];
+
     // Filter to FUT items (quickwins) - only top-level items
     const wins = allItems.filter((w: any) => w.areaCode === 'FUT' && !w.parentId);
     const pending = wins.filter((w: any) => w.status === 'open' || w.status === 'in-progress');
