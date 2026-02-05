@@ -11,14 +11,22 @@ docs/
 ├── GUIDE.md             # Workflow guide (synced by chkd)
 ├── PHILOSOPHY.md        # Why chkd exists (synced by chkd)
 ├── FILING.md            # This file (synced by chkd)
+├── AGENT-GOVERNANCE.md  # Agent behavior rules
+├── {AREA}.{NUM}/        # Task-specific folders (e.g., BE.48/, FE.23/)
 ├── designs/             # Design & architecture docs
 ├── plans/               # Implementation plans
 ├── handovers/           # Session context for continuity
 ├── stories/             # User stories & requirements
 ├── research/            # Investigation & research notes
 ├── epics/               # Epic definitions
+├── archive/             # Old/unused files
 └── attachments/         # File attachments
 ```
+
+**Task-specific folders** (NEW):
+- `docs/BE.48/` - All files related to task BE.48
+- `docs/FE.23/` - All files related to task FE.23
+- Use this for notes, research, screenshots specific to one task
 
 Note: Spec items and quick wins are stored in the database, not markdown files.
 Use `status()` to see current items.
