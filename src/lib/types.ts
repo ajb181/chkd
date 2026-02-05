@@ -267,6 +267,7 @@ export interface SpecItem {
   // Status
   status: ItemStatus;
   priority: ItemPriority;
+  reviewCompleted: boolean;
 
   // Tags (populated separately)
   tags?: string[];

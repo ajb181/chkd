@@ -32,6 +32,7 @@ function rowToItem(row: any): SpecItem {
     sortOrder: row.sort_order || 0,
     status: row.status as ItemStatus,
     priority: row.priority as ItemPriority,
+    reviewCompleted: row.review_completed === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -531,6 +532,12 @@ export function markItemDone(id: string): SpecItem | null {
 
 export function markItemInProgress(id: string): SpecItem | null {
   return updateItemStatus(id, 'in-progress');
+}
+
+export function markReviewCompleted(id: string): SpecItem | null {
+  const db = getDb();
+  db.prepare(`UPDATE spec_items SET review_completed = 1, updated_at = datetime('now') WHERE id = ?`).run(id);
+  return getItem(id);
 }
 
 // ============================================

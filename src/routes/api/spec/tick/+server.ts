@@ -113,25 +113,8 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // If this is a parent item with children, check for ReviewDone
     if (!dbItem.parentId && incompleteChildren.length > 0) {
-      // Check if ReviewDone was called for this parent
-      const fs = await import('fs');
-      const path = await import('path');
-      const reviewLogPath = path.join(repoPath, '.chkd', 'review.log');
-
-      let reviewExists = false;
-      if (fs.existsSync(reviewLogPath)) {
-        const logs = fs.readFileSync(reviewLogPath, 'utf-8').trim().split('\n').filter(Boolean);
-        reviewExists = logs.some(line => {
-          try {
-            const entry = JSON.parse(line);
-            return entry.itemId === dbItem.displayId;
-          } catch {
-            return false;
-          }
-        });
-      }
-
-      if (reviewExists) {
+      // Check if ReviewDone was called (DB flag check)
+      if (dbItem.reviewCompleted) {
         // ReviewDone was called - mark all children as done automatically
         for (const child of incompleteChildren) {
           markItemDone(child.id);

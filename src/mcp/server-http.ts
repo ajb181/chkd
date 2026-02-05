@@ -654,26 +654,109 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    // Ensure .chkd directory exists
-    const chkdDir = path.join(repoPath, '.chkd');
-    if (!fs.existsSync(chkdDir)) {
-      fs.mkdirSync(chkdDir, { recursive: true });
+    // Validate summary length
+    if (!summary || summary.trim().length < 10) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Review summary must be at least 10 characters\n\nProvide a meaningful summary of what was reviewed and approved.`
+        }]
+      };
     }
 
-    // Save to .chkd/review.log
-    const logEntry = {
-      itemId,
-      timestamp: new Date().toISOString(),
-      summary
-    };
+    // Find the item in DB
+    const findResponse = await api.findSpecItem(repoPath, itemId);
+    if (!findResponse.success || !findResponse.data?.items?.length) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ Item not found: ${itemId}`
+        }]
+      };
+    }
 
-    const logPath = path.join(chkdDir, 'review.log');
-    fs.appendFileSync(logPath, JSON.stringify(logEntry) + '\n');
+    const item = findResponse.data.items[0];
+
+    // Mark review completed in DB
+    const response = await fetch(`${HTTP_BASE}/api/spec/review-done`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoPath, itemId: item.id, summary })
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      return {
+        content: [{
+          type: "text",
+          text: `❌ ${result.error}`
+        }]
+      };
+    }
 
     return {
       content: [{
         type: "text",
         text: `✅ Review logged for ${itemId}\n\n${summary}\n\n💡 You can now tick("${itemId}") to complete all checkpoints.`
+      }]
+    };
+  }
+);
+
+// list_reviews - Show completed reviews
+server.tool(
+  "list_reviews",
+  "List all completed code reviews from review.log",
+  {
+    limit: z.number().optional().describe("Max reviews to show (default: 10)")
+  },
+  async ({ limit = 10 }) => {
+    const repoPath = getRepoPath();
+    await requireRepo(repoPath);
+
+    const logPath = path.join(repoPath, '.chkd', 'review.log');
+
+    if (!fs.existsSync(logPath)) {
+      return {
+        content: [{
+          type: "text",
+          text: `📝 No reviews logged yet\n\n💡 Reviews are logged with ReviewDone(itemId, summary)`
+        }]
+      };
+    }
+
+    const logs = fs.readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
+    const reviews = logs
+      .map(line => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .slice(-limit);
+
+    if (reviews.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: `📝 No reviews found in log`
+        }]
+      };
+    }
+
+    let text = `📋 Code Reviews (${reviews.length}):\n\n`;
+    reviews.forEach((review: any) => {
+      const date = new Date(review.timestamp).toLocaleString();
+      text += `✅ ${review.itemId} - ${date}\n`;
+      text += `   ${review.summary}\n\n`;
+    });
+
+    return {
+      content: [{
+        type: "text",
+        text
       }]
     };
   }
@@ -707,12 +790,10 @@ server.tool(
       // Check if this is a parent item (e.g., BE.45 not BE.45.1.1)
       const isParentItem = /^[A-Z]+\.\d+$/.test(item);
 
-      if (isParentItem) {
+      if (isParentItem && findResponse.success && findResponse.data?.items?.length > 0) {
         // Parent items require ReviewDone to be called first
-        const chkdDir = path.join(repoPath, '.chkd');
-        const logPath = path.join(chkdDir, 'review.log');
-
-        if (!fs.existsSync(logPath)) {
+        const foundItem = findResponse.data.items[0];
+        if (!foundItem.reviewCompleted) {
           return {
             content: [{
               type: "text",
@@ -724,29 +805,6 @@ server.tool(
                     `3. Call: ReviewDone("${item}", "Passed: [summary of review]")\n` +
                     `4. Then: tick("${item}")\n\n` +
                     `This ensures code quality before marking work complete.`
-            }]
-          };
-        }
-
-        // Check if THIS specific item was reviewed
-        const logs = fs.readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
-        const reviewed = logs.some(line => {
-          try {
-            const entry = JSON.parse(line);
-            return entry.itemId === item;
-          } catch {
-            return false;
-          }
-        });
-
-        if (!reviewed) {
-          return {
-            content: [{
-              type: "text",
-              text: `❌ Cannot complete ${item}\n\n` +
-                    `No review found for this item.\n\n` +
-                    `Run: Skill("review")\n` +
-                    `Then: ReviewDone("${item}", "summary")`
             }]
           };
         }

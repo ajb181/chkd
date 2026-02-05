@@ -279,6 +279,7 @@ function initSchema(db: Database.Database): void {
       -- Status
       status TEXT NOT NULL DEFAULT 'open',  -- open, in-progress, done, skipped, blocked
       priority TEXT DEFAULT 'medium',        -- low, medium, high, critical
+      review_completed INTEGER DEFAULT 0,    -- 1 if ReviewDone() was called
 
       -- Timestamps
       created_at TEXT DEFAULT (datetime('now')),
@@ -365,6 +366,10 @@ function runMigrations(db: Database.Database): void {
   const specItemsCols = specItemsInfo.map(c => c.name);
   if (!specItemsCols.includes('workflow_type')) {
     db.exec(`ALTER TABLE spec_items ADD COLUMN workflow_type TEXT;`);
+  }
+
+  if (!specItemsCols.includes('review_completed')) {
+    db.exec(`ALTER TABLE spec_items ADD COLUMN review_completed INTEGER DEFAULT 0;`);
   }
 
   // Migration: Add ON DELETE CASCADE to parent_id foreign key
