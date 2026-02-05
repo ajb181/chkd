@@ -1014,6 +1014,7 @@ server.tool(
           });
           text += `\n\nSTOP. Create ALL tasks above before continuing.`;
           text += `\n\n📖 THEN: Read docs/AGENT-GOVERNANCE.md before starting work.`;
+          text += `\n📁 ORGANIZE: Keep task files in docs/${foundItem.displayId}/ (see docs/FILING.md)`;
           text += `\n\n💡 Use tick("${foundItem.displayId}") when all work complete + review done.`;
         }
       } else {
