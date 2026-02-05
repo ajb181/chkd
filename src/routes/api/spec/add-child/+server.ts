@@ -32,10 +32,18 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: `Parent item "${parentId}" not found in database.` }, { status: 404 });
     }
 
-    // Get existing children to determine sort order
+    // Get existing children to determine next child number
     const siblings = getChildren(parentItem.id);
     const sortOrder = siblings.length;
-    const childNumber = sortOrder + 1;
+
+    // Find max child number from existing display_ids (handles gaps from deletions)
+    let maxChildNum = 0;
+    for (const sib of siblings) {
+      const parts = sib.displayId.split('.');
+      const num = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(num) && num > maxChildNum) maxChildNum = num;
+    }
+    const childNumber = maxChildNum + 1;
     const displayId = `${parentItem.displayId}.${childNumber}`;
 
     const newChild = createItem({

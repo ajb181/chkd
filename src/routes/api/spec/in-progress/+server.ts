@@ -51,8 +51,16 @@ export const POST: RequestHandler = async ({ request }) => {
     // Update session with current task info
     if (isParent) {
       // Top-level item: set as current task and anchor
+      // Also auto-set currentItem to first incomplete checkpoint
+      const children = getChildren(dbItem.id);
+      children.sort((a, b) => a.displayId.localeCompare(b.displayId));
+      const firstIncomplete = children.find(c => c.status !== 'done');
+
       updateSession(repo.id, {
         currentTask: { id: dbItem.id, title: dbItem.title, phase: null },
+        currentItem: firstIncomplete
+          ? { id: firstIncomplete.id, title: firstIncomplete.title }
+          : null,
         status: 'building'
       });
       setAnchor(repo.id, dbItem.id, dbItem.title, 'cli');

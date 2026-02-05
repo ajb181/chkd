@@ -102,7 +102,23 @@
       "mcp__chkd-dev__tick",
       "Bash(kill:*)",
       "mcp__chkd-dev__suggest",
-      "mcp__chkd-dev__bugs"
+      "mcp__chkd-dev__bugs",
+      "mcp__chkd-dev__sync",
+      "Bash(npm run migrate:*)",
+      "mcp__chkd-dev__status",
+      "mcp__chkd-dev__CreateQuickWin",
+      "Bash(npm run build:stable:*)",
+      "Bash(__NEW_LINE_ea134c55b63c317e__ echo -e \"\\\\n=== Verify state in DB ===\")",
+      "Bash(chmod:*)",
+      "Bash(/Users/alex/chkd/scripts/release-test.sh:*)",
+      "mcp__chkd-dev__working",
+      "mcp__chkd-dev__delete",
+      "Bash(for:*)",
+      "Bash(do echo \"delete $i\")",
+      "mcp__chkd-dev__list",
+      "mcp__chkd-dev__tag",
+      "mcp__chkd-dev__add",
+      "mcp__chkd-dev__done"
     ]
   }
 }

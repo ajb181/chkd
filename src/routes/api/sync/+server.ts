@@ -110,7 +110,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     try {
       fs.mkdirSync(docsPath, { recursive: true });
-      const docFiles = ['GUIDE.md', 'PHILOSOPHY.md', 'FILING.md'];
+      const docFiles = ['GUIDE.md', 'PHILOSOPHY.md', 'FILING.md', 'WORKFLOW.md', 'AGENT-GOVERNANCE.md'];
       let copiedCount = 0;
 
       for (const file of docFiles) {
@@ -125,14 +125,66 @@ export const POST: RequestHandler = async ({ request }) => {
       results.push(`⚠️ docs/ error: ${err}`);
     }
 
-    // 5. .gitignore
+    // 5. .claude/skills/ - sync skills from templates (delete old, copy new)
+    const skillsPath = path.join(repoPath, '.claude', 'skills');
+    const templateSkillsPath = path.join(templatesDir, 'skills');
+
+    try {
+      if (fs.existsSync(templateSkillsPath)) {
+        fs.mkdirSync(skillsPath, { recursive: true });
+
+        const templateSkillDirs = fs.readdirSync(templateSkillsPath, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name);
+
+        // Delete skills that aren't in templates
+        let deletedCount = 0;
+        if (fs.existsSync(skillsPath)) {
+          const existingSkillDirs = fs.readdirSync(skillsPath, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => d.name);
+
+          for (const existingSkill of existingSkillDirs) {
+            if (!templateSkillDirs.includes(existingSkill)) {
+              fs.rmSync(path.join(skillsPath, existingSkill), { recursive: true });
+              deletedCount++;
+            }
+          }
+        }
+
+        // Copy skills from templates
+        let copiedCount = 0;
+        for (const skillDir of templateSkillDirs) {
+          const srcDir = path.join(templateSkillsPath, skillDir);
+          const destDir = path.join(skillsPath, skillDir);
+          fs.mkdirSync(destDir, { recursive: true });
+
+          const files = fs.readdirSync(srcDir);
+          for (const file of files) {
+            const content = fs.readFileSync(path.join(srcDir, file), 'utf-8');
+            fs.writeFileSync(path.join(destDir, file), content);
+          }
+          copiedCount++;
+        }
+
+        const deleteMsg = deletedCount > 0 ? `, ${deletedCount} removed` : '';
+        results.push(`✅ skills/ synced (${copiedCount} skills${deleteMsg})`);
+      }
+    } catch (err) {
+      results.push(`⚠️ skills/ error: ${err}`);
+    }
+
+    // 6. .gitignore
     const gitignorePath = path.join(repoPath, '.gitignore');
     const chkdIgnoreBlock = `
 # chkd managed files (synced from templates, not committed)
 CLAUDE.md
 docs/GUIDE.md
 docs/PHILOSOPHY.md
-docs/FILING.md`;
+docs/FILING.md
+docs/WORKFLOW.md
+docs/AGENT-GOVERNANCE.md
+.claude/skills/`;
 
     try {
       let gitignoreContent = '';

@@ -67,14 +67,12 @@ export const GET: RequestHandler = async ({ url }) => {
       }
     }
 
-    // Optionally add children to each item
-    if (withChildren) {
-      items = items.map(item => ({
-        ...item,
-        children: getChildren(item.id),
-        tags: getItemTags(item.id)
-      }));
-    }
+    // Always include tags, optionally add children
+    items = items.map(item => ({
+      ...item,
+      tags: getItemTags(item.id),
+      ...(withChildren ? { children: getChildren(item.id) } : {})
+    }));
 
     // Optionally include progress stats
     let progress = null;

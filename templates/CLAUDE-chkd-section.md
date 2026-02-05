@@ -70,10 +70,31 @@ Tick each step as you complete it. Can't skip. Can't batch. One at a time.
 ### Core Behaviors
 
 1. **Tick as you go** — Complete a sub-item → `tick()` immediately
-2. **Quick wins** — Small fix? → `CreateQuickWin()` then do it
+2. **Log, don't derail** — Found a bug? → `CreateQuickWin()` then continue
 3. **Explore first** — Read code before changing it
 4. **Verify with user** — Don't tick Feedback without user "yes"
 5. **Research when stuck** — Web search before brute force
+
+---
+
+### Quick How-To
+
+**Found a bug?** Log it, stay focused:
+```
+CreateQuickWin(title="Fix null check", files="src/auth.ts", test="Login works")
+```
+
+**Need a subtask?** Add to current item:
+```
+add_task("Handle edge case")
+```
+
+**Want to refactor?** Same pattern - log it:
+```
+CreateQuickWin(title="Refactor validation", files="src/forms.ts", test="Forms validate")
+```
+
+Then continue your current task. Fix quick wins later with `ListQuickWins()`.
 
 ---
 
@@ -84,4 +105,6 @@ Tick each step as you complete it. Can't skip. Can't batch. One at a time.
 | `status()` | Current state, progress, queue |
 | `docs/GUIDE.md` | How to use chkd |
 | `docs/PHILOSOPHY.md` | Why chkd exists |
+| `docs/WORKFLOW.md` | How to work (subagents, elegance, reuse) |
+| `docs/AGENT-GOVERNANCE.md` | Agent behavior rules (assumptions, scope, simplicity) |
 <!-- chkd:end -->

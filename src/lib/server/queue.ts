@@ -36,6 +36,8 @@ export function removeQueueItem(repoPath: string, itemId: string): boolean {
   return true;
 }
 
-export function clearQueue(repoPath: string): void {
+export function clearQueue(repoPath: string): QueueItem[] {
+  const items = queues.get(repoPath) || [];
   queues.set(repoPath, []);
+  return items;
 }
