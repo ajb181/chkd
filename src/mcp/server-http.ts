@@ -958,6 +958,27 @@ server.tool(
         text = `📋 ${fullTitle}`;
         text += `\n   Progress: ${doneCount}/${totalCount} checkpoints complete`;
 
+        // MANDATORY INSTRUCTIONS FIRST - agent must see these before context
+        const incomplete = children.filter((c: any) => c.status !== 'done');
+        if (incomplete.length > 0) {
+          text += `\n\n⚠️ STOP — Create your task list NOW before doing anything else.`;
+          text += `\nRun TaskCreate() for EACH checkpoint below. Do NOT skip this step.\n`;
+          incomplete.forEach((child: any) => {
+            text += `\nTaskCreate("${child.title}")`;
+          });
+
+          text += `\n\n📖 Read docs/AGENT-GOVERNANCE.md before starting.`;
+          text += `\n📁 Keep files in docs/${foundItem.displayId}/`;
+        } else {
+          text += `\n\n✅ All checkpoints complete! Run tick("${item}") to finish.`;
+        }
+
+        // Show design file link
+        if (foundItem.designFile) {
+          text += `\n\n📄 DESIGN FILE: ${foundItem.designFile}`;
+          text += `\n   Read this before any implementation.`;
+        }
+
         // Show description/story if available
         if (foundItem.description) {
           text += `\n\n📝 DESCRIPTION:\n${foundItem.description}`;
@@ -990,39 +1011,7 @@ server.tool(
           });
         }
 
-        if (firstIncomplete) {
-          text += `\n\n▶ NEXT: working("${firstIncomplete.displayId}")`;
-          text += `\n   ${firstIncomplete.title}`;
-        } else {
-          text += `\n\n✅ All checkpoints complete! Run tick("${item}") to finish.`;
-        }
-
-        // Show remaining checkpoints
-        const incomplete = children.filter((c: any) => c.status !== 'done');
-        if (incomplete.length > 0) {
-          text += `\n\n📋 REMAINING CHECKPOINTS:`;
-          incomplete.forEach((child: any, idx: number) => {
-            const marker = idx === 0 ? '▶' : '○';
-            text += `\n  ${marker} ${child.displayId} ${child.title}`;
-          });
-
-          // Emit TaskCreate prompts for Claude's native task system
-          text += `\n\n⚠️ CREATE TASKS NOW - USE EXACT TITLES AS WRITTEN\n`;
-          text += `CRITICAL: Copy task titles EXACTLY. Do NOT simplify, shorten, or rephrase.\n`;
-          text += `Preserve ALL capitalized instructions (WAIT FOR APPROVAL, GET USER APPROVAL, etc.)\n`;
-          incomplete.forEach((child: any) => {
-            const shortTitle = child.title.length > 60
-              ? child.title.substring(0, 57) + '...'
-              : child.title;
-            text += `\nTaskCreate("${shortTitle}")`;
-          });
-          text += `\n\nSTOP. Create ALL tasks above before continuing.`;
-
-          text += `\n\n📖 THEN: Read docs/AGENT-GOVERNANCE.md before starting work.`;
-          text += `\n📁 ORGANIZE: Keep task files in docs/${foundItem.displayId}/ (see docs/FILING.md)`;
-
-          text += `\n\n💡 Use tick("${foundItem.displayId}") when all work complete + review done.`;
-        }
+        text += `\n\n✅ When done: tick("${foundItem.displayId}")`;
       } else {
         // Leaf checkpoint - show working state
         text = `🔨 Working on: ${fullTitle}`;
@@ -1096,10 +1085,13 @@ server.tool(
     });
 
     if (!response.success) {
+      let errorText = `❌ ${response.error}`;
+      if (response.hint) errorText += `\n💡 ${response.hint}`;
+      if (response.checkedPath) errorText += `\nChecked: ${response.checkedPath}`;
       return {
         content: [{
           type: "text",
-          text: `❌ ${response.error}`
+          text: errorText
         }]
       };
     }
