@@ -386,6 +386,8 @@ server.tool(
   {},
   async () => {
     const repoPath = getRepoPath();
+    const cwd = process.cwd();
+    const worktreePath = cwd !== repoPath ? cwd : undefined;
     const projectName = path.basename(repoPath);
 
     // Call the API endpoint which has the canonical sync logic
@@ -393,7 +395,7 @@ server.tool(
       const response = await fetch(`${HTTP_BASE}/api/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoPath })
+        body: JSON.stringify({ repoPath, worktreePath })
       });
 
       const result = await response.json();

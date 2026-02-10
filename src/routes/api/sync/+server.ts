@@ -8,7 +8,7 @@ import path from 'path';
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const body = await request.json();
-    const { repoPath } = body;
+    const { repoPath, worktreePath } = body;
 
     if (!repoPath) {
       return json({ success: false, error: 'repoPath is required' }, { status: 400 });
@@ -198,6 +198,62 @@ docs/AGENT-GOVERNANCE.md
       }
     } catch (err) {
       results.push(`⚠️ .gitignore error: ${err}`);
+    }
+
+    // 7. Worktree sync - copy skills, CLAUDE.md, and docs to worktree if different from main repo
+    if (worktreePath && worktreePath !== repoPath) {
+      try {
+        let worktreeSynced = 0;
+
+        // Copy CLAUDE.md
+        const mainClaude = path.join(repoPath, 'CLAUDE.md');
+        const wtClaude = path.join(worktreePath, 'CLAUDE.md');
+        if (fs.existsSync(mainClaude)) {
+          fs.writeFileSync(wtClaude, fs.readFileSync(mainClaude, 'utf-8'));
+          worktreeSynced++;
+        }
+
+        // Copy docs/
+        const wtDocsPath = path.join(worktreePath, 'docs');
+        fs.mkdirSync(wtDocsPath, { recursive: true });
+        const docFiles = ['GUIDE.md', 'PHILOSOPHY.md', 'FILING.md', 'WORKFLOW.md', 'AGENT-GOVERNANCE.md'];
+        for (const file of docFiles) {
+          const src = path.join(repoPath, 'docs', file);
+          if (fs.existsSync(src)) {
+            fs.writeFileSync(path.join(wtDocsPath, file), fs.readFileSync(src, 'utf-8'));
+            worktreeSynced++;
+          }
+        }
+
+        // Copy skills/ - clean and replace
+        const wtSkillsPath = path.join(worktreePath, '.claude', 'skills');
+        if (fs.existsSync(templateSkillsPath)) {
+          // Delete old skills in worktree
+          if (fs.existsSync(wtSkillsPath)) {
+            fs.rmSync(wtSkillsPath, { recursive: true });
+          }
+          fs.mkdirSync(wtSkillsPath, { recursive: true });
+
+          const templateSkillDirs = fs.readdirSync(templateSkillsPath, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => d.name);
+
+          for (const skillDir of templateSkillDirs) {
+            const srcDir = path.join(templateSkillsPath, skillDir);
+            const destDir = path.join(wtSkillsPath, skillDir);
+            fs.mkdirSync(destDir, { recursive: true });
+            const files = fs.readdirSync(srcDir);
+            for (const file of files) {
+              fs.writeFileSync(path.join(destDir, file), fs.readFileSync(path.join(srcDir, file), 'utf-8'));
+            }
+            worktreeSynced++;
+          }
+        }
+
+        results.push(`✅ worktree synced (${worktreeSynced} items to ${path.basename(worktreePath)})`);
+      } catch (err) {
+        results.push(`⚠️ worktree sync error: ${err}`);
+      }
     }
 
     return json({
