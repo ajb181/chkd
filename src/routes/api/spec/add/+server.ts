@@ -79,9 +79,10 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 400 });
     }
 
-    // Validate designFile - required for features (not for child items or quickwins)
+    // Validate designFile - required for features (not for child items, quickwins, or bugs)
     // QuickWins and Bugs use a simplified workflow, design file optional
-    const needsDesignFile = !workflowType || workflowType === 'default' || workflowType === 'refactor';
+    const isBugOrQuickWin = areaCode === 'BUG' || workflowType === 'quickwin';
+    const needsDesignFile = !isBugOrQuickWin && (!workflowType || workflowType === 'default' || workflowType === 'refactor');
     if (needsDesignFile && !designFile) {
       return json({
         success: false,

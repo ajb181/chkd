@@ -969,6 +969,7 @@ server.tool(
 
           text += `\n\n📖 Read docs/AGENT-GOVERNANCE.md before starting.`;
           text += `\n📁 Keep files in docs/${foundItem.displayId}/`;
+          text += `\n📝 Write a short summary of bug/fix/test to docs/${foundItem.displayId}/fix.md — do NOT skip this.`;
         } else {
           text += `\n\n✅ All checkpoints complete! Run tick("${item}") to finish.`;
         }
