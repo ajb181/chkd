@@ -114,23 +114,9 @@ This becomes your reference during implementation and review.`,
       }, { status: 400 });
     }
 
-    // Validate design file exists (if provided)
+    // Store design file path (existence checked later when moving)
     let designFilePath: string | null = null;
     if (designFile) {
-      const absoluteDesignPath = path.isAbsolute(designFile)
-        ? designFile
-        : path.join(repoPath, designFile);
-
-      if (!fs.existsSync(absoluteDesignPath)) {
-        return json({
-          success: false,
-          error: `Design file not found: ${designFile}`,
-          hint: 'Create the design file first, then call add(). The file must exist before creating the task.',
-          checkedPath: absoluteDesignPath
-        }, { status: 400 });
-      }
-
-      // Store relative path from repo root
       designFilePath = path.isAbsolute(designFile)
         ? path.relative(repoPath, designFile)
         : designFile;
@@ -243,9 +229,13 @@ This becomes your reference during implementation and review.`,
       const targetRelative = path.relative(repoPath, targetPath);
 
       if (sourceRelative !== targetRelative) {
-        // Copy to new location (keep original for safety)
-        fs.copyFileSync(sourceAbsolute, targetPath);
-        warnings.push(`Design file copied to: docs/${displayId}/design.md`);
+        if (fs.existsSync(sourceAbsolute)) {
+          // Copy to new location (keep original for safety)
+          fs.copyFileSync(sourceAbsolute, targetPath);
+          warnings.push(`Design file copied to: docs/${displayId}/design.md`);
+        } else {
+          warnings.push(`Design file not found at ${designFilePath} — create it at docs/${displayId}/design.md`);
+        }
       }
 
       finalDesignPath = `docs/${displayId}/design.md`;
