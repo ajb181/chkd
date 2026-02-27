@@ -1,12 +1,12 @@
 ---
 name: deep-review
-description: AI-focused code review with 4 parallel sub-agents - catches duplication, over-engineering, assumptions, fallbacks, code smells
+description: Thorough code review with 4 parallel sub-agents and interactive walkthrough of every finding
 args: scope
 ---
 
 # /deep-review - AI-Focused Code Review
 
-Reviews code for mistakes AI commonly makes. Spawns 4 parallel sub-agents, each with fresh context.
+Reviews code for mistakes AI commonly makes. Spawns 4 parallel sub-agents, then walks through EVERY finding interactively with the user.
 
 ## Usage
 
@@ -178,6 +178,10 @@ Return:
 REUSE_SCORE: X/5 (5 = excellent reuse, 1 = reinvented everything)
 PATTERN_SCORE: X/5 (5 = fits perfectly, 1 = ignores conventions)
 
+JUSTIFICATION (MANDATORY for any score below 4):
+- Score is X because: [specific reason]
+- To reach 5: [what would need to change]
+
 SEARCHES PERFORMED:
 - Searched for "[term]" → found [result] at [path:line] | nothing
 - Searched for "[term]" → found [result] at [path:line] | nothing
@@ -270,15 +274,19 @@ Return:
 SIMPLICITY_SCORE: X/5 (5 = minimal and elegant, 1 = over-engineered)
 SMELL_SCORE: X/5 (5 = clean, 1 = smelly)
 
+JUSTIFICATION (MANDATORY for any score below 4):
+- Score is X because: [specific reason with file:line references]
+- To reach 5: [concrete changes needed]
+
 OVER_ENGINEERING:
 - [file:line] [abstraction] is only used once - inline it
 - [file:line] [wrapper] adds no value - remove it
 - [file:line] could be replaced with [simpler alternative]
 
 SMELLS FOUND (list EVERY one — do not batch or summarize):
-- [file:line] [smell type]: [description] — SEVERITY: HIGH/MEDIUM/LOW
-- [file:line] [smell type]: [description] — SEVERITY: HIGH/MEDIUM/LOW
-- [file:line] [smell type]: [description] — SEVERITY: HIGH/MEDIUM/LOW
+- [file:line] [smell type]: [description]
+- [file:line] [smell type]: [description]
+- [file:line] [smell type]: [description]
 
 INTERNAL DUPLICATION:
 - [file:line1] and [file:line2]: [description of repeated code]
@@ -295,7 +303,9 @@ If you report fewer than 3 total findings across all categories, explain why you
 
 ### Sub-Agent 4: Assumptions & Error Handling
 
-**Purpose:** Did the AI make silent decisions? Did it create fallback behavior instead of proper errors?
+**Purpose:** Did the AI make silent decisions that weren't in the plan? Did it create fallback behavior instead of proper errors?
+
+**CRITICAL:** This agent's primary job is to find code decisions that were NOT in the design/requirements. Every choice the AI made that wasn't explicitly asked for is a finding. These MUST be surfaced to the user — they may be correct, but the user needs to confirm.
 
 ```
 Task({
@@ -311,27 +321,41 @@ CODE TO REVIEW:
 --- src/components/Feature.tsx ---
 [actual contents]
 
-REQUIREMENTS:
+REQUIREMENTS / DESIGN:
 1. [actual requirement]
 2. [actual requirement]
+
+[design file contents if available]
 
 FLAGS FROM BUILD (assumptions the AI logged during coding):
 [any flags from .chkd/decisions.json, or "none logged"]
 
-PART A — ASSUMPTIONS:
-Look for decisions made without explicit instruction:
-1. Data format choices (JSON vs FormData, date formats)
-2. Error handling strategy chosen
-3. State management approach
-4. API design choices
-5. Default values chosen
-6. Edge case handling decisions
+PART A — ASSUMPTIONS (this is the most important part):
 
-For each: Was this explicitly requested? Should the user have been asked?
+Go through the code line by line. For EVERY implementation decision, ask: "Was this in the plan/requirements?"
+
+Look for:
+1. Data format choices (JSON vs FormData, date formats, string vs enum)
+2. Error handling strategy chosen (throw vs return null vs default)
+3. State management approach
+4. API design choices (REST conventions, response shape, status codes)
+5. Default values chosen — what are they, why those values?
+6. Edge case handling decisions — what edge cases were handled, which were ignored?
+7. Validation rules — what gets validated, what doesn't?
+8. Ordering/sorting choices
+9. Naming choices that imply behavior (e.g., "soft delete" vs "delete")
+10. Caching/memoization decisions
+11. Timeout values, retry counts, limits
+12. Data transformation logic
+
+For EACH assumption found, provide:
+- WHAT: The specific decision made (with file:line)
+- WHY IT MATTERS: What could go wrong if this assumption is incorrect
+- QUESTION: The plain-English question the user should answer to confirm
 
 PART B — FALLBACK / ERROR HIDING:
-This is CRITICAL. AI loves to "be helpful" by returning defaults instead of errors.
-Flag ALL of these as MUST FIX:
+AI loves to "be helpful" by returning defaults instead of errors.
+Flag ALL of these:
 
 1. catch blocks that return fallback values ([], null, {}, 0, '', false) instead of throwing or re-throwing
 2. catch blocks that log but don't re-throw — error is swallowed
@@ -349,13 +373,20 @@ Internal functions should THROW, not catch-and-default.
 Exception: retry logic, circuit breakers, and explicit user-facing fallbacks with clear comments are OK.
 
 Return:
-ASSUMPTION_SCORE: X/5 (5 = all decisions explicit, 1 = many silent assumptions)
+ASSUMPTION_SCORE: X/5 (5 = all decisions explicit in plan, 1 = many silent assumptions)
 ERROR_HANDLING_SCORE: X/5 (5 = errors propagate correctly, 1 = errors hidden everywhere)
 
-SILENT_ASSUMPTIONS:
-- [assumption]: [what was decided] - should have asked because [reason]
+JUSTIFICATION (MANDATORY for any score below 4):
+- Score is X because: [specific reason]
+- To reach 5: [what would need to change]
 
-FALLBACK_VIOLATIONS (MUST FIX):
+SILENT_ASSUMPTIONS (list ALL — do not filter by importance):
+For each:
+- WHAT: [file:line] [what was decided]
+- WHY IT MATTERS: [what breaks if wrong]
+- QUESTION: [plain English question for the user]
+
+FALLBACK_VIOLATIONS:
 - [file:line]: catch returns [fallback] instead of throwing — error is hidden
 - [file:line]: || [default] masks failure of [expression]
 - [file:line]: ?. silently skips [thing] that should be required
@@ -363,9 +394,6 @@ FALLBACK_VIOLATIONS (MUST FIX):
 GOOD_ERROR_HANDLING:
 - [correctly lets errors propagate]
 - [appropriate top-level catch with user-facing error message]
-
-QUESTIONS_THAT_SHOULD_HAVE_BEEN_ASKED:
-- [question AI should have asked before implementing]
 `
 })
 ```
@@ -374,7 +402,7 @@ QUESTIONS_THAT_SHOULD_HAVE_BEEN_ASKED:
 
 ## Step 4: Aggregate Results
 
-After all 4 sub-agents return:
+After all 4 sub-agents return, compile the full report. Do NOT filter findings. Every finding from every agent appears.
 
 ```
 ╔══════════════════════════════════════════════════════╗
@@ -390,60 +418,102 @@ SMELL SCORE:          X/5
 ASSUMPTION SCORE:     X/5
 ERROR HANDLING SCORE: X/5
 
-─── MUST FIX (blocks ship) ───
-[ ] [missing requirement]
-[ ] [duplicated existing code - use X instead]
-[ ] [catch returns fallback instead of throwing]
-[ ] [error swallowed - should propagate]
-[ ] [over-engineered - simplify]
-[ ] [silent assumption - should have asked]
+Total findings: N
 
-─── DUPLICATION (from Agent 2) ───
+─── SPEC ISSUES ───
+[ ] [missing/wrong/partial requirement]
+
+─── ASSUMPTIONS NOT IN PLAN ───
+[ ] [file:line] [what was decided] — needs user confirmation
+[ ] [file:line] [what was decided] — needs user confirmation
+
+─── DUPLICATION ───
 Searches performed: N
-Duplications found: N
-[ ] [new thing at path:line] → use [existing thing at path:line] instead
-[ ] [near-duplicate] → extend [existing] instead of creating new
+[ ] [new thing at path:line] → [existing thing at path:line]
 
-─── CODE SMELLS (from Agent 3) ───
-Total smells found: N
-[ ] HIGH: [file:line] [smell]: [description]
-[ ] MEDIUM: [file:line] [smell]: [description]
-[ ] LOW: [file:line] [smell]: [description]
+─── CODE SMELLS ───
+[ ] [file:line] [smell]: [description]
+[ ] [file:line] [smell]: [description]
 
-─── SHOULD FIX ───
-[ ] [minor reuse opportunity]
-[ ] [slight over-engineering]
-[ ] [minor pattern deviation]
-[ ] [assumption worth noting]
+─── ERROR HANDLING ───
+[ ] [file:line] [fallback/swallow description]
 
-─── NOTES ───
-[observations, good things, questions for user]
+─── GOOD ───
+[things done well — always include positives]
 ```
 
 ---
 
-## Step 5: Fix or Escalate
+## Step 5: Interactive Walkthrough
 
-**If MUST FIX is empty:**
+**This is the most important step. Do NOT skip it. Do NOT batch-fix.**
+
+After showing the report, walk through EVERY finding one at a time using `AskUserQuestion`. The user decides what to do with each finding — not you.
+
+### How to present each finding:
+
+Use `AskUserQuestion` with clear, plain-English explanation. No jargon. Explain it like you're talking to someone smart who isn't looking at the code right now.
+
+For each finding, structure it as:
+
 ```
-✅ Deep review passed. Ready to ship.
+AskUserQuestion({
+  questions: [{
+    question: "[Plain English: what's happening, why it matters, what could go wrong]
+
+[file:line] — [the actual code snippet]
+
+What would you like to do?",
+    header: "Finding N",
+    options: [
+      { label: "Fix it", description: "[specific proposed fix]" },
+      { label: "Leave it", description: "Accept this as-is, it's intentional" },
+      { label: "Discuss", description: "I want to understand this better before deciding" }
+    ],
+    multiSelect: false
+  }]
+})
 ```
 
-**If MUST FIX has items:**
+### Rules for the walkthrough:
+
+1. **One finding at a time** — never batch multiple findings into one question
+2. **Plain English first** — explain WHAT is happening and WHY it matters before showing code
+3. **Always offer "Discuss"** — the user might want to talk through it, ask questions, or explain context you don't have
+4. **If user picks "Discuss"** — have the conversation. Answer questions. Explain trade-offs. When they're ready, re-present the options
+5. **If user picks "Fix it"** — note it down, move to next finding. Fix everything at the end
+6. **If user picks "Leave it"** — move on, no argument
+7. **Assumptions get special treatment** — for findings from Agent 4 (assumptions not in plan), always frame as: "The code does X, but the plan didn't specify this. Is X correct?"
+8. **Group related findings** — if 3 findings are all about the same function, you CAN present them together in one AskUserQuestion, but still list each as a separate option
+
+### Walkthrough order:
+
+1. Spec issues first (missing/wrong requirements)
+2. Assumptions not in plan (decisions that need confirmation)
+3. Error handling (fallbacks and swallowed errors)
+4. Code smells and duplication
+5. Pattern violations
+
+---
+
+## Step 6: Apply Fixes
+
+After the walkthrough, summarize what was decided:
+
 ```
-❌ Issues found.
+Walkthrough Complete
+═══════════════════════════════════════
 
-Show user:
-- What needs to change
-- Why (which AI mistake)
-- Proposed fix
+FIX (N items):
+- [finding] → [proposed fix]
 
-Get approval, then fix.
-Re-run relevant sub-agent to verify.
+ACCEPTED AS-IS (N items):
+- [finding] → user confirmed intentional
+
+Applying fixes now...
 ```
 
-**If disagreement with sub-agent:**
-Ask user to decide. Don't argue with the review.
+Apply all fixes. Then show the user a summary of changes made.
 
 ---
 
@@ -453,12 +523,14 @@ Ask user to decide. Don't argue with the review.
 - **Pass real content**: Sub-agents get actual file contents
 - **Parallel execution**: Launch all 4 sub-agents at once
 - **Fresh context**: Each sub-agent has no prior knowledge
-- **Be objective**: Sub-agent ratings are authoritative
-- **Fix before ship**: MUST FIX items block completion
-- **Fallbacks are bugs**: catch-and-default is a MUST FIX, not a suggestion
+- **Surface EVERYTHING**: Do not filter, prioritize, or condense sub-agent findings. Every finding appears in the report. The user decides what matters during the walkthrough.
+- **Interactive walkthrough is mandatory**: After the report, walk through every finding with AskUserQuestion. No exceptions.
+- **Plain English**: Explain findings like the user isn't staring at the code. What's happening, why it matters, what could go wrong.
+- **Scores need justification**: Any score below 4/5 MUST include specific reasons and what would fix it. "3/5" with no explanation is not acceptable.
+- **Assumptions are findings**: Every code decision not in the plan is a finding that needs user confirmation. Don't assume the AI made the right call.
 - **Duplication requires proof**: Agent 2 must list searches performed — "no duplication" without searches is a failed review
 - **Smells require line numbers**: Agent 3 must cite exact file:line for every smell — vague findings are rejected
-- **Surface everything**: Do not filter or condense sub-agent findings in the report. Every finding from every agent appears in the final output. Let the user decide what matters.
+- **No auto-fixing**: Never fix findings without walking through them with the user first
 
 ---
 
@@ -474,10 +546,10 @@ Ask user to decide. Don't argue with the review.
 | Premature abstraction | Code Quality |
 | Long functions/files | Code Quality |
 | Magic numbers | Code Quality |
-| Swallowed errors with fallbacks | Assumptions & Error Handling |
-| catch-and-return-default | Assumptions & Error Handling |
-| Silent decisions without asking | Assumptions & Error Handling |
-| Optional chaining hiding required data | Assumptions & Error Handling |
+| Decisions not in the plan | Assumptions |
+| Swallowed errors with fallbacks | Error Handling |
+| catch-and-return-default | Error Handling |
+| Optional chaining hiding required data | Error Handling |
 
 ---
 
@@ -487,4 +559,4 @@ Ask user to decide. Don't argue with the review.
 1. Spec Compliance
 2. Assumptions & Error Handling
 
-(The 2 most critical for AI mistakes)
+(The 2 most critical for AI mistakes. Still does interactive walkthrough.)
