@@ -152,12 +152,15 @@ export async function createEpic(
   const filePath = path.join(epicsDir, `${slug}.md`);
   const createdAt = new Date().toISOString().split('T')[0];
 
-  // Check if epic already exists
+  // If file already exists, adopt it (agent may have written it first)
   try {
     await fs.access(filePath);
-    throw new Error(`Epic "${name}" already exists at ${filePath}`);
+    const existing = await parseEpicFile(filePath);
+    if (existing) return existing;
+    throw new Error(`Epic file exists at ${filePath} but couldn't be parsed. Check it has a "# Epic: Name" title.`);
   } catch (err: any) {
     if (err.code !== 'ENOENT') throw err;
+    // File doesn't exist — fall through to create it
   }
 
   // Default overhaul checklist

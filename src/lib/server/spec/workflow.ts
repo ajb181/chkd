@@ -8,26 +8,18 @@
 import type { WorkflowStep } from '$lib/types';
 
 /**
- * Streamlined workflow steps for new features (11 checkpoints)
+ * Streamlined workflow steps for new features (8 checkpoints)
  *
  * Philosophy:
- * - Get user feedback BEFORE investing in real implementation
+ * - Tasks arrive well-spec'd — confirm the plan, then build
  * - Minimal checkpoints that enforce human+AI collaboration
- * - FE/SD: 11 checkpoints, BE: 9 checkpoints (no Prototype)
+ * - FE/SD: 8 checkpoints, BE: 6 checkpoints (no Prototype)
  */
 export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
   {
-    task: 'Explore: research problem and existing code',
+    task: 'Understand: review the plan',
     children: [
-      'Research: investigate codebase, find reusable patterns',
-      'Share: discuss findings with user, clarify if unclear'
-    ]
-  },
-  {
-    task: 'Design: review and finalize approach',
-    children: [
-      'Review: read design file (docs/{ITEM.ID}/design.md), update with implementation details',
-      'Approve: show user the finalized approach, WAIT FOR EXPLICIT APPROVAL before proceeding'
+      'Confirm: read design file (docs/{ITEM.ID}/design.md), confirm it is clear and fit for purpose. Raise any concerns before proceeding.'
     ]
   },
   {
@@ -60,15 +52,14 @@ export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
 ];
 
 /**
- * Backend workflow (9 checkpoints) - skips Prototype phase
+ * Backend workflow (6 checkpoints) - skips Prototype phase
  */
 export const BE_WORKFLOW_STEPS: WorkflowStep[] = [
-  DEFAULT_WORKFLOW_STEPS[0], // Explore
-  DEFAULT_WORKFLOW_STEPS[1], // Design
-  // Skip Prototype (index 2)
-  DEFAULT_WORKFLOW_STEPS[3], // Implement
-  DEFAULT_WORKFLOW_STEPS[4], // Polish
-  DEFAULT_WORKFLOW_STEPS[5], // Finish
+  DEFAULT_WORKFLOW_STEPS[0], // Understand
+  // Skip Prototype (index 1)
+  DEFAULT_WORKFLOW_STEPS[2], // Implement
+  DEFAULT_WORKFLOW_STEPS[3], // Review
+  DEFAULT_WORKFLOW_STEPS[4], // Finish
 ];
 
 /**
@@ -107,11 +98,11 @@ export const BUG_WORKFLOW_STEPS: WorkflowStep[] = [
 
 // Shorter workflows for specific task types
 
-/** Remove workflow: Explore → Wire-up → Commit (deletion tasks) */
+/** Remove workflow: Understand → Implement → Finish (deletion tasks) */
 export const REMOVE_WORKFLOW: WorkflowStep[] = [
-  DEFAULT_WORKFLOW_STEPS[0], // Explore
-  DEFAULT_WORKFLOW_STEPS[3], // Wire-up (the deletion work)
-  DEFAULT_WORKFLOW_STEPS[7], // Commit
+  DEFAULT_WORKFLOW_STEPS[0], // Understand
+  DEFAULT_WORKFLOW_STEPS[2], // Implement
+  DEFAULT_WORKFLOW_STEPS[4], // Finish
 ];
 
 /** Refactor workflow: Understand → Plan → Tests Before → Confirm → Refactor → Tests After → Commit */
@@ -170,12 +161,11 @@ export const REFACTOR_WORKFLOW: WorkflowStep[] = [
   }
 ];
 
-/** Audit workflow: Explore → Feedback → Document → Commit (research + discuss findings) */
+/** Audit workflow: Understand → Review → Finish (research + discuss findings) */
 export const AUDIT_WORKFLOW: WorkflowStep[] = [
-  DEFAULT_WORKFLOW_STEPS[0], // Explore
-  DEFAULT_WORKFLOW_STEPS[4], // Feedback (discuss findings)
-  DEFAULT_WORKFLOW_STEPS[6], // Document
-  DEFAULT_WORKFLOW_STEPS[7], // Commit
+  DEFAULT_WORKFLOW_STEPS[0], // Understand
+  DEFAULT_WORKFLOW_STEPS[3], // Review
+  DEFAULT_WORKFLOW_STEPS[4], // Finish
 ];
 
 /** Quick Win workflow: Scope → Align → Fix → Verify → Commit */
