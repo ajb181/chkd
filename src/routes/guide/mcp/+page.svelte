@@ -38,12 +38,6 @@
     <h2>Session Tools</h2>
 
     <div class="tool">
-      <h3>chkd_impromptu</h3>
-      <p>Start an ad-hoc work session for unplanned work.</p>
-      <div class="code-block"><pre><code>chkd_impromptu(description: "Quick data export script")</code></pre></div>
-    </div>
-
-    <div class="tool">
       <h3>chkd_debug</h3>
       <p>Start a debug/investigation session.</p>
       <div class="code-block"><pre><code>chkd_debug(description: "Why login is slow")</code></pre></div>
@@ -51,7 +45,7 @@
 
     <div class="tool">
       <h3>chkd_done</h3>
-      <p>End the current session (impromptu, debug, or feature work).</p>
+      <p>End the current session (debug or feature work).</p>
       <div class="code-block"><pre><code>chkd_done()</code></pre></div>
     </div>
 

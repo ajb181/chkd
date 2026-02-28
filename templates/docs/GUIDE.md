@@ -178,12 +178,6 @@ tick("Design")
 | `ListQuickWins()` | List all quick wins |
 | `CompleteQuickWin(id)` | Mark quick win done |
 
-### Sessions
-
-| Tool | What it does |
-|------|--------------|
-| `impromptu(description)` | Start ad-hoc work session |
-
 ### Epics
 
 | Tool | What it does |

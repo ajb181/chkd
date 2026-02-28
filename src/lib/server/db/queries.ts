@@ -177,7 +177,7 @@ export function getSession(repoId: string): TaskSession {
   const now = Date.now();
 
   return {
-    // For adhoc sessions (impromptu/debug), id can be null but title exists
+    // For adhoc sessions (debug/quickwin), id can be null but title exists
     currentTask: (row.current_task_id || row.current_task_title) ? {
       id: row.current_task_id || null,
       title: row.current_task_title,

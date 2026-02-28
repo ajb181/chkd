@@ -29,13 +29,7 @@ The user runs `/epic "Mobile Capture App"` - extract the name.
 If no name provided:
 > "What's the epic? Run `/epic "Feature Name"`"
 
-### 2. Start an impromptu session
-
-```
-chkd_impromptu("Planning epic: [name]")
-```
-
-### 3. Acknowledge and begin interview
+### 2. Acknowledge and begin interview
 
 > "Let's plan **[Epic Name]**. I'll ask some questions to understand the scope, then we'll break it down into stories."
 

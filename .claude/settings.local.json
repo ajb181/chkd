@@ -51,7 +51,6 @@
       "Bash(npx tsc:*)",
       "Bash(claude mcp add chkd -- npx tsx /Users/alex/chkd/src/mcp/server.ts)",
       "mcp__chkd__chkd_working",
-      "mcp__chkd__chkd_impromptu",
       "mcp__chkd__chkd_status",
       "mcp__chkd__chkd_debug",
       "mcp__chkd__chkd_bug",
@@ -91,7 +90,6 @@
       "mcp__chkd__win",
       "mcp__chkd__add",
       "mcp__chkd__bug",
-      "mcp__chkd__impromptu",
       "mcp__chkd__pulse",
       "Bash(npm version:*)",
       "mcp__chkd__bugs",
@@ -118,7 +116,16 @@
       "mcp__chkd-dev__list",
       "mcp__chkd-dev__tag",
       "mcp__chkd-dev__add",
-      "mcp__chkd-dev__done"
+      "mcp__chkd-dev__done",
+      "mcp__chkd-dev__ReviewDone",
+      "mcp__chkd-dev__CreateBug",
+      "mcp__chkd-dev__ListQuickWins",
+      "mcp__chkd-dev__ListBugs",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(echo Pre-written epic file created:*)",
+      "Bash(echo Test file written:*)",
+      "mcp__chkd-dev__CompleteQuickWin"
     ]
   }
 }

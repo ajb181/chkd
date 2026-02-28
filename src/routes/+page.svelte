@@ -58,7 +58,7 @@
   interface RepoStatus {
     currentTask: string | null;
     currentItem: string | null;  // The sub-item being worked on
-    status: 'idle' | 'building' | 'debugging' | 'impromptu' | 'quickwin';
+    status: 'idle' | 'building' | 'debugging' | 'quickwin';
     repoProgress: number;        // Overall repo progress %
     taskProgress: number;        // Current task progress % (sub-items)
     completedItems: number;
@@ -579,18 +579,6 @@
       };
     }
 
-    if (session.mode === 'impromptu') {
-      return {
-        state: 'IMPROMPTU',
-        stateColor: 'warning',
-        action: session.currentTask?.title || 'Ad-hoc work',
-        commands: [
-          { cmd: 'Build it', desc: 'Do the work' },
-          { cmd: 'chkd done', desc: 'End session' }
-        ]
-      };
-    }
-
     switch (session.status) {
       case 'building':
         return {
@@ -828,7 +816,6 @@
           currentTask: sessionRes.data?.currentTask?.title || null,
           currentItem: sessionRes.data?.currentItem?.title || null,
           status: sessionRes.data?.mode === 'debugging' ? 'debugging' :
-                  sessionRes.data?.mode === 'impromptu' ? 'impromptu' :
                   sessionRes.data?.mode === 'quickwin' ? 'quickwin' :
                   sessionRes.data?.status === 'building' ? 'building' : 'idle',
           repoProgress: specRes.data?.progress || 0,
@@ -987,7 +974,6 @@
           currentTask: session?.currentTask?.title || null,
           currentItem: session?.currentItem?.title || null,
           status: session?.mode === 'debugging' ? 'debugging' :
-                  session?.mode === 'impromptu' ? 'impromptu' :
                   session?.mode === 'quickwin' ? 'quickwin' :
                   session?.status === 'building' ? 'building' : 'idle',
           repoProgress: spec?.progress || 0,
@@ -1844,8 +1830,6 @@
                 <span class="repo-card-status building">●</span>
               {:else if status?.status === 'debugging'}
                 <span class="repo-card-status debugging">●</span>
-              {:else if status?.status === 'impromptu'}
-                <span class="repo-card-status impromptu">●</span>
               {:else if status?.status === 'quickwin'}
                 <span class="repo-card-status quickwin">●</span>
               {:else}
@@ -2557,7 +2541,7 @@
     <main>
     <!-- Context Helper Bar - only show when NOT building (session card handles that) -->
     {#if !loading && session && session.status !== 'building'}
-      <div class="context-bar" class:testing={contextHelp.state === 'TESTING'} class:complete={contextHelp.state === 'COMPLETE'} class:rework={contextHelp.state === 'REWORK'} class:debug={contextHelp.state === 'DEBUG'} class:impromptu={contextHelp.state === 'IMPROMPTU'}>
+      <div class="context-bar" class:testing={contextHelp.state === 'TESTING'} class:complete={contextHelp.state === 'COMPLETE'} class:rework={contextHelp.state === 'REWORK'} class:debug={contextHelp.state === 'DEBUG'}>
         <span class="ctx-badge {contextHelp.stateColor}">{contextHelp.state}</span>
         <span class="ctx-action">{contextHelp.action}</span>
         <div class="ctx-commands">
@@ -2627,12 +2611,10 @@
         {@const activeSession = demoMode ? demoSession : session}
         {@const checklist = demoMode ? demoProgress : []}
         {@const sessionBadge = activeSession?.mode === 'debugging' ? 'DEBUG' :
-                               activeSession?.mode === 'impromptu' ? 'IMPROMPTU' :
                                activeSession?.mode === 'quickwin' ? 'QUICKWIN' : 'BUILDING'}
         {@const badgeClass = activeSession?.mode === 'debugging' ? 'debug' :
-                             activeSession?.mode === 'impromptu' ? 'impromptu' :
                              activeSession?.mode === 'quickwin' ? 'quickwin' : ''}
-        <div class="session-card" class:demo={demoMode} class:debug={activeSession?.mode === 'debugging'} class:impromptu={activeSession?.mode === 'impromptu'} class:quickwin={activeSession?.mode === 'quickwin'}>
+        <div class="session-card" class:demo={demoMode} class:debug={activeSession?.mode === 'debugging'} class:quickwin={activeSession?.mode === 'quickwin'}>
           <div class="session-header">
             {#if demoMode}
               <span class="session-badge {badgeClass}">{sessionBadge}</span>
@@ -2644,7 +2626,6 @@
               >
                 <option value="building">BUILDING</option>
                 <option value="debugging">DEBUG</option>
-                <option value="impromptu">IMPROMPTU</option>
                 <option value="quickwin">QUICKWIN</option>
                 <option value="idle">IDLE</option>
               </select>
@@ -3585,11 +3566,6 @@
 
   .repo-card-status.debugging {
     color: var(--error);
-    animation: pulse 1.5s infinite;
-  }
-
-  .repo-card-status.impromptu {
-    color: var(--warning);
     animation: pulse 1.5s infinite;
   }
 
@@ -5809,7 +5785,6 @@
   .context-bar.complete { border-left: 3px solid var(--success); }
   .context-bar.rework { border-left: 3px solid var(--warning); }
   .context-bar.debug { border-left: 3px solid var(--error); }
-  .context-bar.impromptu { border-left: 3px solid var(--warning); }
   .context-bar.quickwin { border-left: 3px solid #f59e0b; }
 
   .ctx-badge {
@@ -6078,11 +6053,6 @@
     background: var(--error);
   }
 
-  .session-badge.impromptu {
-    background: var(--warning);
-    color: var(--text);
-  }
-
   .session-badge.quickwin {
     background: #f59e0b;  /* amber/gold */
     color: #1a1a1a;
@@ -6105,12 +6075,6 @@
   .session-state-select.debug,
   .session-state-select[value="debugging"] {
     background: var(--error);
-  }
-
-  .session-state-select.impromptu,
-  .session-state-select[value="impromptu"] {
-    background: var(--warning);
-    color: var(--text);
   }
 
   .session-state-select.quickwin,

@@ -53,7 +53,7 @@
       <div class="feature-card">
         <div class="feature-icon">💻</div>
         <h3>CLI Commands</h3>
-        <p>Full CLI for humans: <code>chkd status</code>, <code>chkd tick</code>, <code>chkd bug</code>, <code>chkd impromptu</code> and more.</p>
+        <p>Full CLI for humans: <code>chkd status</code>, <code>chkd tick</code>, <code>chkd bug</code>, <code>chkd quickwin</code> and more.</p>
       </div>
 
       <div class="feature-card">

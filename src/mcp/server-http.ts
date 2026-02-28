@@ -171,10 +171,10 @@ async function getContextualNudges(
     if (trackStatus.anchor) {
       nudges.push(`🎯 PENDING TASK: "${trackStatus.anchor.title}"`);
       nudges.push(`   User set this anchor - START IT NOW!`);
-      nudges.push(`   → impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")`);
+      nudges.push(`   → working("${trackStatus.anchor.id || trackStatus.anchor.title}")`);
     } else {
       nudges.push(`🚨 IDLE: You're not in a session! Start one NOW:`);
-      nudges.push(`   → impromptu("what you're doing") for ad-hoc work`);
+      nudges.push(`   → working("XX.N") for a spec task, CreateQuickWin() for a small fix, CreateBug() for a bug`);
     }
     return nudges;
   }
@@ -205,11 +205,6 @@ async function getContextualNudges(
   // Queue nudges
   if (queue.length > 0) {
     nudges.push(`📬 ${queue.length} message(s) from user - check with pulse()`);
-  }
-
-  // Mode-specific nudges
-  if (session.mode === 'impromptu') {
-    nudges.push(`⚡ Impromptu: Log what you did when done`);
   }
 
   return nudges;
@@ -522,7 +517,7 @@ server.tool(
         } else {
           statusText += `Status: IDLE - No active task\n`;
           statusText += `💡 Find a task: list() then working("XX.N") to start\n`;
-          statusText += `   Only use impromptu() for truly unplanned work not in the spec\n`;
+          statusText += `   Small fix? CreateQuickWin()  Bug? CreateBug()\n`;
         }
       } else {
         statusText += `Status: ${session.status.toUpperCase()}\n`;
@@ -549,57 +544,10 @@ server.tool(
   }
 );
 
-// impromptu - Start an impromptu session
-server.tool(
-  "impromptu",
-  "LAST RESORT: Only for truly unplanned work with no spec item. Prefer working() to start a tracked task. If a task exists, use working(itemId) instead.",
-  {
-    description: z.string().describe("What you're working on (e.g., 'Quick script for data export')")
-  },
-  async ({ description }) => {
-    const repoPath = getRepoPath();
-    await requireRepo(repoPath);
-
-    const response = await api.startAdhocSession(repoPath, 'impromptu', description);
-
-    if (!response.success) {
-      return {
-        content: [{
-          type: "text",
-          text: `⚠️ ${response.error}\n\n${response.hint || ''}`
-        }]
-      };
-    }
-
-    const queueResponse = await api.getQueue(repoPath);
-    const queue = queueResponse.data?.items || [];
-
-    let text = `⚡ Impromptu session started\n`;
-    text += `Working on: ${description}\n`;
-    text += `───────────────────\n`;
-    text += `This tracks ad-hoc work so nothing is forgotten.\n`;
-    text += `When done: done() to end session`;
-
-    if (queue.length > 0) {
-      text += `\n\n📬 Queue (${queue.length}):\n`;
-      queue.forEach((q: any) => {
-        text += `  • ${q.title}\n`;
-      });
-    }
-
-    return {
-      content: [{
-        type: "text",
-        text
-      }]
-    };
-  }
-);
-
 // done - End the current session
 server.tool(
   "done",
-  "End the current session (impromptu or feature work). Clears the active state.",
+  "End the current session (feature work or quick win). Clears the active state.",
   {},
   async () => {
     const repoPath = getRepoPath();
@@ -1206,7 +1154,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: "❌ No active session. Start work on an item first with working() or impromptu()."
+          text: "❌ No active session. Start work on an item first with working()."
         }]
       };
     }
@@ -2510,7 +2458,7 @@ server.resource(
           text += `│                                     │\n`;
           text += `│ ⚡ User set this anchor - START IT! │\n`;
           text += `│                                     │\n`;
-          text += `│ Run: impromptu("${anchor.id}")     │\n`;
+          text += `│ Run: working("${anchor.id}")        │\n`;
           text += `└─────────────────────────────────────┘\n\n`;
         } else if (trackStatus?.onTrack) {
           text += `┌─ 🎯 ANCHOR ──────────────────────────┐\n`;
@@ -2535,13 +2483,11 @@ server.resource(
         text += `│ You're not in a session!            │\n`;
         text += `│ Start one before writing code:      │\n`;
         text += `│  • status() - see what's next  │\n`;
-        text += `│  • impromptu("desc") - ad-hoc  │\n`;
+        text += `│  • CreateQuickWin() - small fix │\n`;
         text += `└─────────────────────────────────────┘\n\n`;
       } else {
-        const modeIcon = session.mode === 'debugging' ? '🔧' :
-                        session.mode === 'impromptu' ? '⚡' : '🔨';
-        const modeLabel = session.mode === 'debugging' ? 'DEBUG' :
-                         session.mode === 'impromptu' ? 'IMPROMPTU' : 'BUILDING';
+        const modeIcon = session.mode === 'debugging' ? '🔧' : '🔨';
+        const modeLabel = session.mode === 'debugging' ? 'DEBUG' : 'BUILDING';
 
         text += `│ ${modeIcon} MODE: ${modeLabel.padEnd(24)}│\n`;
 

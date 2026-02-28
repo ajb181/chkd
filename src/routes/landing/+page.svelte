@@ -476,7 +476,6 @@
             <h4>Sessions</h4>
           </div>
           <div class="cmd-list">
-            <div class="cmd"><code>impromptu</code> <span>Ad-hoc work</span></div>
             <div class="cmd"><code>debug</code> <span>Investigation</span></div>
             <div class="cmd"><code>pivot</code> <span>Change focus</span></div>
             <div class="cmd"><code>pulse</code> <span>Quick update</span></div>

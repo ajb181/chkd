@@ -60,10 +60,6 @@
         <div class="type-badge">BUILDING</div>
         <div class="type-desc">Working on a spec task</div>
       </div>
-      <div class="session-type impromptu">
-        <div class="type-badge">IMPROMPTU</div>
-        <div class="type-desc">Ad-hoc work not in spec</div>
-      </div>
       <div class="session-type debug">
         <div class="type-badge">DEBUG</div>
         <div class="type-desc">Investigation/troubleshooting</div>
@@ -325,7 +321,6 @@
   }
 
   .building .type-badge { background: #22c55e; color: #000; }
-  .impromptu .type-badge { background: #eab308; color: #000; }
   .debug .type-badge { background: #ef4444; color: #fff; }
   .idle .type-badge { background: #666; color: #fff; }
 

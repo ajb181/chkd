@@ -83,7 +83,7 @@ export async function clearSession(repoPath: string) {
 
 export async function startAdhocSession(
   repoPath: string,
-  type: 'impromptu' | 'debug',
+  type: 'debug',
   description: string
 ) {
   return request('POST', '/api/session/adhoc', { repoPath, type, description });

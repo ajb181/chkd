@@ -12,8 +12,6 @@
 - Small fix? → `CreateQuickWin(title, files, test)`
 - Bug? → `CreateBug(title, reproduce, files, expected)`
 
-**NEVER use `impromptu()` as your default.** It's only for truly unplanned work that doesn't fit any task. If a task exists, use `working()`.
-
 **If you find yourself coding without calling `working()` first, STOP.**
 
 ### How It Works
@@ -67,7 +65,6 @@ See `docs/FILING.md` for full naming conventions.
 | `add(title, areaCode, designFile)` | New feature (design file required) |
 | `CreateQuickWin(title, files, test)` | Small fix, no design needed |
 | `CreateBug(title, reproduce, files, expected)` | Bug report |
-| `impromptu("desc")` | LAST RESORT — only for unplanned work with no task |
 
 
 

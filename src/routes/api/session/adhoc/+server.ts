@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { getRepoByPath, getSession } from '$lib/server/db/queries';
 import { getDb } from '$lib/server/db';
 
-// POST /api/session/adhoc - Start an adhoc session (impromptu, debug, or quickwin)
+// POST /api/session/adhoc - Start an adhoc session (debug or quickwin)
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const body = await request.json();
@@ -15,10 +15,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Accept either 'type' (legacy) or 'mode' (new)
     const inputType = type || modeParam;
-    if (!inputType || !['impromptu', 'debug', 'quickwin'].includes(inputType)) {
+    if (!inputType || !['debug', 'quickwin'].includes(inputType)) {
       return json({
         success: false,
-        error: 'type must be "impromptu", "debug", or "quickwin"'
+        error: 'type must be "debug" or "quickwin"'
       }, { status: 400 });
     }
 
@@ -47,12 +47,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Start adhoc session - use existing session fields creatively:
     // - status = 'building' (so UI knows we're active)
-    // - mode = 'impromptu', 'debugging', or 'quickwin'
+    // - mode = 'debugging' or 'quickwin'
     // - current_task_id = null (no spec task) or quickwinId
     // - current_task_title = description (what we're working on)
     const db = getDb();
-    const mode = inputType === 'debug' ? 'debugging' :
-                 inputType === 'quickwin' ? 'quickwin' : 'impromptu';
+    const mode = inputType === 'debug' ? 'debugging' : 'quickwin';
 
     // For quickwin, store the quickwinId so we can auto-complete it
     const taskId = quickwinId || null;
@@ -80,10 +79,8 @@ export const POST: RequestHandler = async ({ request }) => {
         updated_at = datetime('now')
     `).run(repo.id, taskId, description, mode, taskId, mode);
 
-    const emoji = inputType === 'debug' ? '🔧' :
-                  inputType === 'quickwin' ? '⚡' : '⚡';
-    const stateLabel = inputType === 'debug' ? 'Debug' :
-                       inputType === 'quickwin' ? 'Quick win' : 'Impromptu';
+    const emoji = inputType === 'debug' ? '🔧' : '⚡';
+    const stateLabel = inputType === 'debug' ? 'Debug' : 'Quick win';
 
     return json({
       success: true,
