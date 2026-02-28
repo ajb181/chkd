@@ -10,3 +10,12 @@ build-stable/
 # Project-specific working files (not code)
 docs/SPEC.md
 docs/QUICKWINS.md
+
+# chkd managed files (synced from templates, not committed)
+CLAUDE.md
+docs/GUIDE.md
+docs/PHILOSOPHY.md
+docs/FILING.md
+docs/WORKFLOW.md
+docs/AGENT-GOVERNANCE.md
+.claude/skills/

@@ -147,19 +147,27 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    // Get parent info for response
+    // Get parent info and next checkpoint for response
     let parentTitle = '';
     let parentId = '';
     let hasMoreSiblings = false;
+    let nextCheckpoint: { displayId: string; title: string } | null = null;
 
     if (dbItem.parentId) {
       const parent = getItem(dbItem.parentId);
       if (parent) {
         parentId = parent.id;
         parentTitle = parent.title;
-        // Check for more incomplete siblings
+        // Find next incomplete sibling (sorted by sort_order)
         const siblings = getChildren(parent.id);
-        hasMoreSiblings = siblings.some(s => s.id !== dbItem.id && s.status !== 'done');
+        const currentIndex = siblings.findIndex(s => s.id === dbItem.id);
+        const nextSibling = siblings
+          .slice(currentIndex + 1)
+          .find(s => s.status !== 'done');
+        if (nextSibling) {
+          hasMoreSiblings = true;
+          nextCheckpoint = { displayId: nextSibling.displayId, title: nextSibling.title };
+        }
       }
     }
 
@@ -224,6 +232,11 @@ export const POST: RequestHandler = async ({ request }) => {
       response.queuedItems = queuedItems.map(q => q.title);
       response.queuedCount = queuedItems.length;
       response.instruction = `USER QUEUED ${queuedItems.length} ITEM(S): ${queuedItems.map(q => `"${q.title}"`).join(', ')}. ADD these to your existing Claude Code TodoWrite list without losing any current items. Do NOT add to the spec.`;
+    }
+
+    // Include next checkpoint info if available
+    if (nextCheckpoint) {
+      response.nextCheckpoint = nextCheckpoint;
     }
 
     // Smart next-step based on context

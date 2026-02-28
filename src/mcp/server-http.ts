@@ -836,11 +836,31 @@ server.tool(
         text += `\n\n🎉 All checkpoints marked complete!`;
       }
 
-      // Check if this was a Confirm step - remind about user approval
-      const lowerTitle = fullTitle.toLowerCase();
-      if (lowerTitle.includes('confirm') || lowerTitle.includes('approval') || lowerTitle.includes('verify')) {
-        text += `\n\n⚠️  CHECKPOINT: Did you get explicit user approval?`;
-        text += `\n   If not, discuss with user before proceeding.`;
+      // Show next checkpoint with appropriate urgency
+      const nextCp = response.data?.nextCheckpoint;
+      if (nextCp) {
+        const nextTitle = nextCp.title || '';
+        const nextLower = nextTitle.toLowerCase();
+        const isApprovalGate = nextLower.includes('approval') || nextLower.includes('confirm') ||
+          nextLower.includes('demo') || nextLower.includes('wait') ||
+          nextLower.includes('user') || nextLower.includes('review');
+
+        if (isApprovalGate) {
+          text += `\n\n══════════════════════════════════════`;
+          text += `\n🛑 STOP. Do NOT call any more tools.`;
+          text += `\n`;
+          text += `\nNEXT: ${nextCp.displayId} ${nextTitle}`;
+          text += `\n`;
+          text += `\nPresent your work to the user now.`;
+          text += `\nWait for them to respond.`;
+          text += `\nOnly tick after they explicitly approve.`;
+          text += `\n══════════════════════════════════════`;
+        } else {
+          text += `\n\nNEXT → ${nextCp.displayId} ${nextTitle}`;
+        }
+      } else if (!isParentItem && response.data?.parentTitle) {
+        // No more siblings — phase complete
+        text += `\n\n✓ Phase complete. Continue to next phase.`;
       }
 
       // Add type/area-specific guidance
@@ -1576,21 +1596,11 @@ server.tool(
     const repoPath = getRepoPath();
     await requireRepo(repoPath);
 
-    // Find the item
-    const findRes = await fetch(`${HTTP_BASE}/api/spec/item?repoPath=${encodeURIComponent(repoPath)}&query=${encodeURIComponent(id)}`);
-    const findResult = await findRes.json();
-    
-    if (!findResult.success || !findResult.data) {
-      return { content: [{ type: "text", text: `❌ Quick win not found: ${id}` }] };
-    }
-
-    const item = findResult.data;
-
-    // Mark as done
-    const response = await fetch(`${HTTP_BASE}/api/spec/update`, {
+    // Use tick API to mark the quick win as done
+    const response = await fetch(`${HTTP_BASE}/api/spec/tick`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoPath, itemId: item.id, status: 'done' })
+      body: JSON.stringify({ repoPath, item: id })
     });
     const result = await response.json();
 
@@ -1598,11 +1608,12 @@ server.tool(
       return { content: [{ type: "text", text: `❌ ${result.error}` }] };
     }
 
-    const title = item.title.replace(/^FUT\.\d+\s*/, '');
+    const displayId = result.data?.displayId || id;
+    const title = (result.data?.title || '').replace(/^FUT\.\d+\s*/, '');
     return {
       content: [{
         type: "text",
-        text: `✅ Quick win done: ${item.displayId} ${title}\n\n📦 Before committing:\n   1. Review docs if behavior changed\n   2. Commit with descriptive message\n   3. Push to remote`
+        text: `✅ Quick win done: ${displayId} ${title}\n\n📦 Before committing:\n   1. Review docs if behavior changed\n   2. Commit with descriptive message\n   3. Push to remote`
       }]
     };
   }

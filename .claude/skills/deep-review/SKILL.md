@@ -1,12 +1,12 @@
 ---
 name: deep-review
-description: Thorough code review with 4 parallel sub-agents and interactive walkthrough of every finding
+description: Thorough code review with 6 parallel sub-agents and interactive walkthrough of every finding
 args: scope
 ---
 
 # /deep-review - AI-Focused Code Review
 
-Reviews code for mistakes AI commonly makes. Spawns 4 parallel sub-agents, then walks through EVERY finding interactively with the user.
+Reviews code for mistakes AI commonly makes. Spawns 6 parallel sub-agents, then walks through EVERY finding interactively with the user.
 
 ## Usage
 
@@ -55,11 +55,13 @@ REQUIREMENTS (from task):
 FLAGS (from assume()):
 - [any assumptions logged during build]
 
-Launching 4 sub-agents:
+Launching 6 sub-agents:
 1. Spec Compliance
 2. Codebase Fit (reuse + patterns)
 3. Code Quality (simplicity + smells)
 4. Assumptions & Error Handling
+5. Fit for Purpose (overcomplexity check)
+6. UX/UI Standards (if frontend files in scope)
 
 Proceed? (y/n)
 ```
@@ -400,31 +402,229 @@ GOOD_ERROR_HANDLING:
 
 ---
 
+### Sub-Agent 5: Fit for Purpose (Overcomplexity Check)
+
+**Purpose:** Is this code doing what it needs to do, or has it grown beyond its purpose? Is it overbuilt, doing too many things, or solving problems that don't exist?
+
+**IMPORTANT:** This is a higher-level review than Agent 3 (code smells). Agent 3 looks at code quality line-by-line. This agent looks at the WHOLE SOLUTION and asks: "Is this the right thing to build? Is it doing too much?"
+
+```
+Task({
+  subagent_type: "Explore",
+  description: "Fit for purpose - overcomplexity check",
+  prompt: `
+You are reviewing whether this code is FIT FOR PURPOSE. Not code quality — PURPOSE.
+
+Ask yourself: "If I described what this code does to someone in one sentence, would they say 'that sounds about right' or 'why does it do all that?'"
+
+CODE TO REVIEW:
+--- src/components/Feature.tsx ---
+[actual contents]
+
+REQUIREMENTS / DESIGN:
+[what was asked for]
+
+CHECK EACH OF THESE:
+
+1. SCOPE CREEP — Does it do more than what was asked?
+   - Features nobody requested
+   - Edge cases that will never happen in practice
+   - Configurability that nobody needs
+   - Supporting multiple formats/protocols when only one is used
+   - Report: [what's extra] vs [what was requested]
+
+2. WRONG ABSTRACTION LEVEL — Is it solving at the right level?
+   - Building a framework when a function would do
+   - Creating a service when a utility is enough
+   - Making something generic when it's used in one place
+   - Building infrastructure when the task is "add a button"
+   - Report: [what level it's at] vs [what level it should be at]
+
+3. UNNECESSARY INDIRECTION — Can you follow the logic?
+   - How many files do you need to open to understand one feature?
+   - How many layers does a request pass through?
+   - Could someone new to the codebase understand this in 5 minutes?
+   - Report: [the path through the code] and whether it's justified
+
+4. DOING TOO MANY THINGS — Single responsibility at the feature level
+   - Does this one change touch concerns it shouldn't?
+   - Is it mixing data fetching with presentation with business logic?
+   - Could this be 2-3 smaller, focused changes?
+   - Report: [the responsibilities] and whether they belong together
+
+5. GOLD PLATING — Is it polished beyond what's needed?
+   - Elaborate error messages for internal functions
+   - Documentation for obvious code
+   - Tests for trivial getters
+   - Animations/transitions nobody asked for
+   - Report: [what's gold-plated] vs [what's appropriate]
+
+Return:
+FIT_FOR_PURPOSE_SCORE: X/5 (5 = does exactly what's needed, 1 = massively overbuilt)
+
+JUSTIFICATION (MANDATORY for any score below 4):
+- Score is X because: [specific reason]
+- To reach 5: [what to simplify or remove]
+
+SCOPE_CREEP:
+- [what was asked] vs [what was built] — [what's extra]
+
+WRONG_LEVEL:
+- [file:line] built as [what] but should be [what]
+
+UNNECESSARY_INDIRECTION:
+- To do [simple thing], you must: [step 1] → [step 2] → [step 3]...
+
+TOO_MANY_THINGS:
+- [file/component] handles: [responsibility 1], [responsibility 2], [responsibility 3]
+
+GOLD_PLATING:
+- [file:line] [what's over-done] — [what's appropriate instead]
+
+GOOD_FIT:
+- [things that are well-scoped and appropriate]
+
+ONE-SENTENCE SUMMARY:
+"This code [does X]. For the requirement [Y], this is [appropriate/overbuilt/underbuilt] because [reason]."
+`
+})
+```
+
+---
+
+### Sub-Agent 6: UX/UI Standards (Frontend Only)
+
+**Purpose:** Does the UI follow the project's design standards? Is it consistent with the rest of the app?
+
+**IMPORTANT:** Only run this agent if the changed files include frontend code (.tsx, .jsx, .svelte, .vue, .css, .scss, .html). Skip entirely for pure backend changes.
+
+**Design Standards Doc:** Check for `docs/design-standards.md` in the project root. If it doesn't exist, the agent should CREATE one by analyzing 3-5 existing UI files for patterns, then review the new code against those patterns.
+
+```
+Task({
+  subagent_type: "Explore",
+  description: "UX/UI standards review",
+  prompt: `
+You are reviewing frontend code against the project's design standards.
+
+NEW CODE:
+--- src/components/Feature.tsx ---
+[actual contents]
+
+STEP 1: Find or create design standards
+
+Check if docs/design-standards.md exists in the project. Read it if it does.
+
+If it DOESN'T exist, analyze 3-5 existing UI files in the project to discover:
+- Color system (CSS variables, theme tokens, hardcoded values?)
+- Spacing system (rem, px, spacing scale?)
+- Typography (font families, sizes, weights, headings?)
+- Component patterns (how are forms built? buttons? cards? modals?)
+- Layout approach (flexbox, grid, containers, breakpoints?)
+- Animation/transition patterns
+- Accessibility patterns (aria labels, keyboard nav, focus management?)
+- Naming conventions (BEM, utility classes, CSS modules, styled-components?)
+- Icon system
+- Responsive approach
+
+Report what you found as: DISCOVERED_STANDARDS
+
+STEP 2: Review the new code against standards
+
+For each standard you found (or from the doc):
+
+1. CONSISTENCY — Does the new code match?
+   - Same color variables or hardcoded different ones?
+   - Same spacing units or mixing px/rem/em?
+   - Same component structure or reinvented?
+   - Same naming patterns?
+
+2. ACCESSIBILITY — Basic checks
+   - Interactive elements have visible focus styles?
+   - Images have alt text?
+   - Color contrast sufficient?
+   - Semantic HTML used (not div soup)?
+   - aria labels where needed?
+
+3. RESPONSIVENESS — If applicable
+   - Works at mobile/tablet/desktop?
+   - Uses the project's breakpoint system?
+   - Touch targets adequate size?
+
+4. VISUAL COHERENCE — Does it look like it belongs?
+   - Consistent with the rest of the app?
+   - Not introducing new visual patterns without reason?
+   - Spacing and alignment feel right?
+
+Return:
+UX_STANDARDS_SCORE: X/5 (5 = perfectly consistent, 1 = ignores all standards)
+
+JUSTIFICATION (MANDATORY for any score below 4):
+- Score is X because: [specific reason]
+- To reach 5: [what to change]
+
+STANDARDS_SOURCE: [docs/design-standards.md | discovered from existing code]
+
+If discovered (no standards doc exists):
+DISCOVERED_STANDARDS:
+- Colors: [what system is used]
+- Spacing: [what units/scale]
+- Components: [patterns found]
+- Layout: [approach]
+(Include recommendation to create docs/design-standards.md from these findings)
+
+VIOLATIONS:
+- [file:line] uses [X] but project standard is [Y]
+- [file:line] introduces new pattern [X] — existing pattern is [Y]
+- [file:line] accessibility: [issue]
+
+SUGGESTIONS:
+- [improvement that would better match project standards]
+
+GOOD_UX:
+- [things that match standards well]
+- [good accessibility practices]
+
+STANDARDS_UPDATE:
+If you found patterns in the new code that are BETTER than existing standards,
+or new patterns that should become standards, note them here:
+- [new pattern] should be added to design-standards.md because [reason]
+`
+})
+```
+
+---
+
 ## Step 4: Aggregate Results
 
-After all 4 sub-agents return, compile the full report. Do NOT filter findings. Every finding from every agent appears.
+After all 6 sub-agents return (or 4-5 if no frontend files), compile the full report. Do NOT filter findings. Every finding from every agent appears.
 
 ```
 ╔══════════════════════════════════════════════════════╗
 ║              DEEP REVIEW REPORT                      ║
 ╚══════════════════════════════════════════════════════╝
 
-SPEC COMPLIANCE:      X/Y requirements
-DESIGN COMPLIANCE:    matches/deviates
-REUSE SCORE:          X/5
-PATTERN SCORE:        X/5
-SIMPLICITY SCORE:     X/5
-SMELL SCORE:          X/5
-ASSUMPTION SCORE:     X/5
-ERROR HANDLING SCORE: X/5
+SPEC COMPLIANCE:       X/Y requirements
+DESIGN COMPLIANCE:     matches/deviates
+REUSE SCORE:           X/5
+PATTERN SCORE:         X/5
+SIMPLICITY SCORE:      X/5
+SMELL SCORE:           X/5
+ASSUMPTION SCORE:      X/5
+ERROR HANDLING SCORE:  X/5
+FIT FOR PURPOSE SCORE: X/5
+UX STANDARDS SCORE:    X/5 (or N/A if no frontend)
 
 Total findings: N
 
 ─── SPEC ISSUES ───
 [ ] [missing/wrong/partial requirement]
 
+─── FIT FOR PURPOSE ───
+[ ] [scope creep / wrong level / too many things]
+One-sentence: "[summary from Agent 5]"
+
 ─── ASSUMPTIONS NOT IN PLAN ───
-[ ] [file:line] [what was decided] — needs user confirmation
 [ ] [file:line] [what was decided] — needs user confirmation
 
 ─── DUPLICATION ───
@@ -433,10 +633,13 @@ Searches performed: N
 
 ─── CODE SMELLS ───
 [ ] [file:line] [smell]: [description]
-[ ] [file:line] [smell]: [description]
 
 ─── ERROR HANDLING ───
 [ ] [file:line] [fallback/swallow description]
+
+─── UX/UI STANDARDS ───
+[ ] [file:line] [violation]: [description]
+Standards source: [doc | discovered]
 
 ─── GOOD ───
 [things done well — always include positives]
@@ -489,10 +692,12 @@ What would you like to do?",
 ### Walkthrough order:
 
 1. Spec issues first (missing/wrong requirements)
-2. Assumptions not in plan (decisions that need confirmation)
-3. Error handling (fallbacks and swallowed errors)
-4. Code smells and duplication
-5. Pattern violations
+2. Fit for purpose (is this overbuilt or underbuilt?)
+3. Assumptions not in plan (decisions that need confirmation)
+4. Error handling (fallbacks and swallowed errors)
+5. Code smells and duplication
+6. UX/UI standards (if applicable)
+7. Pattern violations
 
 ---
 
@@ -521,7 +726,7 @@ Apply all fixes. Then show the user a summary of changes made.
 
 - **Show scope first**: Confirm files with user before proceeding
 - **Pass real content**: Sub-agents get actual file contents
-- **Parallel execution**: Launch all 4 sub-agents at once
+- **Parallel execution**: Launch all 6 sub-agents at once (skip Agent 6 if no frontend files)
 - **Fresh context**: Each sub-agent has no prior knowledge
 - **Surface EVERYTHING**: Do not filter, prioritize, or condense sub-agent findings. Every finding appears in the report. The user decides what matters during the walkthrough.
 - **Interactive walkthrough is mandatory**: After the report, walk through every finding with AskUserQuestion. No exceptions.
@@ -531,6 +736,8 @@ Apply all fixes. Then show the user a summary of changes made.
 - **Duplication requires proof**: Agent 2 must list searches performed — "no duplication" without searches is a failed review
 - **Smells require line numbers**: Agent 3 must cite exact file:line for every smell — vague findings are rejected
 - **No auto-fixing**: Never fix findings without walking through them with the user first
+- **UX standards doc**: Agent 6 creates `docs/design-standards.md` if missing. After each review, ask user if any new patterns should be added to it. Keep the doc alive.
+- **Fit for purpose is high priority**: Agent 5 findings go right after spec issues in the walkthrough — overcomplexity is the #2 AI failure mode after missing requirements
 
 ---
 
@@ -550,6 +757,13 @@ Apply all fixes. Then show the user a summary of changes made.
 | Swallowed errors with fallbacks | Error Handling |
 | catch-and-return-default | Error Handling |
 | Optional chaining hiding required data | Error Handling |
+| Scope creep / built too much | Fit for Purpose |
+| Wrong abstraction level | Fit for Purpose |
+| Too many responsibilities | Fit for Purpose |
+| Gold plating | Fit for Purpose |
+| Inconsistent UI patterns | UX/UI Standards |
+| Hardcoded colors/spacing | UX/UI Standards |
+| Missing accessibility | UX/UI Standards |
 
 ---
 
