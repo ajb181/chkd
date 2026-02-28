@@ -1,18 +1,20 @@
 <!-- chkd:start -->
 ## Working with chkd
 
-### Mandatory: ALL Code Changes Go Through chkd
+### Mandatory: Start Every Session Right
 
-Before writing ANY code:
-1. Write design file to `docs/designs/my-feature.md`
-2. `add("feature name", areaCode="XX", designFile="docs/designs/my-feature.md")` — create the task
-3. `working("XX.N")` — begin work
-4. Work through checkpoints, tick parent when done
-5. No commits without an active chkd task
+**Step 1:** `status()` — see what's happening
+**Step 2:** `working("XX.N")` — start your task (this gives you checkpoints, design file, requirements)
+**Step 3:** Follow the checkpoints. Tick as you go.
 
-**If you find yourself coding without a chkd task, STOP. Create the task first.**
+**If no task exists yet:**
+- Feature? → Write design to `docs/designs/`, then `add(title, areaCode, designFile)`
+- Small fix? → `CreateQuickWin(title, files, test)`
+- Bug? → `CreateBug(title, reproduce, files, expected)`
 
-**Design file required** - QuickWins and Bugs don't need one, but features do.
+**NEVER use `impromptu()` as your default.** It's only for truly unplanned work that doesn't fit any task. If a task exists, use `working()`.
+
+**If you find yourself coding without calling `working()` first, STOP.**
 
 ### How It Works
 
@@ -57,14 +59,15 @@ See `docs/FILING.md` for full naming conventions.
 
 ### Key MCP Tools
 
-| Tool | Use |
-|------|-----|
-| `status()` | See current state + version |
-| `sync()` | Sync templates, shows version |
-| `add(title, areaCode, designFile)` | Create task (design file required) |
-| `working("XX.N")` | Start a task - shows full context |
-| `tick("item")` | Complete current item |
-| `CreateQuickWin(title, files, test)` | Quick fix (no design file needed) |
+| Tool | When |
+|------|------|
+| `status()` | First thing every session |
+| `working("XX.N")` | Before writing ANY code — gives you the full plan |
+| `tick("item")` | After completing each checkpoint |
+| `add(title, areaCode, designFile)` | New feature (design file required) |
+| `CreateQuickWin(title, files, test)` | Small fix, no design needed |
+| `CreateBug(title, reproduce, files, expected)` | Bug report |
+| `impromptu("desc")` | LAST RESORT — only for unplanned work with no task |
 
 
 

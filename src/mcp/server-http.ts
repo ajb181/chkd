@@ -518,10 +518,11 @@ server.tool(
         if (trackStatus?.anchor) {
           statusText += `Status: 🎯 PENDING - Task waiting\n`;
           statusText += `Task: ${trackStatus.anchor.title}\n`;
-          statusText += `💡 START THIS NOW → impromptu("${trackStatus.anchor.id || trackStatus.anchor.title}")\n`;
+          statusText += `💡 START THIS NOW → working("${trackStatus.anchor.id || trackStatus.anchor.title}")\n`;
         } else {
           statusText += `Status: IDLE - No active task\n`;
-          statusText += `💡 Start with impromptu()\n`;
+          statusText += `💡 Find a task: list() then working("XX.N") to start\n`;
+          statusText += `   Only use impromptu() for truly unplanned work not in the spec\n`;
         }
       } else {
         statusText += `Status: ${session.status.toUpperCase()}\n`;
@@ -551,7 +552,7 @@ server.tool(
 // impromptu - Start an impromptu session
 server.tool(
   "impromptu",
-  "Start an impromptu work session for unplanned work not in the spec. Keeps you visible in UI even for ad-hoc tasks.",
+  "LAST RESORT: Only for truly unplanned work with no spec item. Prefer working() to start a tracked task. If a task exists, use working(itemId) instead.",
   {
     description: z.string().describe("What you're working on (e.g., 'Quick script for data export')")
   },
@@ -877,7 +878,7 @@ server.tool(
 // working - Signal starting work on an item
 server.tool(
   "working",
-  "Signal you're starting work on a specific item. Updates the UI to show current focus.",
+  "START HERE: Begin work on a spec item. Call this BEFORE writing any code. Returns the full task context, checkpoints, design file, and requirements.",
   {
     item: z.string().describe("Item title or ID you're starting")
   },
